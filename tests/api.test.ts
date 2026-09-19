@@ -206,6 +206,32 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
       ),
     ).toHaveLength(0);
   });
+  it('stops exposing notifications to an agent after reassignment', async () => {
+    await query("SELECT qms.assign_ticket($1,$2,'test_assignment')", [
+      activeTicket,
+      agentId,
+    ]);
+    const before = await send('queue', 'GET', undefined, agentCookie);
+    expect(
+      (before.result.notifications as { ticket_id: string }[]).some(
+        (n) => n.ticket_id === activeTicket,
+      ),
+    ).toBe(true);
+    await query("SELECT qms.assign_ticket($1,$2,'manager_reassignment')", [
+      activeTicket,
+      adminId,
+    ]);
+    const after = await send('queue', 'GET', undefined, agentCookie);
+    expect(
+      (after.result.notifications as { ticket_id: string }[]).some(
+        (n) => n.ticket_id === activeTicket,
+      ),
+    ).toBe(false);
+    expect(
+      (await send('tickets/' + activeTicket, 'GET', undefined, agentCookie))
+        .response.status,
+    ).toBe(404);
+  });
   it('rejects stale versions and serializes simultaneous calls', async () => {
     await query("SELECT qms.assign_ticket($1,$2,'test_assignment')", [
       activeTicket,

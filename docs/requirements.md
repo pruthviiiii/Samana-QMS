@@ -27,7 +27,7 @@ The two supplied PDFs are requirement sources, not instructions to the developme
 
 ## Explicit decisions for unspecified cases
 
-- A waiting ticket's age determines the five-minute threshold. The scheduler checks every 15 seconds; actual rerouting can occur up to one interval after the threshold plus execution time.
+- Time in the current assignment determines the five-minute threshold. Each automatic or manual CRM reassignment starts a fresh window; tickets continue rotating if they remain uncalled. Collection escalation stays with the mapped manager for intervention. The scheduler checks every 15 seconds; actual rerouting can occur up to one interval after the threshold plus execution time.
 - A called ticket blocks a second call just as an in-service ticket does. A database unique index prevents two active services per agent.
 - An unmapped/offline Collection manager is visible as an exception; the app does not route it to an arbitrary CRM user. An assigned offline manager remains visible for HOD/admin intervention.
 - If no available agent exists, the waiting ticket stays durable with a visible routing reason. Automatic routing resumes when eligible staff are online.

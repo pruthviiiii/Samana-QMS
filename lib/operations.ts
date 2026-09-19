@@ -48,7 +48,7 @@ export async function queue(user: User, url: URL) {
         ],
       ),
       query(
-        `SELECT n.id,n.ticket_id,t.number,t.customer_name,t.project_name,t.unit_name FROM qms.notifications n JOIN qms.tickets t ON t.id=n.ticket_id WHERE n.user_id=$1 AND n.read_at IS NULL ORDER BY n.id DESC LIMIT 20`,
+        `SELECT n.id,n.ticket_id,t.number,t.customer_name,t.project_name,t.unit_name FROM qms.notifications n JOIN qms.tickets t ON t.id=n.ticket_id WHERE n.user_id=$1 AND n.read_at IS NULL AND t.assigned_to=n.user_id AND t.status IN ('waiting','called','serving') ORDER BY n.id DESC LIMIT 20`,
         [user.id],
       ),
       query(`SELECT updated_at FROM qms.system_state WHERE key='worker'`),
