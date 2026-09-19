@@ -1,0 +1,40 @@
+name: samana-qms
+services:
+  web:
+    build:
+      context: .
+      target: web
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      SESSION_COOKIE_SECURE: "true"
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+  scheduler:
+    build:
+      context: .
+      target: worker
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "node", "--input-type=module", "-e", "import {neon} from '@neondatabase/serverless';const r=await neon(process.env.DATABASE_URL).query(\"SELECT updated_at>now()-interval '90 seconds' ok FROM qms.system_state WHERE key='worker'\");process.exit(r[0]?.ok?0:1)"]
+      interval: 30s
+      timeout: 20s
+      start_period: 30s
