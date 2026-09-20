@@ -1,8 +1,7 @@
 # Deploying to Render
 
-`render.yaml` in the repository root defines everything Render needs: a web service, an
-always-on scheduler, and a shared environment variable group. Render reads it when you create
-a Blueprint from the connected repository.
+`render.yaml` in the repository root defines everything Render needs: a web service and an
+always-on scheduler. Render reads it when you create a Blueprint from the connected repository.
 
 ## Why Render
 
@@ -16,11 +15,12 @@ cron floor of one minute would violate the five-minute routing rule.
 1. Push the repository to GitHub or GitLab. Build output folders are git-ignored; Render
    builds from source on every deploy.
 2. In Render: **New → Blueprint**, pick the repository, branch `main`. Render shows the two
-   services and the variable group from `render.yaml`.
-3. Enter the `sync: false` values when prompted:
+   services from `render.yaml`.
+3. Enter the `sync: false` values for the web service when prompted:
    - `DATABASE_URL` — the Neon connection string for `samana_qms`.
    - `SALESFORCE_INSTANCE_URL`, `SALESFORCE_CLIENT_ID`, `SALESFORCE_CLIENT_SECRET` — the
      connected app credentials for the org in use.
+   The scheduler copies `WORKER_SECRET` and `DATABASE_URL` from the web service automatically.
 4. Apply. Render builds both services, runs `scripts/migrate.mjs` before the web service
    starts, and reports the web URL.
 5. If the assigned URL differs from `https://samana-qms.onrender.com`, update `APP_ORIGIN`
@@ -46,10 +46,10 @@ Then sign in at the web URL as `admin` and change the password when prompted.
 
 ## Switching to another Salesforce org (UAT, production)
 
-Change the three `SALESFORCE_*` values in the `samana-qms-shared` group and redeploy both
-services. Nothing else changes. Keep `SALESFORCE_WRITE_ENABLED` at `false` until the
-target org has the `QMS_Ticket__c` object, the two Apex REST classes, and a dedicated
-integration user with the `QMS_Access` permission set.
+Change the three `SALESFORCE_*` values on the web service and redeploy both services.
+Nothing else changes. Keep `SALESFORCE_WRITE_ENABLED` at `false` until the target org has
+the `QMS_Ticket__c` object, the two Apex REST classes, and a dedicated integration user with
+the `QMS_Access` permission set.
 
 ## Operational notes
 

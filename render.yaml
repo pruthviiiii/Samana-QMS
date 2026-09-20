@@ -1,20 +1,35 @@
 # Render Blueprint for Samana QMS.
-# Two always-on services sharing one environment variable group:
 #   samana-qms            web app (standalone Node build of the vinext app)
 #   samana-qms-scheduler  background worker that ticks routing and outbox delivery every 15 s
 # Spec: https://render.com/docs/blueprint-spec
 #
-# Values marked `sync: false` are entered once in the Render dashboard and never live in git.
+# Secrets (sync: false) are entered once in the Render dashboard and never live in git.
+# The scheduler copies the shared secret and database URL from the web service.
 
-envVarGroups:
-  - name: samana-qms-shared
+services:
+  - type: web
+    name: samana-qms
+    runtime: node
+    region: frankfurt
+    plan: starter
+    branch: main
+    buildCommand: npm ci --include=dev && npm run build:node
+    preDeployCommand: node scripts/migrate.mjs
+    startCommand: node dist-node/standalone/server.js
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: APP_ORIGIN
+        value: https://samana-qms.onrender.com
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
       - key: DATABASE_URL
-        sync: false # Neon connection string (pooler host, sslmode=require)
+        sync: false
       - key: SALESFORCE_INSTANCE_URL
-        sync: false # https://<org>.sandbox.my.salesforce.com — POD2 now, UAT later
+        sync: false
       - key: SALESFORCE_CLIENT_ID
         sync: false
       - key: SALESFORCE_CLIENT_SECRET
@@ -22,36 +37,15 @@ envVarGroups:
       - key: SALESFORCE_API_VERSION
         value: "67.0"
       - key: SALESFORCE_WRITE_ENABLED
-        value: "false" # set to "true" in the dashboard to post tickets to Salesforce
+        value: "false"
       - key: WORKER_SECRET
-        generateValue: true # web verifies it, scheduler sends it
+        generateValue: true
       - key: QR_SIGNING_SECRET
         generateValue: true
-      - key: SESSION_COOKIE_SECURE
-        value: "true"
       - key: SMS_ENABLED
         value: "false"
       - key: SMS_SENDER
         value: SAMANA
-
-services:
-  - type: web
-    name: samana-qms
-    runtime: node
-    region: frankfurt # same region as the Neon database (aws-eu-central-1)
-    plan: starter
-    branch: main
-    autoDeploy: true
-    buildCommand: npm ci --include=dev && npm run build:node
-    preDeployCommand: node scripts/migrate.mjs
-    startCommand: node dist-node/standalone/server.js
-    healthCheckPath: /api/health
-    envVars:
-      - fromGroup: samana-qms-shared
-      - key: NODE_ENV
-        value: production
-      - key: APP_ORIGIN
-        value: https://samana-qms.onrender.com # change if Render assigns another hostname or a custom domain is added
 
   - type: worker
     name: samana-qms-scheduler
@@ -59,12 +53,22 @@ services:
     region: frankfurt
     plan: starter
     branch: main
-    autoDeploy: true
     buildCommand: npm ci --include=dev && npm run build:worker
     startCommand: node dist-worker/worker.mjs
     envVars:
-      - fromGroup: samana-qms-shared
+      - key: NODE_VERSION
+        value: "22"
       - key: NODE_ENV
         value: production
       - key: WORKER_ORIGIN
-        value: https://samana-qms.onrender.com # must match the web service URL
+        value: https://samana-qms.onrender.com
+      - key: WORKER_SECRET
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: WORKER_SECRET
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: DATABASE_URL
