@@ -37,7 +37,9 @@ async function accessToken(force = false) {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: payload,
-      redirect: 'error',
+      // 'manual', not 'error': the Cloudflare workerd runtime rejects 'error'
+      // with a TypeError. A 3xx still fails below because response.ok is false.
+      redirect: 'manual',
       signal: AbortSignal.timeout(15000),
     });
     if (!response.ok)
@@ -78,7 +80,7 @@ export async function sfRequest(
     const response = await fetch(instance() + path, {
       ...init,
       headers,
-      redirect: 'error',
+      redirect: 'manual', // workerd rejects 'error'; 3xx fails the ok check below
       signal: AbortSignal.timeout(20000),
     });
     if (response.status === 401 && retry) {

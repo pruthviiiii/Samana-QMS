@@ -111,7 +111,7 @@ export async function processJobs() {
             message,
             idempotencyKey: job.id,
           }),
-          redirect: 'error',
+          redirect: 'manual', // workerd rejects 'error'; 3xx fails the ok check below
           signal: AbortSignal.timeout(15000),
         });
         if (!response.ok) throw new Error('SMS gateway rejected the request.');

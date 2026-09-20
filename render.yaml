@@ -1,0 +1,70 @@
+# Render Blueprint for Samana QMS.
+# Two always-on services sharing one environment variable group:
+#   samana-qms            web app (standalone Node build of the vinext app)
+#   samana-qms-scheduler  background worker that ticks routing and outbox delivery every 15 s
+# Spec: https://render.com/docs/blueprint-spec
+#
+# Values marked `sync: false` are entered once in the Render dashboard and never live in git.
+
+envVarGroups:
+  - name: samana-qms-shared
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false # Neon connection string (pooler host, sslmode=require)
+      - key: SALESFORCE_INSTANCE_URL
+        sync: false # https://<org>.sandbox.my.salesforce.com — POD2 now, UAT later
+      - key: SALESFORCE_CLIENT_ID
+        sync: false
+      - key: SALESFORCE_CLIENT_SECRET
+        sync: false
+      - key: SALESFORCE_API_VERSION
+        value: "67.0"
+      - key: SALESFORCE_WRITE_ENABLED
+        value: "false" # set to "true" in the dashboard to post tickets to Salesforce
+      - key: WORKER_SECRET
+        generateValue: true # web verifies it, scheduler sends it
+      - key: QR_SIGNING_SECRET
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SMS_ENABLED
+        value: "false"
+      - key: SMS_SENDER
+        value: SAMANA
+
+services:
+  - type: web
+    name: samana-qms
+    runtime: node
+    region: frankfurt # same region as the Neon database (aws-eu-central-1)
+    plan: starter
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm run build:node
+    preDeployCommand: node scripts/migrate.mjs
+    startCommand: node dist-node/standalone/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - fromGroup: samana-qms-shared
+      - key: NODE_ENV
+        value: production
+      - key: APP_ORIGIN
+        value: https://samana-qms.onrender.com # change if Render assigns another hostname or a custom domain is added
+
+  - type: worker
+    name: samana-qms-scheduler
+    runtime: node
+    region: frankfurt
+    plan: starter
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm run build:worker
+    startCommand: node dist-worker/worker.mjs
+    envVars:
+      - fromGroup: samana-qms-shared
+      - key: NODE_ENV
+        value: production
+      - key: WORKER_ORIGIN
+        value: https://samana-qms.onrender.com # must match the web service URL
