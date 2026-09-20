@@ -13,7 +13,7 @@ App data is isolated in the `qms` schema of `samana_qms` on the connected Neon p
 - Monitor `qms.outbox` failed/disabled jobs. Outbox leases prevent a stale worker from overwriting a newer worker's result. Upstream idempotency is required for external delivery. An abandoned final delivery attempt is marked failed for review.
 - UI reads retry through polling. If an issue-ticket response is lost, retry with the same requestId; do not generate another ID. Optimistic ticket versions protect manager/agent races.
 - Never mark SMS sent by editing the database. After reviewing a failed job with the provider, an administrator can reset its attempts/status/available_at using an audited operational SQL change. The UI currently provides status, not an unrestricted delivery replay button.
-- Logout is blocked while a staff member has a called/in-service ticket. Complete, mark no-show, or have a manager reassign/close it first. Heartbeat expiry still detects browser/network loss; active service remains for explicit manager handling.
+- Logout always revokes the session. A called/in-service ticket remains assigned for explicit completion or manager handling; heartbeat expiry detects browser/network loss. The separate go-offline action still prevents abandoning active service.
 
 ## Backups, retention, recovery
 

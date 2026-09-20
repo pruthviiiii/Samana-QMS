@@ -9,6 +9,7 @@ import {
   HttpError,
   sessionCookie,
   rateLimit,
+  clientRateLimit,
 } from '@/lib/http';
 import {
   hashPassword,
@@ -87,17 +88,34 @@ async function handler(request: Request) {
     if (path === 'auth/login' && method === 'POST') {
       const input = z
         .object({
-          username: z.string().trim().min(1).max(120),
+          username: z.string().trim().min(1).max(254),
           password: z.string().min(1).max(128),
         })
         .parse(await body(request));
       const username = input.username.toLowerCase();
+      // Bound expensive password work even if an attacker rotates usernames.
+      await clientRateLimit(request, 'login', 20, 300);
+      await rateLimit('login:global', 120, 60);
       await rateLimit('login:' + (await sha256(username)), 8, 300);
-      const [u] = await query<User & { password_hash: string }>(
-        // Username first; an email only when exactly one enabled account carries it.
-        'SELECT * FROM qms.users u WHERE u.enabled=true AND (lower(u.username)=$1 OR (lower(u.email)=$1 AND (SELECT count(*) FROM qms.users x WHERE lower(x.email)=$1 AND x.enabled=true)=1)) ORDER BY (lower(u.username)=$1) DESC LIMIT 1',
+      const candidates = await query<
+        User & { password_hash: string; username_match: boolean }
+      >(
+        // Two rows detect ambiguous usernames or emails without choosing a user.
+        'SELECT u.*,lower(u.username)=$1 username_match FROM qms.users u WHERE u.enabled=true AND (lower(u.username)=$1 OR lower(u.email)=$1) ORDER BY username_match DESC LIMIT 2',
         [username],
       );
+      const usernameMatches = candidates.filter(
+        (candidate) => candidate.username_match,
+      );
+      // A unique username takes precedence. Ambiguous usernames never fall back.
+      const u =
+        usernameMatches.length === 1
+          ? usernameMatches[0]
+          : usernameMatches.length === 0 && candidates.length === 1
+            ? candidates[0]
+            : undefined;
+      // Username and email are aliases for one account and share one budget.
+      if (u) await rateLimit('login-account:' + u.id, 8, 300);
       // Hash even unknown accounts to avoid fast username enumeration.
       const valid = await verifyPassword(
         input.password,
@@ -107,10 +125,12 @@ async function handler(request: Request) {
       if (!u || !valid)
         throw new HttpError(401, 'Incorrect username or password.');
       const token = randomToken();
-      await query(
-        "INSERT INTO qms.sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '8 hours')",
-        [await sha256(token), u.id],
+      const [session] = await query<{ issued: boolean }>(
+        'SELECT qms.issue_session($1,$2,$3) issued',
+        [u.id, u.password_hash, await sha256(token)],
       );
+      if (!session.issued)
+        throw new HttpError(401, 'Your account changed. Please sign in again.');
       const [user] = await query(
         `SELECT ${userColumns} FROM qms.users WHERE id=$1`,
         [u.id],
@@ -121,15 +141,20 @@ async function handler(request: Request) {
     if (path === 'auth/me' && method === 'GET')
       return json({ user, services: SERVICES });
     if (path === 'auth/logout' && method === 'POST') {
-      // Use the same routing lock and active-service guard as the presence toggle.
-      await query('SELECT qms.set_presence($1,false)', [user.id]);
       const token = request.headers
         .get('cookie')
-        ?.match(/qms_session=([a-f0-9]{64})/)?.[1];
+        ?.match(/(?:^|;\s*)qms_session=([a-f0-9]{64})(?:;|$)/)?.[1];
       if (token)
         await query('DELETE FROM qms.sessions WHERE token_hash=$1', [
           await sha256(token),
         ]);
+      // Ending authentication is always allowed. Keep active service ownership
+      // intact; the separate presence action still guards against abandonment.
+      try {
+        await query('SELECT qms.set_presence($1,false)', [user.id]);
+      } catch {
+        console.info(JSON.stringify({ event: 'logout_presence_unchanged' }));
+      }
       return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
     }
     if (path === 'auth/password' && method === 'POST') {
@@ -151,19 +176,17 @@ async function handler(request: Request) {
       if (input.currentPassword === input.newPassword)
         throw new HttpError(400, 'Choose a different password.');
       const token = randomToken();
-      const { db } = await import('@/lib/db');
-      const sql = db();
-      await sql.transaction([
-        sql.query(
-          'UPDATE qms.users SET password_hash=$1,must_change_password=false WHERE id=$2',
-          [await hashPassword(input.newPassword), user.id],
-        ),
-        sql.query('DELETE FROM qms.sessions WHERE user_id=$1', [user.id]),
-        sql.query(
-          "INSERT INTO qms.sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '8 hours')",
-          [await sha256(token), user.id],
-        ),
-      ]);
+      const [changed] = await query<{ changed: boolean }>(
+        'SELECT qms.change_password($1,$2,$3,$4) changed',
+        [
+          user.id,
+          u.password_hash,
+          await hashPassword(input.newPassword),
+          await sha256(token),
+        ],
+      );
+      if (!changed.changed)
+        throw new HttpError(409, 'Your account changed. Please sign in again.');
       return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(token) });
     }
     if (user.must_change_password)
@@ -371,20 +394,23 @@ async function handler(request: Request) {
           password: passwordSchema.optional(),
         })
         .parse(await body(request));
-      await query('SELECT qms.save_user($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)', [
-        input.id || null,
-        user.id,
-        input.username.toLowerCase(),
-        input.name,
-        input.role,
-        input.sfId || null,
-        input.managerSfId || null,
-        input.services,
-        input.counter,
-        input.enabled,
-        input.password ? await hashPassword(input.password) : null,
-        input.email ? input.email.trim().toLowerCase() : null,
-      ]);
+      await query(
+        'SELECT qms.save_user($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        [
+          input.id || null,
+          user.id,
+          input.username.toLowerCase(),
+          input.name,
+          input.role,
+          input.sfId || null,
+          input.managerSfId || null,
+          input.services,
+          input.counter,
+          input.enabled,
+          input.password ? await hashPassword(input.password) : null,
+          input.email ? input.email.trim().toLowerCase() : null,
+        ],
+      );
       return json({ ok: true });
     }
     if (path === 'integrations' && method === 'GET') {

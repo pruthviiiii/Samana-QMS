@@ -37,7 +37,7 @@ services:
       - key: SALESFORCE_API_VERSION
         value: "67.0"
       - key: SALESFORCE_WRITE_ENABLED
-        value: "false"
+        value: "true"
       - key: WORKER_SECRET
         generateValue: true
       - key: QR_SIGNING_SECRET
@@ -53,8 +53,8 @@ services:
     region: frankfurt
     plan: starter
     branch: main
-    buildCommand: npm ci --include=dev && npm run build:worker
-    startCommand: node dist-worker/worker.mjs
+    buildCommand: npm ci --omit=dev
+    startCommand: node scripts/worker.mjs
     envVars:
       - key: NODE_VERSION
         value: "22"

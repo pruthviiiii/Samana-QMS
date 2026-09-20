@@ -40,6 +40,7 @@ export async function verifyPassword(password: string, hash: string) {
   if (
     algorithm !== 'pbkdf2' ||
     !salt ||
+    !Number.isInteger(iterations) ||
     iterations < 100000 ||
     iterations > 1000000
   )

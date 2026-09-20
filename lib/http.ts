@@ -21,7 +21,7 @@ export function json(
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
-      'Referrer-Policy': 'same-origin',
+      'Referrer-Policy': 'no-referrer',
       ...extra,
     },
   });
@@ -132,4 +132,32 @@ export async function rateLimit(key: string, limit = 10, windowSeconds = 300) {
   );
   if (r.count > limit)
     throw new HttpError(429, 'Too many attempts. Please try again later.');
+}
+
+export async function clientRateLimit(
+  request: Request,
+  scope: string,
+  limit: number,
+  windowSeconds: number,
+) {
+  // Honor a proxy header only when explicitly configured behind a trusted edge.
+  // Never use arbitrary forwarded headers as the sole abuse safeguard.
+  const header = process.env.TRUSTED_CLIENT_IP_HEADER;
+  if (
+    !header ||
+    ![
+      'cf-connecting-ip',
+      'true-client-ip',
+      'x-real-ip',
+      'x-forwarded-for',
+    ].includes(header)
+  )
+    return;
+  const value = request.headers.get(header)?.split(',')[0].trim();
+  if (!value || !/^[a-fA-F0-9:.]{3,64}$/.test(value)) return;
+  await rateLimit(
+    scope + ':client:' + (await sha256(value)),
+    limit,
+    windowSeconds,
+  );
 }

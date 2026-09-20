@@ -10,7 +10,7 @@
     "dev": "vinext dev",
     "build": "node scripts/build.mjs",
     "start": "wrangler dev --config dist/server/wrangler.json",
-    "lint": "oxlint app components/qms lib tests scripts vite.config.ts vitest.config.ts next.config.ts",
+    "lint": "oxlint app components/qms lib tests scripts vite.config.ts vitest.config.ts next.config.ts middleware.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",

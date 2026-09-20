@@ -1,6 +1,13 @@
 import { randomToken, sha256 } from './security';
 import type { Customer } from './domain';
-import { HttpError, requireUser, sessionCookie, json, rateLimit } from './http';
+import {
+  HttpError,
+  requireUser,
+  sessionCookie,
+  json,
+  rateLimit,
+  clientRateLimit,
+} from './http';
 const encoder = new TextEncoder();
 async function signature(value: string) {
   const secret = process.env.QR_SIGNING_SECRET;
@@ -47,13 +54,15 @@ export async function startGuest(request: Request, invite: string) {
       403,
       'This QR code has expired. Please scan the current code.',
     );
-  await rateLimit('invite:' + match[2].slice(0, 20), 150, 300);
   try {
     const existing = await requireUser(request);
     if (existing.role !== 'display') return json({ ok: true });
   } catch (e) {
     if (!(e instanceof HttpError) || e.status !== 401) throw e;
   }
+  await clientRateLimit(request, 'invite', 10, 300);
+  await rateLimit('invite:global', 300, 300);
+  await rateLimit('invite:' + match[2].slice(0, 20), 150, 300);
   const id = crypto.randomUUID();
   const token = randomToken();
   const { db } = await import('./db');

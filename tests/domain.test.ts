@@ -119,6 +119,13 @@ describe('Password security and SQL migration parsing', () => {
   });
   it('rejects invalid hashes', async () =>
     expect(await verifyPassword('password', 'plain-password')).toBe(false));
+  it.each(['NaN', 'Infinity', '100000.5', '0', '1000001'])(
+    'rejects invalid password work factor %s',
+    async (iterations) =>
+      expect(
+        await verifyPassword('password', `pbkdf2$${iterations}$salt$hash`),
+      ).toBe(false),
+  );
   it('keeps procedural SQL bodies intact', () =>
     expect(
       splitStatements(

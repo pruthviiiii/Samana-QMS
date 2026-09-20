@@ -1,5 +1,6 @@
 import { query } from './db';
 import { sfRequest } from './salesforce';
+import { HttpError } from './http';
 type Job = {
   id: string;
   ticket_id: string;
@@ -12,10 +13,19 @@ export function salesforcePayload(
   ticket: Record<string, unknown>,
   comments: unknown[],
 ) {
-  const seconds = (a: unknown, b: unknown) =>
-    typeof a === 'string' && typeof b === 'string'
-      ? Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 1000))
+  const epoch = (value: unknown) =>
+    value instanceof Date
+      ? value.getTime()
+      : typeof value === 'string'
+        ? Date.parse(value)
+        : NaN;
+  const seconds = (a: unknown, b: unknown) => {
+    const start = epoch(a),
+      end = epoch(b);
+    return Number.isFinite(start) && Number.isFinite(end)
+      ? Math.max(0, Math.round((end - start) / 1000))
       : null;
+  };
   return {
     qmsTicketNumber: 'SAMANA-' + ticket.id,
     recordType: ticket.identifier_type === 'mobile' ? 'Mobile' : 'Reception',
@@ -82,7 +92,7 @@ export async function processJobs() {
   let sent = 0;
   for (const job of jobs) {
     try {
-      const [ticket] = await query<Record<string, string | null>>(
+      const [ticket] = await query<Record<string, unknown>>(
         `SELECT v.*,u.sf_id agent_sf_id,u.email agent_email,l.customer->>'email' customer_email FROM qms.ticket_view v LEFT JOIN qms.users u ON u.id=v.assigned_to JOIN qms.lookups l ON l.id=v.lookup_id WHERE v.id=$1`,
         [job.ticket_id],
       );
@@ -91,13 +101,14 @@ export async function processJobs() {
         if (
           ticket.identifier_type !== 'mobile' ||
           !ticket.customer_id ||
+          typeof ticket.mobile !== 'string' ||
           !ticket.mobile
         )
           throw new Error('SMS eligibility changed.');
         const url = new URL(process.env.SMS_GATEWAY_URL!);
         if (url.protocol !== 'https:')
           throw new Error('SMS gateway requires HTTPS.');
-        const message = `SAMANA: Your ticket ${ticket.number} for ${ticket.service_name} is ready. Follow your visit: ${process.env.APP_ORIGIN}/visit/${ticket.public_token}`;
+        const message = `SAMANA: Your ticket ${String(ticket.number)} for ${String(ticket.service_name)} is ready. Follow your visit: ${process.env.APP_ORIGIN}/visit/${String(ticket.public_token)}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: {
@@ -130,24 +141,31 @@ export async function processJobs() {
         const result = (await sfRequest('/services/apexrest/api/QMSTicketAPI', {
           method: 'POST',
           body: JSON.stringify(salesforcePayload(ticket, comments)),
-        })) as { isSuccess?: boolean; recordId?: string };
-        if (!result.isSuccess)
+        })) as { isSuccess?: boolean; statusCode?: number; recordId?: string };
+        if (
+          result.isSuccess !== true ||
+          result.statusCode !== 200 ||
+          !result.recordId ||
+          !/^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/.test(result.recordId)
+        )
           throw new Error('Salesforce did not accept the ticket payload.');
-        reference = result.recordId || '';
+        reference = result.recordId;
       }
       await query(
         "UPDATE qms.outbox SET status=CASE WHEN revision=$2 THEN 'sent' ELSE 'pending' END,locked_at=NULL,lease_token=NULL,last_error=NULL,provider_reference=$3,attempts=CASE WHEN revision=$2 THEN attempts ELSE 0 END,available_at=now() WHERE id=$1 AND lease_token=$4",
         [job.id, job.revision, reference, job.lease_token],
       );
       sent++;
-    } catch {
+    } catch (error) {
       await query(
         "UPDATE qms.outbox SET status=CASE WHEN revision<>$3 THEN 'pending' WHEN attempts>=5 THEN 'failed' ELSE 'pending' END,attempts=CASE WHEN revision<>$3 THEN 0 ELSE attempts END,available_at=now()+make_interval(secs=>least(3600,power(2,attempts)::int*15)),locked_at=NULL,lease_token=NULL,last_error=$2 WHERE id=$1 AND lease_token=$4",
         [
           job.id,
           job.kind === 'sms'
             ? 'SMS delivery failed. Check gateway configuration.'
-            : 'Salesforce synchronization failed. Check the integration contract.',
+            : error instanceof HttpError
+              ? error.message
+              : 'Salesforce did not confirm a saved record. Check the integration contract.',
           job.revision,
           job.lease_token,
         ],

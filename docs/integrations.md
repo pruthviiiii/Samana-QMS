@@ -14,9 +14,9 @@ The live read-only verification authenticated successfully and retrieved an acco
 
 ## Optional Salesforce ticket upsert
 
-`POST /services/apexrest/api/QMSTicketAPI` is guarded by `SALESFORCE_WRITE_ENABLED=true`. It has **not** been invoked. Enabling it or modifying Salesforce requires the owner's permission.
+`POST /services/apexrest/api/QMSTicketAPI` is guarded by `SALESFORCE_WRITE_ENABLED=true`. POD2 writeback and the two-class Apex repair were explicitly approved. The repair deployed on 21 September 2026 with nine Apex tests passing. Changes to other Salesforce metadata or orgs still require approval.
 
-`lib/jobs.ts` builds full snapshots using the existing Apex contract: external ticket number `SAMANA-<UUID>`, record type, guest flag, account/contact identifiers, department/reason, unit/SB, handled-by identity/email, meeting room, outcome, timing, timestamps, and comments. The daily visible ticket number is not used as the external ID. The existing API resolves its handled-by lookup through email, so directory sync stores Salesforce emails. No Salesforce schema change is needed for the implemented read flow.
+`lib/jobs.ts` builds full snapshots using the Apex contract: external ticket number `SAMANA-<UUID>`, record type, guest flag, account/contact identifiers, department/reason, unit/SB, handled-by identity/email, meeting room, outcome, timing, timestamps, and comments. The daily visible ticket number is not used as the external ID. The repaired API resolves a valid Salesforce User ID first, then email as a legacy fallback, and clears an absent assignment. No Salesforce schema change was required. Delivery requires `isSuccess:true`, `statusCode:200`, and a valid `recordId`.
 
 ## SMS gateway
 

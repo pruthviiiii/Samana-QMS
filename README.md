@@ -4,11 +4,11 @@ React application for customer QR check-in, staff-issued tickets, executive work
 
 ## Current delivery
 
-The QMS database is `samana_qms`; automated database tests use the separate `samana_qms_test` database. The existing unrelated database was not altered. Salesforce authentication and account/unit/project lookups have been verified against the supplied POD2 sandbox. No Salesforce records or metadata have been changed.
+The QMS database is `samana_qms`; automated database tests use the separate `samana_qms_test` database. The existing unrelated database was not altered. Salesforce authentication and account/unit/project lookups have been verified against the supplied POD2 sandbox. The approved ticket API patch was deployed to POD2 on 21 September 2026 with all nine Apex tests passing. See the [security review](docs/security-review-2026-09-21.md).
 
 The implementation includes the BRD's 21 functional requirements, subject to the operational setup below. The user's instruction replaces the documents' kiosk hardware flow with rotating reception/TV QR codes and customer mobiles. Staff can also issue tickets. See [requirements and decisions](docs/requirements.md).
 
-**Launch setup still required:** choose and activate staff/service mappings, configure an SMS gateway, provide a persistent scheduler host, approve the customer-facing domain/access, and complete visual/device acceptance testing. Salesforce ticket write-back is implemented but remains disabled until explicitly authorized and tested. The supplied Salesforce endpoint is a sandbox, not a production organization. Do not describe this review deployment as a completed production rollout.
+**Launch setup still required:** complete staff/service mappings, configure an SMS gateway, and complete visual/device, backup restore, and capacity acceptance testing. Render is the management review host; verify both web and scheduler deployment settings in [Render setup](docs/render.md). Salesforce ticket writeback is approved for POD2 and enabled in its Render Blueprint. The supplied Salesforce endpoint is a sandbox, not a production organization.
 
 ## Start locally
 
@@ -79,7 +79,7 @@ For Sites, runtime secrets are managed in Sites and source metadata lives in `.o
 
 SMS is disabled until the gateway is configured. Set `SMS_GATEWAY_URL`, `SMS_GATEWAY_TOKEN`, `SMS_SENDER`, and `SMS_ENABLED=true` only after validating the provider contract in [integrations](docs/integrations.md). The gateway must support idempotency. EID/passport check-ins never create SMS jobs, even when Salesforce contains a phone number. Queue operation continues if messaging fails; staff see delivery status.
 
-`SALESFORCE_WRITE_ENABLED=false` is intentional. Obtain the owner's approval before enabling the QMSTicketAPI adapter or making any Salesforce changes. The adapter uses a stable external ticket key and full snapshots because the existing API clears omitted scalar values. Live write-back acceptance remains unperformed while disabled.
+POD2 ticket writeback and the two-class Apex fix were explicitly approved. Its Render Blueprint sets `SALESFORCE_WRITE_ENABLED=true`; verify the value on an existing manually configured service. Other orgs retain the disabled `.env.example` default until approved and validated. The adapter uses a stable external ticket key and full snapshots, and marks delivery complete only after Salesforce confirms a record ID.
 
 ## Validation
 

@@ -20,6 +20,7 @@ const entries = [
   'package.json',
   'package-lock.json',
   'next.config.ts',
+  'middleware.ts',
   'tsconfig.json',
   'vite.config.ts',
   'components.json',

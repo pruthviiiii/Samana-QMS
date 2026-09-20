@@ -10,7 +10,7 @@ COPY public ./public
 COPY db ./db
 COPY scripts ./scripts
 COPY .openai ./.openai
-COPY vite.config.ts next.config.ts tsconfig.json components.json ./
+COPY vite.config.ts next.config.ts middleware.ts tsconfig.json components.json ./
 RUN npm run build:node && npm run build:worker
 
 FROM node:22-bookworm-slim AS web

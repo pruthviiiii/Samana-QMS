@@ -1,6 +1,6 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { query } from '../lib/db';
-import { hashPassword } from '../lib/security';
+import { hashPassword, sha256 } from '../lib/security';
 import type { Customer } from '../lib/domain';
 const lookup = vi.hoisted(() => vi.fn());
 vi.mock('../lib/salesforce', async (original) => ({
@@ -16,6 +16,7 @@ let adminId = '';
 let agentId = '';
 let activeTicket = '';
 let guestCookie = '';
+const loginFixtures: { id: string; username: string; email: string }[] = [];
 function request(
   path: string,
   method = 'GET',
@@ -81,6 +82,20 @@ beforeAll(async () => {
     if (role === 'admin') adminId = user.id;
     else agentId = user.id;
   }
+  for (const [suffix, email] of [
+    ['aliases', prefix + '-aliases@example.test'],
+    ['long-email', `${prefix}@${'a'.repeat(63)}.${'b'.repeat(63)}.test`],
+    ['Ambiguous@example.test', prefix + '-ambiguous-one@example.test'],
+    ['aMBIGUOUS@example.test', prefix + '-ambiguous-two@example.test'],
+    ['email-target', prefix + '-ambiguous@example.test'],
+  ]) {
+    const username = prefix + '-' + suffix;
+    const [user] = await query<{ id: string }>(
+      "INSERT INTO qms.users(username,email,name,role,password_hash,must_change_password) VALUES($1,$2,'Login fixture','agent',$3,false) RETURNING id",
+      [username, email, hash],
+    );
+    loginFixtures.push({ id: user.id, username, email });
+  }
   const admin = await send(
     'auth/login',
     'POST',
@@ -107,8 +122,91 @@ afterAll(async () => {
     adminId,
     agentId,
   ]);
+  for (const fixture of loginFixtures) {
+    await query('DELETE FROM qms.sessions WHERE user_id=$1', [fixture.id]);
+    await query('DELETE FROM qms.users WHERE id=$1', [fixture.id]);
+    await query('DELETE FROM qms.rate_limits WHERE key=ANY($1::text[])', [
+      [
+        'login-account:' + fixture.id,
+        'login:' + (await sha256(fixture.username)),
+        'login:' + (await sha256(fixture.email)),
+      ],
+    ]);
+  }
 });
 describe('Authenticated API workflows', { concurrent: false }, () => {
+  it('rejects ambiguous case-insensitive usernames without email fallback', async () => {
+    const identifier = loginFixtures[2].username.toLowerCase();
+    expect(loginFixtures[3].username.toLowerCase()).toBe(identifier);
+    expect(loginFixtures[4].email).toBe(identifier);
+    const login = await send(
+      'auth/login',
+      'POST',
+      {
+        username: identifier,
+        password,
+      },
+      '',
+    );
+    expect(login.response.status).toBe(401);
+    expect(login.response.headers.get('set-cookie')).toBeNull();
+    expect(
+      await query(
+        'SELECT token_hash FROM qms.sessions WHERE user_id=ANY($1::uuid[])',
+        [loginFixtures.slice(2).map((fixture) => fixture.id)],
+      ),
+    ).toHaveLength(0);
+  });
+  it('shares the account login limit between username and email', async () => {
+    const fixture = loginFixtures[0];
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const login = await send(
+        'auth/login',
+        'POST',
+        {
+          username: attempt % 2 === 0 ? fixture.username : fixture.email,
+          password: 'Incorrect-synthetic-password',
+        },
+        '',
+      );
+      expect(login.response.status).toBe(401);
+    }
+    for (const identifier of [fixture.username, fixture.email]) {
+      const login = await send(
+        'auth/login',
+        'POST',
+        {
+          username: identifier,
+          password,
+        },
+        '',
+      );
+      expect(login.response.status).toBe(429);
+      expect(login.response.headers.get('set-cookie')).toBeNull();
+    }
+    expect(
+      await query('SELECT token_hash FROM qms.sessions WHERE user_id=$1', [
+        fixture.id,
+      ]),
+    ).toHaveLength(0);
+  });
+  it('accepts a valid email login identifier longer than 120 characters', async () => {
+    const fixture = loginFixtures[1];
+    expect(fixture.email.length).toBeGreaterThan(120);
+    expect(fixture.email.length).toBeLessThanOrEqual(254);
+    const login = await send(
+      'auth/login',
+      'POST',
+      {
+        username: fixture.email,
+        password,
+      },
+      '',
+    );
+    expect(login.response.status).toBe(200);
+    expect((login.result.user as { id: string }).id).toBe(fixture.id);
+    expect(cookie(login.response)).not.toBe('');
+  });
   it('requires authentication for the queue', async () =>
     expect((await send('queue', 'GET', undefined, '')).response.status).toBe(
       401,
@@ -264,13 +362,27 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
       (await send('presence', 'POST', { online: false }, agentCookie)).response
         .status,
     ).toBe(409));
-  it('blocks logout during an active call without deleting the session', async () => {
+  it('revokes logout sessions even while a called ticket stays assigned', async () => {
     expect(
       (await send('auth/logout', 'POST', {}, agentCookie)).response.status,
-    ).toBe(409);
+    ).toBe(200);
     expect(
       (await send('auth/me', 'GET', undefined, agentCookie)).response.status,
-    ).toBe(200);
+    ).toBe(401);
+    const [ticket] = await query<{ assigned_to: string; status: string }>(
+      'SELECT assigned_to,status FROM qms.tickets WHERE id=$1',
+      [activeTicket],
+    );
+    expect(ticket.assigned_to).toBe(agentId);
+    expect(ticket.status).toBe('called');
+    const login = await send(
+      'auth/login',
+      'POST',
+      { username: prefix + '-agent', password },
+      '',
+    );
+    expect(login.response.status).toBe(200);
+    agentCookie = cookie(login.response);
   });
   it('starts and completes service with notes and audit history', async () => {
     let [t] = await query<{ version: number }>(

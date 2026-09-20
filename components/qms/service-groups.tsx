@@ -17,8 +17,11 @@ export default function ServiceGroups() {
     [selection, setSelection] = useState<Record<string, string>>({}),
     [busy, setBusy] = useState(''),
     [error, setError] = useState(''),
-    [message, setMessage] = useState('');
+    [message, setMessage] = useState(''),
+    [loading, setLoading] = useState(true);
   async function load() {
+    setLoading(true);
+    setError('');
     try {
       const d = await api<GroupData>('integrations/salesforce/groups');
       setData(d);
@@ -29,6 +32,8 @@ export default function ServiceGroups() {
       );
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setLoading(false);
     }
   }
   useEffect(() => {
@@ -64,8 +69,8 @@ export default function ServiceGroups() {
             services.
           </p>
         </div>
-        <Button variant="outline" onClick={load} disabled={!!busy}>
-          Refresh
+        <Button variant="outline" onClick={load} disabled={!!busy || loading}>
+          {loading ? 'Loading…' : 'Refresh'}
         </Button>
       </div>
       <div className="page-section stack">
@@ -76,7 +81,9 @@ export default function ServiceGroups() {
         )}
         {message && <output className="success">{message}</output>}
         {!data ? (
-          <p className="muted">Loading Salesforce queues…</p>
+          loading ? (
+            <p className="muted">Loading Salesforce queues…</p>
+          ) : null
         ) : (
           SERVICES.map((s) => (
             <div className="group-mapping" key={s.id}>

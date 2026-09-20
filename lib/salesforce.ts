@@ -97,9 +97,22 @@ export async function sfRequest(
     return await response.json();
   } catch (error) {
     if (error instanceof HttpError) throw error;
+    const cause =
+      error instanceof Error && 'cause' in error ? error.cause : undefined;
+    const code =
+      cause && typeof cause === 'object' && 'code' in cause
+        ? String(cause.code)
+        : undefined;
+    console.error(
+      JSON.stringify({
+        event: 'salesforce_transport_failed',
+        type: error instanceof Error ? error.name : 'Unknown',
+        ...(code && /^[A-Z0-9_]{1,60}$/.test(code) ? { code } : {}),
+      }),
+    );
     throw new HttpError(
       502,
-      'Salesforce is temporarily unreachable. No ticket has been issued.',
+      'Salesforce is temporarily unreachable. Check the server connection and retry.',
     );
   }
 }

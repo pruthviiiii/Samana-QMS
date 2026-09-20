@@ -1,14 +1,16 @@
 # Deploying to Render
 
 `render.yaml` in the repository root defines everything Render needs: a web service and an
-always-on scheduler. Render reads it when you create a Blueprint from the connected repository.
+always-on scheduler. Render reads it when you create or sync a Blueprint from the connected repository.
 
 ## Why Render
 
 The app needs two long-running processes: the standalone Node server and the 15-second
 scheduler that performs five-minute reassignment and outbox delivery. Render runs both as
-native Node services. Serverless hosts (Vercel, Netlify) cannot run the scheduler and their
-cron floor of one minute would violate the five-minute routing rule.
+native Node services. The Render scheduler runs `node scripts/worker.mjs` and calls the
+web service's authenticated `/api/jobs/run` endpoint. Salesforce/SMS credentials and enable
+flags therefore live on the web service. Other hosting arrangements need an equivalent
+persistent scheduler.
 
 ## One-time setup
 
@@ -20,7 +22,7 @@ cron floor of one minute would violate the five-minute routing rule.
    - `DATABASE_URL` — the Neon connection string for `samana_qms`.
    - `SALESFORCE_INSTANCE_URL`, `SALESFORCE_CLIENT_ID`, `SALESFORCE_CLIENT_SECRET` — the
      connected app credentials for the org in use.
-   The scheduler copies `WORKER_SECRET` and `DATABASE_URL` from the web service automatically.
+     The scheduler copies `WORKER_SECRET` and `DATABASE_URL` from the web service automatically.
 4. Apply. Render builds both services, runs `scripts/migrate.mjs` before the web service
    starts, and reports the web URL.
 5. If the assigned URL differs from `https://samana-qms.onrender.com`, update `APP_ORIGIN`
@@ -43,6 +45,10 @@ Then sign in at the web URL as `admin` and change the password when prompted.
 - Settings → Connected systems shows Salesforce connected and the scheduler healthy
   within 30 seconds of the worker starting.
 - Issue one ticket from the overview page and confirm it appears in the live queue.
+- Run `node scripts/security-smoke.mjs https://<web-url>` to check headers and access guards.
+- Existing services created manually must use the scheduler start command
+  `node scripts/worker.mjs` and build command `npm ci --omit=dev`. Pushing a Blueprint file
+  does not reconfigure a manually created service. Confirm both commands in Render.
 
 ## Switching to another Salesforce org (UAT, production)
 
@@ -53,10 +59,10 @@ the `QMS_Access` permission set.
 
 ## Operational notes
 
-- Both services use the `starter` plan so the scheduler never sleeps. A free web instance
-  would sleep after idle and the queue would stop routing.
-- Render's outbound IP addresses are dynamic on standard plans, so the Neon IP allow list
-  must stay open, or use a Render plan with static outbound IPs.
+- Select service plans that support continuous web and worker operation, and review the
+  current cost in Render before applying a Blueprint. No service plan is changed by local tests.
+- If database network restrictions are enabled, configure them using the actual outbound
+  addresses listed for the deployed services.
 - Logs for both services are in the Render dashboard. The scheduler logs one JSON line per
   tick; `scheduler_unreachable` means it cannot reach the web URL.
 - Rollback: Render keeps previous deploys. Use **Manual Deploy → Rollback** on the web

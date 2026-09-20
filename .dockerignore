@@ -10,6 +10,7 @@
 !scripts/**
 !vite.config.ts
 !next.config.ts
+!middleware.ts
 !tsconfig.json
 !components.json
 !.openai/hosting.json

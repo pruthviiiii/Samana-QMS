@@ -1,8 +1,5 @@
-const origin =
-  process.env.WORKER_ORIGIN ||
-  process.env.APP_ORIGIN ||
-  'http://localhost:3000';
-if (!process.env.WORKER_SECRET) throw new Error('WORKER_SECRET is required.');
+import { schedulerConfig, schedulerTick } from './scheduler.mjs';
+const config = schedulerConfig();
 let stop = false;
 process.on('SIGINT', () => {
   stop = true;
@@ -14,22 +11,14 @@ console.log('Samana QMS scheduler started.');
 while (!stop) {
   const start = Date.now();
   try {
-    const response = await fetch(origin + '/api/jobs/run', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + process.env.WORKER_SECRET },
-      signal: AbortSignal.timeout(45000),
-    });
-    if (!response.ok)
-      console.error(
-        JSON.stringify({ event: 'scheduler_failed', status: response.status }),
-      );
-    else
-      console.log(
-        JSON.stringify({
-          event: 'scheduler_tick',
-          at: new Date().toISOString(),
-        }),
-      );
+    const result = await schedulerTick(config);
+    console.log(
+      JSON.stringify({
+        event: 'scheduler_tick',
+        at: new Date().toISOString(),
+        ...result,
+      }),
+    );
   } catch (error) {
     console.error(
       JSON.stringify({ event: 'scheduler_unreachable', type: error.name }),
