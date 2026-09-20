@@ -1,0 +1,47 @@
+﻿{
+    "images":  [
+                   {
+                       "page":  "https://www.samanadevelopers.com/projects/samana-ocean-bay",
+                       "source":  "https://www.samanadevelopers.com/storage/projects/gallery/2026/06/10/lg_6a295456eac74.jpeg",
+                       "project":  "SAMANA Ocean Bay",
+                       "file":  "samana-ocean-bay-sunset.jpg",
+                       "description":  "Sunset pool and fire-pit lounge; suggested sign-in background"
+                   },
+                   {
+                       "page":  "https://www.samanadevelopers.com/projects/samana-ocean-bay",
+                       "source":  "https://www.samanadevelopers.com/storage/projects/gallery/2026/06/10/lg_6a29545954bef.jpeg",
+                       "project":  "SAMANA Ocean Bay",
+                       "file":  "samana-ocean-bay-residences.jpg",
+                       "description":  "Symmetrical courtyard perspective; suggested overview banner"
+                   },
+                   {
+                       "page":  "https://www.samanadevelopers.com/projects/samana-rome",
+                       "source":  "https://www.samanadevelopers.com/storage/projects/gallery/2024/10/10/lg_6707b582e992a.jpg",
+                       "project":  "SAMANA Rome",
+                       "file":  "samana-rome-dusk.jpg",
+                       "description":  "Building facade at dusk with SAMANA lettering; suggested TV display"
+                   }
+               ],
+    "fonts":  [
+                  {
+                      "weight":  "200 800",
+                      "license":  "manrope-OFL.txt",
+                      "file":  "manrope-latin-variable.woff2",
+                      "family":  "Manrope",
+                      "source":  "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2",
+                      "style":  "normal",
+                      "subset":  "latin",
+                      "licenseSource":  "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/OFL.txt"
+                  },
+                  {
+                      "weight":  "300 700",
+                      "license":  "cormorantgaramond-OFL.txt",
+                      "file":  "cormorant-garamond-latin-variable.woff2",
+                      "family":  "Cormorant Garamond",
+                      "source":  "https://fonts.gstatic.com/s/cormorantgaramond/v21/co3bmX5slCNuHLi8bLeY9MK7whWMhyjYqXtK.woff2",
+                      "style":  "normal",
+                      "subset":  "latin",
+                      "licenseSource":  "https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/OFL.txt"
+                  }
+              ]
+}

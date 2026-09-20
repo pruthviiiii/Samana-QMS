@@ -1,6 +1,6 @@
 # SAMANA QMS
 
-React application for customer QR check-in, staff-issued tickets, executive workstations, HOD/manager operations, and reception TVs. Built with TypeScript, Vinext, Vite, PostgreSQL on Neon, and server-side Salesforce APIs. Official SAMANA Ocean Pearl imagery and logos are bundled locally; provenance is in `public/images/sources.json`.
+React application for customer QR check-in, staff-issued tickets, executive workstations, HOD/manager operations, and reception TVs. Built with TypeScript, Vinext, Vite, PostgreSQL on Neon, and server-side Salesforce APIs. Official SAMANA Ocean Pearl, Ocean Bay, and Rome imagery and logos are bundled locally; provenance is in `public/images/sources.json` and `public/images/redesign-sources.json`. Manrope and Cormorant Garamond fonts are self-hosted with their OFL licenses.
 
 ## Current delivery
 
@@ -47,6 +47,8 @@ Localhost QR codes work only on the same computer. Customers' phones require an 
 - Atomic ticket numbering, idempotent issuance, duplicate active-visit prevention, preferred owner routing, service-specific round robin, strict greater-than-five-minute escalation, and visible unmapped/offline exceptions.
 - Call, start, complete with notes, no-show, manager reassignment, notifications, printable receipts, private mobile ticket status, and TV announcements.
 - Live queue filtering, pagination, operational metrics, team administration, connection health, audit history, reports, and spreadsheet-safe CSV exports.
+- Interactive table/board views, removable filter chips, live department summaries, keyboard quick actions (Ctrl/Cmd+K), mobile navigation, and a focused ticket drawer with visit progress and pinned actions. The board displays the current page of results; use pagination to see further tickets.
+- Service selection cards, English/Arabic check-in labels, report date presets, password visibility controls, reduced-motion support, and a consistent SAMANA visual system across staff, customer, and TV screens. Report charts load on demand.
 - Durable routing, worker health, retryable integration outbox, lease ownership, session revocation on password reset, role checks, request-size limits, and rate limiting.
 
 ## Production build and self-hosting

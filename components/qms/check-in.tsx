@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Search,
   ArrowRight,
@@ -50,7 +50,24 @@ const translations = {
     noSms: 'SMS is not sent for Emirates ID or passport check-ins.',
     select: 'Select a unit',
     noUnits:
-      'No units were returned by Salesforce. Please ask reception to verify your account.',
+      'No linked units were found. Please ask reception to verify your account.',
+    finding: 'Finding your account…',
+    issuing: 'Issuing…',
+    verified: 'Account found',
+    autoSelected: 'Selected',
+    linkedUnits: 'linked units',
+    saved: 'Your ticket is saved. Printing again will not create a duplicate.',
+    privacy:
+      'Your details are used to find your account and manage this visit.',
+    passportHint: 'Enter passport number',
+    headquarters: 'Samana Headquarters',
+    assistance: 'General assistance',
+    services: {
+      'crm-general': 'General Query',
+      'crm-noc': 'NOC / Resale',
+      'crm-refund': 'Refund',
+      'crm-handover': 'Handover',
+    },
   },
   ar: {
     welcome: 'أهلاً بكم في سمانا',
@@ -79,6 +96,22 @@ const translations = {
     noSms: 'لا يتم إرسال رسائل عند التسجيل بالهوية أو جواز السفر.',
     select: 'اختر وحدة',
     noUnits: 'لم يتم العثور على وحدات. يرجى مراجعة الاستقبال للتحقق من حسابك.',
+    finding: 'جارٍ البحث عن حسابك…',
+    issuing: 'جارٍ إصدار التذكرة…',
+    verified: 'تم العثور على الحساب',
+    autoSelected: 'تم الاختيار',
+    linkedUnits: 'وحدات مرتبطة',
+    saved: 'تم حفظ تذكرتك. لن تؤدي إعادة الطباعة إلى إصدار تذكرة جديدة.',
+    privacy: 'تُستخدم بياناتك للعثور على حسابك وتنظيم هذه الزيارة.',
+    passportHint: 'أدخل رقم جواز السفر',
+    headquarters: 'المقر الرئيسي لسمانا',
+    assistance: 'المساعدة العامة',
+    services: {
+      'crm-general': 'استفسار عام',
+      'crm-noc': 'شهادة عدم ممانعة / إعادة بيع',
+      'crm-refund': 'استرداد المبلغ',
+      'crm-handover': 'تسليم الوحدة',
+    },
   },
 };
 export default function CheckIn({
@@ -102,6 +135,11 @@ export default function CheckIn({
   const [error, setError] = useState('');
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [requestId, setRequestId] = useState('');
+  const stepRef = useRef<HTMLDivElement>(null);
+  const identifierRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (lookup || ticket) stepRef.current?.focus();
+  }, [lookup, ticket]);
   const reset = () => {
     setValue('');
     setLookup(null);
@@ -153,7 +191,11 @@ export default function CheckIn({
     }
   }
   return (
-    <section className="checkin" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+    <section
+      className="checkin"
+      lang={language}
+      dir={language === 'ar' ? 'rtl' : 'ltr'}
+    >
       <div className="checkin-top">
         <div>
           <p className="eyebrow">SAMANA CUSTOMER EXPERIENCE</p>
@@ -163,6 +205,7 @@ export default function CheckIn({
         <div className="language-toggle">
           <button
             className={language === 'en' ? 'active' : ''}
+            aria-pressed={language === 'en'}
             onClick={() => setLanguage('en')}
           >
             English
@@ -170,6 +213,7 @@ export default function CheckIn({
           <button
             lang="ar"
             className={language === 'ar' ? 'active' : ''}
+            aria-pressed={language === 'ar'}
             onClick={() => setLanguage('ar')}
           >
             العربية
@@ -200,7 +244,7 @@ export default function CheckIn({
         </p>
       )}
       {ticket ? (
-        <div className="ticket-success">
+        <div className="ticket-success" ref={stepRef} tabIndex={-1}>
           <span className="success-ring">
             <Check size={28} />
           </span>
@@ -209,8 +253,8 @@ export default function CheckIn({
           <h3>{ticket.service_name}</h3>
           <p>{t.wait}</p>
           <div className="receipt-details">
-            <span>{ticket.project_name || 'Samana Headquarters'}</span>
-            <span>{ticket.unit_name || 'General assistance'}</span>
+            <span>{ticket.project_name || t.headquarters}</span>
+            <span>{ticket.unit_name || t.assistance}</span>
           </div>
           <div className="section-actions">
             <Button
@@ -230,9 +274,7 @@ export default function CheckIn({
               <ArrowRight size={16} />
             </Button>
           </div>
-          <small>
-            The ticket is saved. Printing again does not create a duplicate.
-          </small>
+          <small>{t.saved}</small>
         </div>
       ) : !lookup ? (
         <form onSubmit={find}>
@@ -251,6 +293,7 @@ export default function CheckIn({
               <button
                 type="button"
                 key={key}
+                aria-pressed={type === key}
                 className={
                   type === key ? 'identity-option active' : 'identity-option'
                 }
@@ -270,6 +313,8 @@ export default function CheckIn({
             <label htmlFor="identifier">{t[type]}</label>
             <Input
               id="identifier"
+              ref={identifierRef}
+              aria-invalid={!!error}
               className="form-control identifier"
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -281,7 +326,7 @@ export default function CheckIn({
                   ? '971 50 123 4567'
                   : type === 'emiratesId'
                     ? '784-XXXX-XXXXXXX-X'
-                    : 'Enter passport number'
+                    : t.passportHint
               }
               required
               dir="ltr"
@@ -300,16 +345,13 @@ export default function CheckIn({
             ) : (
               <Search size={17} />
             )}{' '}
-            {busy ? 'Finding your account…' : t.lookup}
+            {busy ? t.finding : t.lookup}
           </Button>
-          <p className="privacy-note">
-            Your details are used only to identify your account and manage this
-            visit.
-          </p>
+          <p className="privacy-note">{t.privacy}</p>
         </form>
       ) : (
         <div className="stack">
-          <div className="customer-card">
+          <div className="customer-card" ref={stepRef} tabIndex={-1}>
             <span className="avatar large">
               <UserRound size={23} />
             </span>
@@ -319,13 +361,13 @@ export default function CheckIn({
               </h3>
               <p>
                 {lookup.customer.registered
-                  ? `${lookup.customer.units.length} linked ${lookup.customer.units.length === 1 ? 'unit' : 'units'} · Salesforce verified`
+                  ? `${lookup.customer.units.length} ${t.linkedUnits}`
                   : t.general}
               </p>
             </div>
             {lookup.customer.registered && (
               <span className="verified">
-                <Check size={13} /> Verified
+                <Check size={13} /> {t.verified}
               </span>
             )}
           </div>
@@ -336,6 +378,7 @@ export default function CheckIn({
                 <div className="department-options">
                   <button
                     className={department === 'CRM' ? 'active' : ''}
+                    aria-pressed={department === 'CRM'}
                     onClick={() => {
                       setDepartment('CRM');
                       setService('crm-general');
@@ -348,6 +391,7 @@ export default function CheckIn({
                   </button>
                   <button
                     className={department === 'Collection' ? 'active' : ''}
+                    aria-pressed={department === 'Collection'}
                     onClick={() => {
                       setDepartment('Collection');
                       setService('collection');
@@ -355,29 +399,35 @@ export default function CheckIn({
                     }}
                   >
                     <Building2 size={22} />
-                    <strong>Collection</strong>
+                    <strong>
+                      {language === 'ar' ? 'التحصيل' : 'Collection'}
+                    </strong>
                     <small>{t.collection}</small>
                   </button>
                 </div>
               </div>
               {department === 'CRM' && (
                 <div>
-                  <label htmlFor="checkin-service">{t.service}</label>
-                  <select
-                    id="checkin-service"
-                    className="form-control"
-                    value={service}
-                    onChange={(e) => {
-                      setService(e.target.value);
-                      setRequestId(crypto.randomUUID());
-                    }}
+                  <label id="checkin-service-label">{t.service}</label>
+                  <fieldset
+                    className="service-choice-grid"
+                    aria-labelledby="checkin-service-label"
                   >
                     {SERVICES.filter((s) => s.department === 'CRM').map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
+                      <button
+                        key={s.id}
+                        type="button"
+                        aria-pressed={service === s.id}
+                        onClick={() => {
+                          setService(s.id);
+                          setRequestId(crypto.randomUUID());
+                        }}
+                      >
+                        <i />
+                        {t.services[s.id as keyof typeof t.services]}
+                      </button>
                     ))}
-                  </select>
+                  </fieldset>
                 </div>
               )}
               <div>
@@ -394,7 +444,7 @@ export default function CheckIn({
                         {lookup.customer.units[0].bookingNumber || '—'}
                       </small>
                     </div>
-                    <span className="badge serving">Auto-selected</span>
+                    <span className="badge serving">{t.autoSelected}</span>
                   </div>
                 ) : (
                   <select
@@ -432,7 +482,7 @@ export default function CheckIn({
               ) : (
                 <ArrowRight size={16} />
               )}{' '}
-              {busy ? 'Issuing…' : t.issue}
+              {busy ? t.issuing : t.issue}
             </Button>
           </div>
         </div>

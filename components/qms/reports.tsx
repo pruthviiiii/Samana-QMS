@@ -16,6 +16,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
 } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,6 +81,14 @@ export default function Reports({
       active = false;
     };
   }, [params]);
+  function setRange(days: number) {
+    const end = today();
+    const start = new Date(end + 'T12:00:00Z');
+    start.setUTCDate(start.getUTCDate() - days + 1);
+    setFrom(start.toISOString().slice(0, 10));
+    setTo(end);
+    setPage(1);
+  }
   async function exportCsv() {
     setBusy(true);
     try {
@@ -105,7 +114,38 @@ export default function Reports({
     }
   }
   return (
-    <div className="stack">
+    <div className="stack" aria-busy={busy}>
+      <div className="report-presets">
+        <fieldset className="service-tabs" aria-label="Report date presets">
+          {[
+            [1, 'Today'],
+            [7, 'Last 7 days'],
+            [30, 'Last 30 days'],
+          ].map(([days, label]) => {
+            const start = new Date(today() + 'T12:00:00Z');
+            start.setUTCDate(start.getUTCDate() - Number(days) + 1);
+            const selected =
+              to === today() && from === start.toISOString().slice(0, 10);
+            return (
+              <button
+                key={days}
+                aria-pressed={selected}
+                className={selected ? 'active' : ''}
+                onClick={() => setRange(Number(days))}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </fieldset>
+        <output>
+          {busy
+            ? 'Updating report…'
+            : data
+              ? `${data.from} — ${data.to} · Dubai time`
+              : 'Choose a date range'}
+        </output>
+      </div>
       <section className="report-filters panel">
         <div>
           <label htmlFor="report-from">From (Dubai)</label>
@@ -242,18 +282,23 @@ export default function Reports({
                       axisLine={false}
                       tickLine={false}
                     />
-                    <Tooltip cursor={{ fill: '#f5f8f8' }} />
+                    <Tooltip cursor={{ fill: '#f5f8f0' }} />
+                    <Legend
+                      iconType="circle"
+                      iconSize={7}
+                      wrapperStyle={{ fontSize: 11, paddingTop: 15 }}
+                    />
                     <Bar
                       dataKey="tickets"
                       name="Tickets"
-                      fill="#315b6a"
+                      fill="#5c8365"
                       radius={[5, 5, 0, 0]}
                       maxBarSize={70}
                     />
                     <Bar
                       dataKey="completed"
                       name="Completed"
-                      fill="#c6ae7a"
+                      fill="#c8b487"
                       radius={[5, 5, 0, 0]}
                       maxBarSize={70}
                     />

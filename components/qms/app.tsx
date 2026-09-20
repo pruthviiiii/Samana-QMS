@@ -5,6 +5,8 @@ import {
   useCallback,
   useRef,
   useDeferredValue,
+  lazy,
+  Suspense,
 } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -31,6 +33,12 @@ import {
   Check,
   History,
   ChevronRight,
+  Menu,
+  PanelsTopLeft,
+  List,
+  Eye,
+  EyeOff,
+  CalendarDays,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,9 +58,18 @@ import {
 import CheckIn from './check-in';
 import TicketDetail from './ticket-detail';
 import Team from './team';
-import Reports from './reports';
+const Reports = lazy(() => import('./reports'));
 import Settings from './settings';
 import TVDisplay from './tv-display';
+import { ServicePulse, QueueBoard, QueueSkeleton } from './experience';
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from '@/components/ui/command';
 type Notice = {
   id: number;
   ticket_id: string;
@@ -115,9 +132,38 @@ export default function QmsApp({
   const [qrOpen, setQrOpen] = useState(false);
   const [qr, setQr] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [queueLayout, setQueueLayout] = useState<'table' | 'board'>('table');
+  const notificationRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen((open) => !open);
+      }
+      if (event.key === 'Escape') setNotificationsOpen(false);
+    };
+    const outside = (event: PointerEvent) => {
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      )
+        setNotificationsOpen(false);
+    };
+    document.addEventListener('keydown', keydown);
+    document.addEventListener('pointerdown', outside);
+    return () => {
+      document.removeEventListener('keydown', keydown);
+      document.removeEventListener('pointerdown', outside);
+    };
+  }, []);
   const lastNotice = useRef<number | null>(null);
   const [updated, setUpdated] = useState('');
   const manager = user ? isManager(user.role) : false;
+  const canShowQr =
+    !!user &&
+    ['admin', 'hod', 'manager', 'reception', 'display'].includes(user.role);
   const serviceStaff =
     !!user && ['admin', 'hod', 'manager', 'agent'].includes(user.role);
   const canIssue =
@@ -231,6 +277,9 @@ export default function QmsApp({
   }, [qrOpen]);
   function navigate(next: string) {
     setView(next);
+    setMenuOpen(false);
+    setCommandOpen(false);
+    setPage(1);
     window.history.pushState(null, '', next === 'overview' ? '/' : '/' + next);
   }
   useEffect(() => {
@@ -317,7 +366,7 @@ export default function QmsApp({
   ];
   const title =
     view === 'overview'
-      ? 'Queue overview'
+      ? 'Your service floor'
       : view === 'agent'
         ? 'Your service desk'
         : viewNames[view] || 'Workspace';
@@ -326,16 +375,20 @@ export default function QmsApp({
       ? data?.tickets.filter((t) => t.assigned_to === user.id) || []
       : data?.tickets || [];
   return (
-    <div className="workspace">
+    <div className={'workspace view-' + view}>
+      <a className="skip-link" href="#workspace-main">
+        Skip to workspace
+      </a>
       <aside className="sidebar">
         <a className="brand" href="/">
           SAMANA<span>DEVELOPERS</span>
         </a>
         <div className="workspace-label">CUSTOMER EXPERIENCE</div>
-        <nav>
+        <nav aria-label="Main navigation">
           {navigation.map((item) => (
             <button
               key={item.id}
+              aria-current={view === item.id ? 'page' : undefined}
               className={view === item.id ? 'nav-item selected' : 'nav-item'}
               onClick={() => navigate(item.id)}
             >
@@ -348,7 +401,7 @@ export default function QmsApp({
           ))}
         </nav>
         <div className="sidebar-shortcuts">
-          {canIssue && (
+          {canShowQr && (
             <button onClick={() => setQrOpen(true)}>
               <QrCode size={16} />
               Mobile check-in QR
@@ -399,11 +452,27 @@ export default function QmsApp({
       </aside>
       <div className="main-shell">
         <header className="topbar">
+          <button
+            className="mobile-menu-button icon-button"
+            aria-label="Open navigation"
+            onClick={() => setMenuOpen(true)}
+          >
+            <Menu size={21} />
+          </button>
           <span>
             Operations <span className="slash">/</span>{' '}
             {viewNames[view] || title}
           </span>
           <div className="topbar-actions">
+            <button
+              className="workspace-search"
+              onClick={() => setCommandOpen(true)}
+              aria-label="Search workspace, Control or Command K"
+            >
+              <Search size={16} />
+              <span>Quick actions</span>
+              <kbd>⌘ K</kbd>
+            </button>
             {serviceStaff && (
               <button
                 className={'presence-toggle ' + (user.online ? 'online' : '')}
@@ -412,14 +481,16 @@ export default function QmsApp({
                 <span
                   className={'status-dot ' + (user.online ? 'green' : '')}
                 />
-                {user.online ? 'Available' : 'Offline'}
+                {user.online ? 'Online' : 'Offline'}
               </button>
             )}
             <span className="subtle">Dubai · GST</span>
-            <div className="notification-wrapper">
+            <div className="notification-wrapper" ref={notificationRef}>
               <button
                 className="icon-button"
                 aria-label="Notifications"
+                aria-expanded={notificationsOpen}
+                aria-controls="notifications-panel"
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
               >
                 <Bell size={18} />
@@ -430,7 +501,11 @@ export default function QmsApp({
                 )}
               </button>
               {notificationsOpen && (
-                <div className="notification-popover">
+                <section
+                  className="notification-popover"
+                  id="notifications-panel"
+                  aria-label="Notifications"
+                >
                   <div className="row space-between">
                     <h3>Notifications</h3>
                     <button className="btn-link" onClick={clearNotices}>
@@ -457,39 +532,50 @@ export default function QmsApp({
                   ) : (
                     <p>You’re all caught up.</p>
                   )}
-                </div>
+                </section>
               )}
             </div>
           </div>
         </header>
-        <main className="main-content">
+        <main className="main-content" id="workspace-main">
           <div className="page-heading">
             <div>
               <p className="eyebrow">
                 {view === 'overview'
-                  ? 'YOUR SERVICE FLOOR, AT A GLANCE'
+                  ? 'CUSTOMER EXPERIENCE · DUBAI'
                   : 'SAMANA CUSTOMER EXPERIENCE'}
               </p>
               <h1>{title}</h1>
               <p>
                 {view === 'agent'
-                  ? 'Make every interaction personal. Your next customer is waiting.'
+                  ? 'Your customers. Your next great interaction.'
                   : view === 'team'
                     ? 'The right people, in the right place, at the right time.'
                     : view === 'reports'
                       ? 'Turn every visit into a clearer picture of your service.'
-                      : 'Keep every customer moving. Give every interaction your attention.'}
+                      : 'Every visit matters. Make today exceptional.'}
               </p>
             </div>
-            {canIssue && (
-              <Button
-                className="primary-action"
-                onClick={() => setIssueOpen(true)}
-              >
-                <Plus size={17} />
-                Issue ticket
-              </Button>
-            )}
+            <div className="heading-actions">
+              <span className="workspace-date">
+                <CalendarDays size={16} />
+                {new Date().toLocaleDateString('en-GB', {
+                  timeZone: 'Asia/Dubai',
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </span>
+              {canIssue && (
+                <Button
+                  className="primary-action"
+                  onClick={() => setIssueOpen(true)}
+                >
+                  <Plus size={17} />
+                  New visit
+                </Button>
+              )}
+            </div>
           </div>
           {error && (
             <div className="connection-banner" role="alert">
@@ -520,12 +606,12 @@ export default function QmsApp({
                       <p>
                         {user.online
                           ? 'You are receiving ticket assignments.'
-                          : 'Go available when you are ready to assist customers.'}
+                          : 'Go online when you are ready to assist customers.'}
                       </p>
                     </div>
                   </div>
                   <Button variant="outline" onClick={presence}>
-                    {user.online ? 'Go offline' : 'Go available'}
+                    {user.online ? 'Go offline' : 'Go online'}
                   </Button>
                 </div>
               )}
@@ -556,7 +642,7 @@ export default function QmsApp({
                     [
                       'Completed today',
                       data?.statistics.completed ?? '—',
-                      'A better experience, delivered',
+                      'Successful customer interactions',
                       CheckCircle2,
                       'closed',
                     ],
@@ -564,7 +650,8 @@ export default function QmsApp({
                     const I = Icon as typeof Users;
                     return (
                       <button
-                        className="stat-card"
+                        className={'stat-card metric-' + filter}
+                        aria-pressed={status === filter}
                         key={String(label)}
                         onClick={() => {
                           setStatus(String(filter));
@@ -582,360 +669,394 @@ export default function QmsApp({
                   })}
                 </div>
               )}
-              <section className="panel">
-                <div className="panel-heading">
-                  <div>
-                    <h2>
-                      {view === 'agent'
-                        ? 'Your assigned tickets'
-                        : 'Live queue'}
-                      {data && (
-                        <span className="count-chip">
-                          {view === 'agent'
-                            ? visibleTickets.length
-                            : data.total}
-                        </span>
-                      )}
-                    </h2>
-                    <p>
-                      {view === 'agent'
-                        ? 'Call a customer, start the interaction, and capture the outcome.'
-                        : 'The next great customer experience starts here.'}
-                    </p>
+              <div
+                className={
+                  view === 'overview' ? 'operations-grid' : 'queue-workspace'
+                }
+              >
+                <section className="panel queue-panel">
+                  <div className="panel-heading">
+                    <div>
+                      <h2>
+                        {view === 'agent'
+                          ? 'Your assigned tickets'
+                          : 'Live queue'}
+                        {data && (
+                          <span className="count-chip">
+                            {view === 'agent'
+                              ? visibleTickets.length
+                              : data.total}
+                          </span>
+                        )}
+                      </h2>
+                      <p>
+                        {view === 'agent'
+                          ? 'Call a customer, start the interaction, and capture the outcome.'
+                          : 'Manage arrivals and keep each visit moving.'}
+                      </p>
+                    </div>
+                    <div className="row queue-view-actions">
+                      <fieldset
+                        className="view-switch"
+                        aria-label="Queue layout"
+                      >
+                        <button
+                          aria-label="Table view"
+                          aria-pressed={queueLayout === 'table'}
+                          onClick={() => setQueueLayout('table')}
+                        >
+                          <List size={17} />
+                        </button>
+                        <button
+                          aria-label="Board view"
+                          aria-pressed={queueLayout === 'board'}
+                          onClick={() => setQueueLayout('board')}
+                        >
+                          <PanelsTopLeft size={17} />
+                        </button>
+                      </fieldset>
+                      <span className="badge neutral">
+                        <span
+                          className={
+                            'status-dot ' + (!error && data ? 'green' : '')
+                          }
+                        />
+                        {error
+                          ? 'Reconnecting'
+                          : data
+                            ? 'Live updates'
+                            : 'Connecting'}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Refresh queue"
+                        onClick={() => refresh()}
+                        disabled={loading}
+                      >
+                        <RefreshCw
+                          size={16}
+                          className={loading ? 'spin' : ''}
+                        />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="row">
-                    <span className="badge neutral">
-                      <span
-                        className={
-                          'status-dot ' + (!error && data ? 'green' : '')
-                        }
-                      />
-                      {error
-                        ? 'Reconnecting'
-                        : data
-                          ? 'Live updates'
-                          : 'Connecting'}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Refresh queue"
-                      onClick={() => refresh()}
-                      disabled={loading}
-                    >
-                      <RefreshCw size={16} className={loading ? 'spin' : ''} />
-                    </Button>
-                  </div>
-                </div>
-                <div className="queue-toolbar">
-                  <div className="service-tabs">
-                    {[
-                      ['', 'All services'],
-                      ['CRM', 'CRM'],
-                      ['Collection', 'Collection'],
-                      ['General Query', 'General Query'],
-                    ].map(([id, name]) => (
-                      <button
-                        key={id}
-                        className={department === id ? 'active' : ''}
-                        onClick={() => {
-                          setDepartment(id);
+                  <div className="queue-toolbar">
+                    <div className="service-tabs">
+                      {[
+                        ['', 'All services'],
+                        ['CRM', 'CRM'],
+                        ['Collection', 'Collection'],
+                        ['General Query', 'General Query'],
+                      ].map(([id, name]) => (
+                        <button
+                          key={id}
+                          className={department === id ? 'active' : ''}
+                          aria-pressed={department === id}
+                          onClick={() => {
+                            setDepartment(id);
+                            setPage(1);
+                          }}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="queue-filter-tools">
+                      <select
+                        aria-label="Filter ticket status"
+                        value={status}
+                        onChange={(e) => {
+                          setStatus(e.target.value);
                           setPage(1);
                         }}
                       >
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="queue-filter-tools">
-                    <select
-                      aria-label="Filter ticket status"
-                      value={status}
-                      onChange={(e) => {
-                        setStatus(e.target.value);
-                        setPage(1);
-                      }}
-                    >
-                      {[
-                        ['active', 'Active'],
-                        ['waiting', 'Waiting'],
-                        ['called', 'Called'],
-                        ['serving', 'In service'],
-                        ['closed', 'Completed'],
-                        ['no_show', 'No-show'],
-                        ['all', 'All statuses'],
-                      ].map(([value, label]) => (
-                        <option value={value} key={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="search">
-                      <Search size={16} />
-                      <Input
-                        value={search}
-                        onChange={(e) => {
-                          setSearch(e.target.value);
-                          setPage(1);
-                        }}
-                        aria-label="Search queue"
-                        placeholder="Search ticket or customer…"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
                         {[
-                          'TICKET',
-                          'CUSTOMER / UNIT',
-                          'SERVICE',
-                          'ASSIGNED TO',
-                          'WAIT TIME',
-                          'STATUS',
-                          '',
-                        ].map((h, i) => (
-                          <th key={i}>{h}</th>
+                          ['active', 'Active'],
+                          ['waiting', 'Waiting'],
+                          ['called', 'Called'],
+                          ['serving', 'In service'],
+                          ['closed', 'Completed'],
+                          ['no_show', 'No-show'],
+                          ['all', 'All statuses'],
+                        ].map(([value, label]) => (
+                          <option value={value} key={value}>
+                            {label}
+                          </option>
                         ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleTickets.map((ticket) => (
-                        <tr key={ticket.id}>
-                          <td>
-                            <button
-                              className="ticket-number btn-link"
-                              onClick={() => setSelected(ticket.id)}
-                            >
-                              {ticket.number}
-                            </button>
-                            <span className="ticket-meta">
-                              {new Date(ticket.created_at).toLocaleTimeString(
-                                'en-AE',
-                                {
-                                  timeZone: 'Asia/Dubai',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                },
-                              )}
-                            </span>
-                          </td>
-                          <td>
-                            <strong className="customer-cell">
-                              {ticket.customer_name}
-                            </strong>
-                            <span className="ticket-meta">
-                              {ticket.project_name || 'Walk-in customer'}
-                              {ticket.unit_name ? ' · ' + ticket.unit_name : ''}
-                            </span>
-                          </td>
-                          <td>
-                            {ticket.service_name}
-                            <span className="ticket-meta">
-                              {ticket.department}
-                            </span>
-                          </td>
-                          <td>
-                            {ticket.assigned_name ? (
-                              <div className="agent-cell">
-                                <span className="avatar small">
-                                  {ticket.assigned_name
-                                    .split(' ')
-                                    .map((x) => x[0])
-                                    .slice(0, 2)
-                                    .join('')}
-                                </span>
-                                <span>{ticket.assigned_name}</span>
-                              </div>
-                            ) : (
-                              <span className="unassigned">Awaiting agent</span>
-                            )}
-                          </td>
-                          <td>
-                            <span
-                              className={
-                                ticket.status === 'waiting' &&
-                                minutesBetween(ticket.created_at) > 5
-                                  ? 'wait-warning'
-                                  : 'wait-time'
-                              }
-                            >
-                              <Clock3 size={12} />
-                              {minutesBetween(
-                                ticket.created_at,
-                                ticket.called_at || ticket.closed_at,
-                              ).toFixed(0)}{' '}
-                              min
-                            </span>
-                          </td>
-                          <td>
-                            <span className={'badge ' + ticket.status}>
-                              {ticket.status === 'serving'
-                                ? 'In service'
-                                : ticket.status === 'closed'
-                                  ? 'Completed'
-                                  : ticket.status === 'no_show'
-                                    ? 'No-show'
-                                    : ticket.status[0].toUpperCase() +
-                                      ticket.status.slice(1)}
-                            </span>
-                          </td>
-                          <td>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={'View ' + ticket.number}
-                              onClick={() => setSelected(ticket.id)}
-                            >
-                              <ChevronRight size={16} />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                      {!visibleTickets.length && (
-                        <tr>
-                          <td colSpan={7}>
-                            <div className="empty-state">
-                              <ListOrdered size={30} />
-                              <h3>
-                                {loading
-                                  ? 'Loading your service floor…'
-                                  : search
-                                    ? 'No matching tickets'
-                                    : view === 'agent'
-                                      ? 'You’re ready for your next customer'
-                                      : 'A clear queue. A fresh start.'}
-                              </h3>
-                              <p>
-                                {search
-                                  ? 'Try another ticket number, customer, or unit.'
-                                  : view === 'agent'
-                                    ? 'Go available to receive assignments for your service queues.'
-                                    : 'New visits will appear here as customers check in.'}
-                              </p>
-                              {canIssue && !loading && !search && (
-                                <Button
-                                  className="empty-cta"
-                                  variant="outline"
-                                  onClick={() => setIssueOpen(true)}
-                                >
-                                  <Plus size={14} />
-                                  Issue the first ticket
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="pagination">
-                  <span>
-                    {data?.total
-                      ? `${(page - 1) * 20 + 1}–${Math.min(page * 20, data.total)} of ${data.total} tickets`
-                      : 'No tickets'}
-                    {updated && ' · Updated ' + updated}
-                  </span>
-                  <div className="section-actions">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => p - 1)}
-                      disabled={page === 1 || loading}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => p + 1)}
-                      disabled={!data || page * 20 >= data.total || loading}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </section>
-              {view === 'overview' && (
-                <div className="bottom-grid">
-                  <section className="panel">
-                    <div className="panel-heading">
-                      <div>
-                        <h2>Service queues</h2>
-                        <p>A clear view of every customer journey</p>
-                      </div>
-                      <span className="subtle">Waiting / Serving</span>
-                    </div>
-                    {['CRM', 'Collection', 'General Query'].map((s, i) => {
-                      const services =
-                        data?.services.filter((row) => row.department === s) ||
-                        [];
-                      return (
-                        <button
-                          className="service-row"
-                          key={s}
-                          onClick={() => {
-                            setDepartment(s);
+                      </select>
+                      <div className="search">
+                        <Search size={16} />
+                        <Input
+                          value={search}
+                          onChange={(e) => {
+                            setSearch(e.target.value);
                             setPage(1);
-                            navigate('queue');
+                          }}
+                          aria-label="Search queue"
+                          placeholder="Search ticket or customer…"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {(department || search || status !== 'active') && (
+                    <div className="active-filters">
+                      <span>Filtered by</span>
+                      {department && (
+                        <button
+                          onClick={() => {
+                            setDepartment('');
+                            setPage(1);
                           }}
                         >
-                          <span className={'service-icon color-' + i}>
-                            <Headphones size={19} />
-                          </span>
-                          <div>
-                            <strong>{s}</strong>
-                            <small>
-                              {i === 0
-                                ? 'Relationship management'
-                                : i === 1
-                                  ? 'Payments & collections'
-                                  : 'Walk-in assistance'}
-                            </small>
-                          </div>
-                          <span className="service-count">
-                            {services.reduce((a, row) => a + row.waiting, 0)}{' '}
-                            <i>/</i>{' '}
-                            {services.reduce((a, row) => a + row.serving, 0)}
-                          </span>
-                          <ArrowUpRight size={17} />
+                          {department} ×
                         </button>
-                      );
-                    })}
-                  </section>
-                  <section className="panel photo-feature">
-                    <img
-                      src="/images/samana-project-1.jpg"
-                      alt="SAMANA Developers waterfront residence"
-                    />
-                    <div>
-                      <p className="eyebrow">A WARMER WELCOME</p>
-                      <h2>
-                        A seamless arrival.
-                        <br />A personal experience.
-                      </h2>
-                      <p>Customers can check in from their own phone.</p>
-                      {canIssue && (
-                        <Button
-                          variant="outline"
-                          onClick={() => setQrOpen(true)}
-                        >
-                          <QrCode size={15} />
-                          Show check-in QR
-                          <ArrowUpRight size={14} />
-                        </Button>
                       )}
+                      {search && (
+                        <button
+                          onClick={() => {
+                            setSearch('');
+                            setPage(1);
+                          }}
+                        >
+                          “{search}” ×
+                        </button>
+                      )}
+                      {status !== 'active' && (
+                        <button
+                          onClick={() => {
+                            setStatus('active');
+                            setPage(1);
+                          }}
+                        >
+                          {status.replace('_', ' ')} ×
+                        </button>
+                      )}
+                      <button
+                        className="clear-filters"
+                        onClick={() => {
+                          setDepartment('');
+                          setSearch('');
+                          setStatus('active');
+                          setPage(1);
+                        }}
+                      >
+                        Clear all
+                      </button>
                     </div>
-                  </section>
-                </div>
-              )}
+                  )}
+                  {!data && loading ? (
+                    <QueueSkeleton />
+                  ) : queueLayout === 'board' ? (
+                    <QueueBoard
+                      tickets={visibleTickets}
+                      loading={loading}
+                      onTicket={setSelected}
+                    />
+                  ) : (
+                    <div className="table-scroll">
+                      <table>
+                        <thead>
+                          <tr>
+                            {[
+                              'TICKET',
+                              'CUSTOMER / UNIT',
+                              'SERVICE',
+                              'ASSIGNED TO',
+                              'TOTAL WAIT',
+                              'STATUS',
+                              '',
+                            ].map((h, i) => (
+                              <th key={i}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleTickets.map((ticket) => (
+                            <tr key={ticket.id}>
+                              <td>
+                                <button
+                                  className="ticket-number btn-link"
+                                  onClick={() => setSelected(ticket.id)}
+                                >
+                                  {ticket.number}
+                                </button>
+                                <span className="ticket-meta">
+                                  {new Date(
+                                    ticket.created_at,
+                                  ).toLocaleTimeString('en-AE', {
+                                    timeZone: 'Asia/Dubai',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              </td>
+                              <td>
+                                <strong className="customer-cell">
+                                  {ticket.customer_name}
+                                </strong>
+                                <span className="ticket-meta">
+                                  {ticket.project_name || 'Walk-in customer'}
+                                  {ticket.unit_name
+                                    ? ' · ' + ticket.unit_name
+                                    : ''}
+                                </span>
+                              </td>
+                              <td>
+                                {ticket.service_name}
+                                <span className="ticket-meta">
+                                  {ticket.department}
+                                </span>
+                              </td>
+                              <td>
+                                {ticket.assigned_name ? (
+                                  <div className="agent-cell">
+                                    <span className="avatar small">
+                                      {ticket.assigned_name
+                                        .split(' ')
+                                        .map((x) => x[0])
+                                        .slice(0, 2)
+                                        .join('')}
+                                    </span>
+                                    <span>{ticket.assigned_name}</span>
+                                  </div>
+                                ) : (
+                                  <span className="unassigned">Unassigned</span>
+                                )}
+                              </td>
+                              <td>
+                                <span
+                                  className={
+                                    ticket.status === 'waiting' &&
+                                    minutesBetween(ticket.created_at) > 5
+                                      ? 'wait-warning'
+                                      : 'wait-time'
+                                  }
+                                >
+                                  <Clock3 size={12} />
+                                  {minutesBetween(
+                                    ticket.created_at,
+                                    ticket.called_at || ticket.closed_at,
+                                  ).toFixed(0)}{' '}
+                                  min
+                                </span>
+                              </td>
+                              <td>
+                                <span className={'badge ' + ticket.status}>
+                                  {ticket.status === 'serving'
+                                    ? 'In service'
+                                    : ticket.status === 'closed'
+                                      ? 'Completed'
+                                      : ticket.status === 'no_show'
+                                        ? 'No-show'
+                                        : ticket.status[0].toUpperCase() +
+                                          ticket.status.slice(1)}
+                                </span>
+                              </td>
+                              <td>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label={'View ' + ticket.number}
+                                  onClick={() => setSelected(ticket.id)}
+                                >
+                                  <ChevronRight size={16} />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                          {!visibleTickets.length && (
+                            <tr>
+                              <td colSpan={7}>
+                                <div className="empty-state">
+                                  <ListOrdered size={30} />
+                                  <h3>
+                                    {loading
+                                      ? 'Loading your service floor…'
+                                      : search
+                                        ? 'No matching tickets'
+                                        : view === 'agent'
+                                          ? 'You’re ready for your next customer'
+                                          : 'A clear queue. A fresh start.'}
+                                  </h3>
+                                  <p>
+                                    {search
+                                      ? 'Try another ticket number, customer, or unit.'
+                                      : view === 'agent'
+                                        ? 'Go available to receive assignments for your service queues.'
+                                        : 'New visits will appear here as customers check in.'}
+                                  </p>
+                                  {canIssue && !loading && !search && (
+                                    <Button
+                                      className="empty-cta"
+                                      variant="outline"
+                                      onClick={() => setIssueOpen(true)}
+                                    >
+                                      <Plus size={14} />
+                                      Issue the first ticket
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="pagination">
+                    <span>
+                      {data?.total
+                        ? `${(page - 1) * 20 + 1}–${Math.min(page * 20, data.total)} of ${data.total} tickets`
+                        : 'No tickets'}
+                      {updated && ' · Updated ' + updated}
+                    </span>
+                    <div className="section-actions">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => p - 1)}
+                        disabled={page === 1 || loading}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => p + 1)}
+                        disabled={!data || page * 20 >= data.total || loading}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+                {view === 'overview' && (
+                  <ServicePulse
+                    services={data?.services || []}
+                    unassigned={data?.statistics.unassigned || 0}
+                    onDepartment={(department) => {
+                      setDepartment(department);
+                      setStatus('active');
+                      navigate('queue');
+                    }}
+                    onWaiting={() => {
+                      setDepartment('');
+                      setStatus('waiting');
+                      navigate('queue');
+                    }}
+                    onQr={canShowQr ? () => setQrOpen(true) : undefined}
+                  />
+                )}
+              </div>
             </>
           )}
           {view === 'team' && manager && <Team user={user} />}{' '}
-          {view === 'reports' && manager && <Reports onTicket={setSelected} />}{' '}
+          {view === 'reports' && manager && (
+            <Suspense fallback={<QueueSkeleton />}>
+              <Reports onTicket={setSelected} />
+            </Suspense>
+          )}{' '}
           {view === 'settings' && (
             <Settings user={user} onPasswordChanged={refreshIdentity} />
           )}{' '}
@@ -953,6 +1074,107 @@ export default function QmsApp({
           Samana QMS <span>Customer experience, thoughtfully connected.</span>
         </footer>
       </div>
+      <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
+        <DialogContent className="mobile-navigation">
+          <DialogTitle className="brand">
+            SAMANA<span>DEVELOPERS</span>
+          </DialogTitle>
+          <DialogDescription>Customer experience workspace</DialogDescription>
+          <nav aria-label="Mobile navigation">
+            {navigation.map((item) => (
+              <button
+                key={item.id}
+                className={view === item.id ? 'nav-item selected' : 'nav-item'}
+                aria-current={view === item.id ? 'page' : undefined}
+                onClick={() => navigate(item.id)}
+              >
+                <item.icon size={19} />
+                {item.name}
+              </button>
+            ))}
+          </nav>
+          <div className="mobile-nav-tools">
+            {canShowQr && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setQrOpen(true);
+                }}
+              >
+                <QrCode size={17} />
+                Check-in QR
+              </Button>
+            )}
+            {manager && (
+              <a href="/display" target="_blank" rel="noreferrer">
+                <Monitor size={17} />
+                Open TV display
+              </a>
+            )}
+            <p>
+              {user.name}
+              <small>{user.role}</small>
+            </p>
+            <Button variant="ghost" onClick={logout}>
+              <LogOut size={16} />
+              Sign out
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={commandOpen} onOpenChange={setCommandOpen}>
+        <DialogContent className="command-dialog">
+          <DialogTitle className="visually-hidden">Quick actions</DialogTitle>
+          <DialogDescription className="visually-hidden">
+            Search pages and actions. Use arrow keys to choose and Enter to
+            open.
+          </DialogDescription>
+          <Command>
+            <CommandInput placeholder="Where would you like to go?" />
+            <CommandList>
+              <CommandEmpty>No matching actions.</CommandEmpty>
+              <CommandGroup heading="Workspace">
+                {navigation.map((item) => (
+                  <CommandItem key={item.id} onSelect={() => navigate(item.id)}>
+                    <item.icon size={18} />
+                    {item.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              {canIssue && (
+                <CommandGroup heading="Actions">
+                  <CommandItem
+                    onSelect={() => {
+                      setCommandOpen(false);
+                      setIssueOpen(true);
+                    }}
+                  >
+                    <Plus size={18} />
+                    Issue a customer ticket
+                  </CommandItem>
+                  {canShowQr && (
+                    <CommandItem
+                      onSelect={() => {
+                        setCommandOpen(false);
+                        setQrOpen(true);
+                      }}
+                    >
+                      <QrCode size={18} />
+                      Show reception QR
+                    </CommandItem>
+                  )}
+                </CommandGroup>
+              )}
+            </CommandList>
+            <div className="command-hint">
+              <span>↑ ↓ to navigate</span>
+              <span>↵ to open</span>
+              <span>esc to close</span>
+            </div>
+          </Command>
+        </DialogContent>
+      </Dialog>
       <TicketDetail
         id={selected}
         user={user}
@@ -1031,6 +1253,8 @@ function Login({
   initialError: string;
 }) {
   const [username, setUsername] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState(initialError);
   const [busy, setBusy] = useState(false);
@@ -1051,8 +1275,8 @@ function Login({
     <main className="login-screen">
       <section className="login-visual">
         <img
-          src="/images/samana-project-1.jpg"
-          alt="SAMANA Developers residential project"
+          src="/images/samana-ocean-bay-sunset.jpg"
+          alt="Sunset over the pool at SAMANA Ocean Bay"
         />
         <div className="login-shade" />
         <a className="brand" href="/">
@@ -1061,9 +1285,9 @@ function Login({
         <div className="login-copy">
           <p className="eyebrow">WHERE DREAMS TAKE SHAPE</p>
           <h1>
-            Exceptional living.
+            Extraordinary places.
             <br />
-            Thoughtful service.
+            <em>Exceptional care.</em>
           </h1>
           <p>One connected workspace for every customer journey.</p>
           <div>
@@ -1074,16 +1298,23 @@ function Login({
             <span>Customer Experience</span>
           </div>
         </div>
-        <small>Image: SAMANA Developers</small>
+        <small>
+          SAMANA OCEAN BAY · DUBAI ISLANDS <span>01 / CUSTOMER EXPERIENCE</span>
+        </small>
       </section>
       <section className="login-form-panel">
         <div className="login-form-content">
           <span className="workspace-pill">
-            <span className="status-dot green" />
-            SAMANA QMS
+            <Building2 size={15} /> THE SAMANA WORKSPACE
           </span>
-          <h2>Welcome to your workspace</h2>
-          <p>Sign in to keep your service floor moving.</p>
+          <h2>
+            Welcome back<span>.</span>
+          </h2>
+          <p>
+            Great experiences start with you.
+            <br />
+            Sign in to your customer experience workspace.
+          </p>
           <form onSubmit={submit}>
             {error && (
               <div className="error" role="alert">
@@ -1104,24 +1335,40 @@ function Login({
             </div>
             <div>
               <label htmlFor="password">Password</label>
-              <Input
-                className="form-control"
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-                maxLength={128}
-                placeholder="Enter your password"
-              />
+              <div className="password-field">
+                <Input
+                  className="form-control"
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  onKeyUp={(event) =>
+                    setCapsLock(event.getModifierState('CapsLock'))
+                  }
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  maxLength={128}
+                  placeholder="Enter your password"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                </button>
+              </div>
+              {capsLock && (
+                <output className="caps-lock">Caps Lock is on</output>
+              )}
             </div>
             <Button type="submit" className="primary-action" disabled={busy}>
               {busy ? (
                 <Loader2 size={16} className="spin" />
               ) : (
                 <>
-                  Sign in
+                  Enter workspace
                   <ArrowRight size={17} />
                 </>
               )}

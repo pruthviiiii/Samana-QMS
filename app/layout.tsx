@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import './product.css';
+import './experience.css';
 export const metadata: Metadata = {
   title: 'Samana QMS | Customer Experience',
   description:
     'Samana Developers customer queue management, service routing and operations.',
   robots: { index: false, follow: false },
-  metadataBase: new URL('https://samana-qms.jolly-hippo-1106.chatgpt.site'),
+  metadataBase: new URL(process.env.APP_ORIGIN || 'http://localhost:3000'),
   openGraph: {
     title: 'SAMANA | Customer Experience',
     description: 'Your visit, thoughtfully connected.',

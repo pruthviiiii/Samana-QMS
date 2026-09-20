@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   PhoneCall,
   Play,
@@ -54,6 +54,10 @@ export default function TicketDetail({
   const [mode, setMode] = useState('');
   const [target, setTarget] = useState('');
   const [team, setTeam] = useState<User[]>([]);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (mode === 'close' || mode === 'no_show') notesRef.current?.focus();
+  }, [mode]);
   useEffect(() => {
     setData(null);
     setError('');
@@ -151,6 +155,30 @@ export default function TicketDetail({
                   {ticket.status.replace('_', ' ')}
                 </span>
               </div>
+              <div className="visit-progress" aria-label="Visit progress">
+                {[
+                  'Arrived',
+                  'Called',
+                  'In service',
+                  ticket.status === 'no_show' ? 'No-show' : 'Completed',
+                ].map((label, index) => (
+                  <span
+                    key={label}
+                    className={
+                      [
+                        true,
+                        !!ticket.called_at,
+                        !!ticket.started_at,
+                        !!ticket.closed_at,
+                      ][index]
+                        ? 'reached'
+                        : ''
+                    }
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
               <div className="detail-grid">
                 <div>
                   <span className="detail-label">Assigned agent</span>
@@ -196,13 +224,18 @@ export default function TicketDetail({
                 <Info size={16} />
                 {ticket.routing_reason.replaceAll('_', ' ')}
               </div>
-              {data.outbox.map((item) => (
-                <div className="delivery-note" key={item.kind}>
-                  {item.kind.toUpperCase()} delivery:{' '}
-                  <strong>{item.status}</strong>
-                  {item.last_error && <span> · {item.last_error}</span>}
-                </div>
-              ))}
+              {!!data.outbox.length && (
+                <details className="detail-disclosure">
+                  <summary>Delivery details</summary>
+                  {data.outbox.map((item) => (
+                    <div className="delivery-note" key={item.kind}>
+                      {item.kind.toUpperCase()} delivery:{' '}
+                      <strong>{item.status}</strong>
+                      {item.last_error && <span> · {item.last_error}</span>}
+                    </div>
+                  ))}
+                </details>
+              )}
               <div className="section-actions">
                 {canAct && ticket.status === 'waiting' && (
                   <Button
@@ -311,6 +344,7 @@ export default function TicketDetail({
                       </label>
                       <textarea
                         id="closure-comments"
+                        ref={notesRef}
                         rows={3}
                         maxLength={4000}
                         value={comment}

@@ -174,8 +174,8 @@ export default function TVDisplay() {
         </section>
         <aside className="tv-feature">
           <img
-            src="/images/samana-project-1.jpg"
-            alt="SAMANA Developers residential project"
+            src="/images/samana-rome-dusk.jpg"
+            alt="SAMANA Rome residences at dusk"
           />
           <div className="tv-photo-caption">
             <span>WHERE DREAMS TAKE SHAPE</span>
