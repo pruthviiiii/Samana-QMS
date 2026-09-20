@@ -23,6 +23,7 @@ type EditUser = {
   id?: string;
   username: string;
   name: string;
+  email: string;
   role: Role;
   sfId: string;
   managerSfId: string;
@@ -34,6 +35,7 @@ type EditUser = {
 const blank: EditUser = {
   username: '',
   name: '',
+  email: '',
   role: 'agent',
   sfId: '',
   managerSfId: '',
@@ -72,6 +74,7 @@ export default function Team({ user }: { user: User }) {
     try {
       await post('team', {
         ...edit,
+        email: edit.email.trim() || null,
         sfId: edit.sfId || null,
         managerSfId: edit.managerSfId || null,
         password: edit.password || undefined,
@@ -200,7 +203,10 @@ export default function Team({ user }: { user: User }) {
                         </span>
                         <div>
                           <strong>{u.name}</strong>
-                          <small className="ticket-meta">{u.username}</small>
+                          <small className="ticket-meta">
+                            {u.username}
+                            {u.email ? ' · ' + u.email : ''}
+                          </small>
                         </div>
                       </div>
                     </td>
@@ -254,6 +260,7 @@ export default function Team({ user }: { user: User }) {
                               id: u.id,
                               username: u.username,
                               name: u.name,
+                              email: u.email || '',
                               role: u.role,
                               sfId: u.sf_id || '',
                               managerSfId: u.manager_sf_id || '',
@@ -317,7 +324,7 @@ export default function Team({ user }: { user: User }) {
                   />
                 </div>
                 <div>
-                  <label htmlFor="team-username">Username / email</label>
+                  <label htmlFor="team-username">Username</label>
                   <Input
                     id="team-username"
                     value={edit.username}
@@ -327,6 +334,20 @@ export default function Team({ user }: { user: User }) {
                     required
                     minLength={3}
                     maxLength={120}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="team-email">Email (optional sign-in)</label>
+                  <Input
+                    id="team-email"
+                    type="email"
+                    autoComplete="off"
+                    value={edit.email}
+                    onChange={(e) =>
+                      setEdit({ ...edit, email: e.target.value })
+                    }
+                    placeholder="name@samana-group.com"
+                    maxLength={254}
                   />
                 </div>
                 <div>

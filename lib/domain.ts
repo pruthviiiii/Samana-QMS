@@ -59,6 +59,7 @@ export interface User {
   id: string;
   username: string;
   name: string;
+  email?: string | null;
   role: Role;
   sf_id: string | null;
   manager_sf_id: string | null;

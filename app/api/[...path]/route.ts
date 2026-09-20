@@ -38,7 +38,7 @@ import {
 } from '@/lib/public-access';
 const uuid = z.uuid();
 const userColumns =
-  'id,username,name,role,sf_id,manager_sf_id,services,online,last_seen,counter,enabled,must_change_password';
+  'id,username,name,email,role,sf_id,manager_sf_id,services,online,last_seen,counter,enabled,must_change_password';
 const passwordSchema = z
   .string()
   .min(14, 'Use at least 14 characters.')
@@ -94,7 +94,8 @@ async function handler(request: Request) {
       const username = input.username.toLowerCase();
       await rateLimit('login:' + (await sha256(username)), 8, 300);
       const [u] = await query<User & { password_hash: string }>(
-        'SELECT * FROM qms.users WHERE lower(username)=$1 AND enabled=true',
+        // Username first; an email only when exactly one enabled account carries it.
+        'SELECT * FROM qms.users u WHERE u.enabled=true AND (lower(u.username)=$1 OR (lower(u.email)=$1 AND (SELECT count(*) FROM qms.users x WHERE lower(x.email)=$1 AND x.enabled=true)=1)) ORDER BY (lower(u.username)=$1) DESC LIMIT 1',
         [username],
       );
       // Hash even unknown accounts to avoid fast username enumeration.
@@ -342,6 +343,7 @@ async function handler(request: Request) {
             .max(120)
             .regex(/^[a-zA-Z0-9@._+-]+$/),
           name: z.string().trim().min(2).max(100),
+          email: z.email().max(254).nullable().optional(),
           role: z.enum([
             'admin',
             'hod',
@@ -369,7 +371,7 @@ async function handler(request: Request) {
           password: passwordSchema.optional(),
         })
         .parse(await body(request));
-      await query('SELECT qms.save_user($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)', [
+      await query('SELECT qms.save_user($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)', [
         input.id || null,
         user.id,
         input.username.toLowerCase(),
@@ -381,6 +383,7 @@ async function handler(request: Request) {
         input.counter,
         input.enabled,
         input.password ? await hashPassword(input.password) : null,
+        input.email ? input.email.trim().toLowerCase() : null,
       ]);
       return json({ ok: true });
     }
