@@ -5,7 +5,7 @@ import type { Customer, IdentifierType } from './domain';
 let cached: { token: string; expires: number } | null = null;
 let pending: Promise<string> | null = null;
 function instance() {
-  const value = process.env.SALESFORCE_INSTANCE_URL;
+  const value = process.env.SALESFORCE_INSTANCE_URL?.trim();
   if (!value) throw new HttpError(503, 'Salesforce has not been configured.');
   const parsed = new URL(value);
   if (
@@ -21,8 +21,10 @@ async function accessToken(force = false) {
   if (!force && cached && cached.expires > Date.now()) return cached.token;
   if (pending) return pending;
   pending = (async () => {
-    const clientId = process.env.SALESFORCE_CLIENT_ID;
-    const secret = process.env.SALESFORCE_CLIENT_SECRET;
+    // Trimmed: values pasted into hosting dashboards often carry whitespace,
+    // which Salesforce reports as "Missing Consumer Key Parameter".
+    const clientId = process.env.SALESFORCE_CLIENT_ID?.trim();
+    const secret = process.env.SALESFORCE_CLIENT_SECRET?.trim();
     if (!clientId || !secret)
       throw new HttpError(
         503,
