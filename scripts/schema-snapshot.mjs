@@ -56,10 +56,14 @@ export async function snapshot(run) {
   return lines.join('\n') + '\n';
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const { neon } = await import('@neondatabase/serverless');
-  const sql = neon(process.env.DATABASE_URL);
-  const text = await snapshot((q, params = []) => sql.query(q, params));
-  const target = new URL('../db/schema.sql', import.meta.url);
-  await writeFile(target, text);
-  console.log(`Wrote ${fileURLToPath(target)} (${text.length} bytes).`);
+  const { open } = await import('./db.mjs');
+  const db = await open(process.env.DATABASE_URL);
+  try {
+    const text = await snapshot(db.query);
+    const target = new URL('../db/schema.sql', import.meta.url);
+    await writeFile(target, text);
+    console.log(`Wrote ${fileURLToPath(target)} (${text.length} bytes).`);
+  } finally {
+    await db.end();
+  }
 }

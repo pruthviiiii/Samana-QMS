@@ -2,7 +2,7 @@
 
 Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by the internal architecture review and by the production-path note, with its current state. A ticked box means the change is in the repository and covered by the checks in "Verification" below. An open box names who has to decide or act.
 
-**Ticked: 42 of 59.** Of the 17 open boxes, 14 need a business decision or an operator outside the code, and 3 are frontend work not started. Every backend item that did not need a decision is done and applied to the local `samana_qms` database as well as the test database.
+**Ticked: 43 of 60.** Of the 17 open boxes, 14 need a business decision or an operator outside the code, and 3 are frontend work not started. Every backend item that did not need a decision is done and applied to the `samana_qms` database as well as the test database, and the code now runs on any PostgreSQL server through the standard driver.
 
 ## A. Security and access
 
@@ -20,7 +20,7 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [ ] OTP on mobile check-in, which closes identifier probing. Needs the SMS gateway first.
 - [x] Restricted `qms_app` database role: `scripts/create-app-role.mjs` creates it with data and function access only; applied to the local and test databases, and the full suite runs as that role. Migrations use `MIGRATE_DATABASE_URL`. For production, run the script once and set both strings on Render.
 - [x] Per-address rate limits key on the address the proxy appended, not a forged prefix; the Render blueprint sets `TRUSTED_CLIENT_IP_HEADER`. `lib/http.ts`, `render.yaml`.
-- [ ] Neon IP allow list, longer point-in-time recovery window, and a Neon project separate from Samana Living. IT and the account owner.
+- [ ] Database network restrictions (firewall or allow list for Render's outbound addresses), a backup and recovery window, and a server or project that is not shared with Samana Living. IT and the account owner.
 
 ## B. Reliability and operations
 
@@ -72,7 +72,8 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [x] The misleading `start:cloudflare` script is gone; `npm start` runs the standalone server that Render and Docker start. `package.json`.
 - [x] The build runs in place and produces the same standalone output locally, in Docker and on Render. `scripts/build.mjs`, `Dockerfile`.
 - [x] Test suite grown to 141 tests: route table, schema drift, API document, audit trail, walk-ins, no-unit visits, presence audit, work factor, listener endpoint, day rollover, number reuse, retention, alerts, paging, forged client addresses, migration file filter.
-- [x] Pull requests run the database suite on a throwaway Neon branch that is deleted afterwards; pushes to `main` use the fixed test database. Needs `NEON_API_KEY` and `NEON_PROJECT_ID` in the `qms-test` environment. `.github/workflows/quality.yml`.
+- [x] CI runs the database suite against a PostgreSQL 18 container started inside the workflow, so every pull request and push is tested on a fresh database with no external service and no secret. `.github/workflows/quality.yml`.
+- [x] No host-specific database code: the standard `pg` driver replaces Neon's, so the same build runs on your own PostgreSQL server, a managed service, or Neon. `lib/db.ts`, `lib/events.ts`, `scripts/db.mjs`.
 
 ## F. Queue behaviour raised by the review, kept by design
 

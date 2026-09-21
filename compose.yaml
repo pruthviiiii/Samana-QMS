@@ -1,4 +1,6 @@
 name: samana-qms
+# Web and scheduler only; DATABASE_URL in .env points at your PostgreSQL
+# server (a host on the same machine is reachable as host.docker.internal).
 services:
   web:
     build:
@@ -34,7 +36,7 @@ services:
       - no-new-privileges:true
     cap_drop: [ALL]
     healthcheck:
-      test: ["CMD", "node", "--input-type=module", "-e", "import {neon} from '@neondatabase/serverless';const r=await neon(process.env.DATABASE_URL).query(\"SELECT updated_at>now()-interval '90 seconds' ok FROM qms.system_state WHERE key='worker'\");process.exit(r[0]?.ok?0:1)"]
+      test: ["CMD", "node", "--input-type=module", "-e", "import pg from 'pg';const c=new pg.Client({connectionString:process.env.DATABASE_URL});await c.connect();const r=await c.query(\"SELECT updated_at>now()-interval '90 seconds' ok FROM qms.system_state WHERE key='worker'\");await c.end();process.exit(r.rows[0]?.ok?0:1)"]
       interval: 30s
       timeout: 20s
       start_period: 30s

@@ -37,8 +37,10 @@ and `RETENTION_EVENT_DAYS` stay empty (keep everything) until a retention period
 
 ## First run
 
-The database already contains the administrator account if you reuse the existing Neon
-database. For an empty database, open the scheduler's shell in Render and run:
+`DATABASE_URL` can point at any PostgreSQL server Render can reach over the network (a
+managed service, or a company server with TLS and a firewall rule for Render's outbound
+addresses). The database already contains the administrator account if you reuse the
+existing database. For an empty database, open the scheduler's shell in Render and run:
 
 ```sh
 BOOTSTRAP_PASSWORD='<at least 14 characters>' node scripts/bootstrap.mjs

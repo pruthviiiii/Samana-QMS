@@ -26,13 +26,13 @@
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
-    "@neondatabase/serverless": "^1.0.2",
     "@shadcn/react": "0.3.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "lucide-react": "1.31.0",
     "next": "^16.3.5",
+    "pg": "^8.23.0",
     "qrcode.react": "^4.2.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -44,6 +44,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
+    "@types/pg": "^8.23.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "esbuild": "0.28.1",

@@ -26,7 +26,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build --chown=node:node /app/dist-worker/ ./dist-worker/
-COPY --chown=node:node scripts/migrate.mjs scripts/sql.mjs scripts/bootstrap.mjs ./scripts/
+COPY --chown=node:node scripts/migrate.mjs scripts/sql.mjs scripts/db.mjs scripts/bootstrap.mjs scripts/create-app-role.mjs ./scripts/
 COPY --chown=node:node db/ ./db/
 USER node
 CMD ["node","dist-worker/worker.mjs"]

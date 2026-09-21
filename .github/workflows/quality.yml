@@ -20,13 +20,24 @@ jobs:
       - run: npm run build
       - run: npm run build:worker
   database-tests:
-    # Pull requests get a throwaway Neon branch of the production project, so
-    # each change is tested against a fresh copy of the schema and deleted
-    # afterwards. Pushes to main use the fixed test database. Both need the
-    # qms-test environment: NEON_API_KEY and QMS_TEST_DATABASE_URL as secrets,
-    # NEON_PROJECT_ID as a variable. The job deliberately fails without them.
+    # The full suite runs against a PostgreSQL 18 container started inside the
+    # workflow, so every pull request and push is tested on a fresh database
+    # with no external service and no secret.
     runs-on: ubuntu-latest
-    environment: qms-test
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: samana_qms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,32 +45,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Create an isolated Neon branch for this pull request
-        if: github.event_name == 'pull_request'
-        id: branch
-        uses: neondatabase/create-branch-action@v5
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          parent: production
-          branch_name: ci-pr-${{ github.event.number }}-${{ github.run_id }}
-          database: samana_qms_test
-          role: neondb_owner
-          api_key: ${{ secrets.NEON_API_KEY }}
       - name: Migrate and test
         env:
-          DATABASE_URL: ${{ steps.branch.outputs.db_url || secrets.QMS_TEST_DATABASE_URL }}
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/samana_qms_test
           APP_ORIGIN: http://qms.test
           SESSION_COOKIE_SECURE: "false"
           QR_SIGNING_SECRET: ci-synthetic-key-not-used-outside-tests
           WORKER_SECRET: ci-synthetic-worker-key
         run: |
-          test -n "$DATABASE_URL"
           node scripts/migrate.mjs
           npm test
-      - name: Delete the branch
-        if: always() && github.event_name == 'pull_request'
-        uses: neondatabase/delete-branch-action@v3
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: ci-pr-${{ github.event.number }}-${{ github.run_id }}
-          api_key: ${{ secrets.NEON_API_KEY }}

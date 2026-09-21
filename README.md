@@ -1,6 +1,6 @@
 # SAMANA QMS
 
-React application for customer QR check-in, staff-issued tickets, executive workstations, HOD/manager operations, and reception TVs. Built with TypeScript, Next.js, PostgreSQL on Neon, and server-side Salesforce APIs. Official SAMANA Ocean Pearl, Ocean Bay, and Rome imagery and logos are bundled locally; provenance is in `public/images/sources.json` and `public/images/redesign-sources.json`. Manrope and Cormorant Garamond fonts are self-hosted with their OFL licenses.
+React application for customer QR check-in, staff-issued tickets, executive workstations, HOD/manager operations, and reception TVs. Built with TypeScript, Next.js, PostgreSQL (any server; Neon hosted it during the review), and server-side Salesforce APIs. Official SAMANA Ocean Pearl, Ocean Bay, and Rome imagery and logos are bundled locally; provenance is in `public/images/sources.json` and `public/images/redesign-sources.json`. Manrope and Cormorant Garamond fonts are self-hosted with their OFL licenses.
 
 ## Current delivery
 
@@ -40,6 +40,22 @@ Sign in using `BOOTSTRAP_USERNAME` (currently `admin`) and `BOOTSTRAP_PASSWORD` 
 
 Localhost QR codes work only on the same computer. Customers' phones require an approved, reachable HTTPS domain such as the Render deployment.
 
+## Your own PostgreSQL server
+
+The app talks standard PostgreSQL (14 or newer) over the normal wire protocol; nothing depends on a particular host. To run it against your own server:
+
+1. Create the database and an owner role, for example as the `postgres` superuser:
+   ```sql
+   CREATE ROLE qms_owner LOGIN PASSWORD '<owner password>' CREATEROLE;
+   CREATE DATABASE samana_qms OWNER qms_owner;
+   ```
+   Repeat with `samana_qms_test` if you want to run the test suite there.
+2. Put the owner string in `.env` as `DATABASE_URL` (`postgresql://qms_owner:<password>@<host>:5432/samana_qms`; add `?sslmode=verify-full` only when the server uses TLS) and run `npm run db:migrate` and `npm run db:bootstrap`.
+3. Run `npm run db:app-role`. It creates the restricted `qms_app` role and prints the string to use as `DATABASE_URL`; move the owner string to `MIGRATE_DATABASE_URL`.
+4. Build and start: `npm run build`, `npm run build:worker`, then `npm start` and `npm run worker` in two terminals, or `docker compose up -d`.
+
+Moving data from one server to another is one `pg_dump` of `samana_qms` and one restore; the migration ledger travels with it.
+
 ## Features
 
 - Mobile, Emirates ID, and passport lookup; English/Arabic check-in; first matching Salesforce account; single-unit automatic selection.
@@ -70,11 +86,11 @@ docker compose run --rm scheduler node scripts/bootstrap.mjs
 docker compose up -d
 ```
 
-Configure `.env` on the server with an HTTPS `APP_ORIGIN`, `SESSION_COOKIE_SECURE=true`, strong independent `QR_SIGNING_SECRET` and `WORKER_SECRET`, and the Neon connection string. Put a TLS reverse proxy in front of web's loopback port 3000. Do not expose the database credentials or scheduler bearer secret to clients. Secrets are omitted from the image context.
+Configure `.env` on the server with an HTTPS `APP_ORIGIN`, `SESSION_COOKIE_SECURE=true`, strong independent `QR_SIGNING_SECRET` and `WORKER_SECRET`, and the PostgreSQL connection string (`?sslmode=verify-full` for a TLS host). Put a TLS reverse proxy in front of web's loopback port 3000. Do not expose the database credentials or scheduler bearer secret to clients. Secrets are omitted from the image context.
 
 Connect the app as the restricted `qms_app` role created by `npm run db:app-role`, and keep the owner connection string in `MIGRATE_DATABASE_URL` for migrations. `RETENTION_IDENTIFIER_DAYS` and `RETENTION_EVENT_DAYS` switch on anonymisation of closed tickets and purging of old audit events once a retention period is agreed. `GET /api/health/alerts` is the one address an uptime monitor should page on. Tickets left waiting from a previous day are marked no-show two hours after issue, and a number still on the floor from yesterday is never reissued today.
 
-The web app is a standard Next.js standalone server, so any Node host works; Render is the reference deployment in `render.yaml`. The scheduler either runs as a direct database worker (Docker, `npm run worker`) or, as on Render, calls `POST /api/jobs/run` every 15 seconds with `Authorization: Bearer WORKER_SECRET`. Live screen updates use server-sent events fed by PostgreSQL `NOTIFY`; a host that buffers streaming responses degrades gracefully to polling. The listener connects to Neon's direct endpoint even when `DATABASE_URL` is the pooled one, because the pooler accepts `LISTEN` but never forwards notifications.
+The web app is a standard Next.js standalone server, so any Node host works; Render is the reference deployment in `render.yaml`. The scheduler either runs as a direct database worker (Docker, `npm run worker`) or, as on Render, calls `POST /api/jobs/run` every 15 seconds with `Authorization: Bearer WORKER_SECRET`. Live screen updates use server-sent events fed by PostgreSQL `NOTIFY`; a host that buffers streaming responses degrades gracefully to polling. The listener needs one session that stays on a real server connection: on Neon it uses the direct endpoint even when `DATABASE_URL` is the pooled one, and behind a PgBouncer in transaction mode that one connection must bypass the pooler.
 
 ## SMS and Salesforce write-back
 
@@ -91,9 +107,9 @@ npm test
 npm audit --audit-level=high
 ```
 
-Full tests require a Neon database named exactly `samana_qms_test`. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts tests/routes.test.ts tests/openapi.test.ts`. Applied migrations are checksummed; editing one after it has run is refused by `scripts/migrate.mjs`, so always add a new file. `npm run api:docs` regenerates `docs/openapi.json` from the route table; a test fails when it is stale.
+Full tests require a PostgreSQL database named exactly `samana_qms_test`, on any server. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts tests/routes.test.ts tests/openapi.test.ts`. Applied migrations are checksummed; editing one after it has run is refused by `scripts/migrate.mjs`, so always add a new file. `npm run api:docs` regenerates `docs/openapi.json` from the route table; a test fails when it is stale.
 
-CI checks types, lint, unit tests, dependency audit and both builds. On pull requests the database job creates a throwaway Neon branch (secret `NEON_API_KEY`, variable `NEON_PROJECT_ID` in the `qms-test` environment), migrates and tests it, then deletes it; pushes to `main` use the environment secret `QMS_TEST_DATABASE_URL`. The job deliberately fails when those are absent. Browser/device acceptance remains pending because no controllable browser was connected during implementation. Test real mobile QR scanning, Arabic layout, desktop notifications, printing, TV fullscreen/audio, and reconnect behavior before launch.
+CI checks types, lint, unit tests, dependency audit and both builds. The database job starts a PostgreSQL 18 container inside the workflow, migrates it and runs the full suite, so no external database or secret is needed. Browser/device acceptance remains pending because no controllable browser was connected during implementation. Test real mobile QR scanning, Arabic layout, desktop notifications, printing, TV fullscreen/audio, and reconnect behavior before launch.
 
 ## Operations
 

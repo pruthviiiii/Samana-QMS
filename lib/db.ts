@@ -1,15 +1,15 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-// One pooled connection set per process, over the PostgreSQL wire protocol
-// (WebSocket transport on Neon). Queries share connections instead of opening
-// an HTTP request each, and multi-statement work runs in real transactions.
-if (typeof WebSocket !== 'undefined')
-  neonConfig.webSocketConstructor = WebSocket;
-let pool: Pool | null = null;
+import pg from 'pg';
+// One pooled connection set per process over the standard PostgreSQL wire
+// protocol, so any PostgreSQL 14 or newer server works: your own machine, a
+// company server, or a managed host such as Neon. Queries share connections
+// and multi-statement work runs in real transactions. TLS is switched on by
+// `sslmode=require` in DATABASE_URL and off when the parameter is absent.
+let pool: pg.Pool | null = null;
 function getPool() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_NOT_CONFIGURED');
   if (!pool)
-    pool = new Pool({
+    pool = new pg.Pool({
       connectionString: url,
       max: 10,
       idleTimeoutMillis: 30000,

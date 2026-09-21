@@ -28,7 +28,13 @@ if (!resolve(destination).startsWith(root))
   throw new Error('Invalid build destination.');
 await rm(destination, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
 // The standalone server needs the static assets and public files beside it.
-await cp(join(built, 'standalone'), join(destination, 'standalone'), { recursive: true });
+// Packages Next.js leaves external (such as pg) appear in the standalone
+// output as symlinks; they are copied as real directories so the result runs
+// anywhere, including Windows hosts where creating symlinks needs privileges.
+await cp(join(built, 'standalone'), join(destination, 'standalone'), {
+  recursive: true,
+  dereference: true,
+});
 await cp(join(built, 'static'), join(destination, 'standalone', '.next', 'static'), { recursive: true });
 await cp(join(root, 'public'), join(destination, 'standalone', 'public'), { recursive: true });
 await stat(join(destination, 'standalone', 'server.js'));

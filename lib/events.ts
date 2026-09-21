@@ -1,21 +1,21 @@
-import { Client, neonConfig } from '@neondatabase/serverless';
+import pg from 'pg';
 // One database session per web process holds LISTEN qms_changes. Migration
 // 013 raises a NOTIFY whenever tickets, notifications or staff availability
 // change, and every connected screen is told to refresh. If the listener
 // cannot be established the screens keep their own polling interval.
-if (typeof WebSocket !== 'undefined')
-  neonConfig.webSocketConstructor = WebSocket;
 type Listener = (kind: string) => void;
 const listeners = new Set<Listener>();
-let client: Client | null = null;
+let client: pg.Client | null = null;
 let connecting: Promise<void> | null = null;
 let retryAt = 0;
 export function listening() {
   return client !== null;
 }
-// Neon's connection pooler (hostnames whose first label ends in "-pooler")
-// accepts LISTEN but never forwards NOTIFY messages, so the listener always
-// connects to the direct endpoint even when DATABASE_URL is the pooled one.
+// LISTEN needs a session that stays on one server connection. A pooler in
+// transaction mode accepts the command but never forwards notifications, so
+// on Neon (hostnames whose first label ends in "-pooler") the listener uses
+// the direct endpoint. Any other host is used exactly as configured; put this
+// one connection past PgBouncer if you run one.
 export function listenUrl(url: string) {
   try {
     const parsed = new URL(url);
@@ -32,7 +32,7 @@ async function connect() {
   connecting = (async () => {
     const url = process.env.DATABASE_URL;
     if (!url) throw new Error('DATABASE_NOT_CONFIGURED');
-    const c = new Client({ connectionString: listenUrl(url) });
+    const c = new pg.Client({ connectionString: listenUrl(url) });
     await c.connect();
     await c.query('LISTEN qms_changes');
     c.on('notification', (message) => {
