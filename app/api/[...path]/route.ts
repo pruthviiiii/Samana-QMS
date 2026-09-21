@@ -27,10 +27,9 @@ import { queue, ticketDetail, reports } from '@/lib/operations';
 import {
   lookupCustomer,
   integrationHealth,
-  syncDirectory,
+  searchUsers,
 } from '@/lib/salesforce';
 import { processJobs } from '@/lib/jobs';
-import { listServiceGroups, syncServiceGroup } from '@/lib/salesforce-groups';
 import {
   checkinLink,
   startGuest,
@@ -417,29 +416,17 @@ async function handler(request: Request) {
       allow(['admin', 'hod', 'manager']);
       return json(await integrationHealth());
     }
-    if (path === 'integrations/salesforce/sync' && method === 'POST') {
+    if (path === 'integrations/salesforce/users' && method === 'GET') {
+      // On-demand search through QMSUserAPI; nothing is imported in bulk.
       allow(['admin']);
-      return json(await syncDirectory());
-    }
-    if (path === 'integrations/salesforce/groups') {
-      allow(['admin']);
-      if (method === 'GET') return json(await listServiceGroups());
-      const input = z
-        .object({
-          serviceId: z.enum([
-            'crm-general',
-            'crm-noc',
-            'crm-refund',
-            'crm-handover',
-            'collection',
-            'general',
-          ]),
-          groupId: z.string().regex(/^00G[a-zA-Z0-9]{12,15}$/),
-        })
-        .parse(await body(request));
-      return json(
-        await syncServiceGroup(input.serviceId, input.groupId, user.id),
-      );
+      await rateLimit('sfusers:' + user.id, 30, 60);
+      const q = z
+        .string()
+        .trim()
+        .min(3, 'Enter at least 3 characters to search.')
+        .max(100)
+        .parse(url.searchParams.get('q') ?? '');
+      return json({ users: await searchUsers(q) });
     }
     if (path === 'reports' && method === 'GET') {
       allow(['admin', 'hod', 'manager']);

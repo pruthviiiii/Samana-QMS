@@ -19,6 +19,14 @@ import {
 import { api, post } from '@/lib/client';
 import { SERVICES, type User, type Role } from '@/lib/domain';
 type TeamUser = User & { active_tickets: number };
+type SalesforceUser = {
+  id: string;
+  name: string;
+  username: string | null;
+  email: string | null;
+  managerId: string | null;
+  managerName: string | null;
+};
 type EditUser = {
   id?: string;
   username: string;
@@ -52,6 +60,9 @@ export default function Team({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [sfQuery, setSfQuery] = useState('');
+  const [sfResults, setSfResults] = useState<SalesforceUser[] | null>(null);
+  const [searching, setSearching] = useState(false);
   async function load() {
     setLoading(true);
     try {
@@ -88,23 +99,45 @@ export default function Team({ user }: { user: User }) {
       setBusy(false);
     }
   }
-  async function sync() {
-    setBusy(true);
+  // Nothing is fetched until an administrator searches; results live only in the dialog.
+  async function findInSalesforce(e: React.SyntheticEvent) {
+    e.preventDefault();
+    if (sfQuery.trim().length < 3) {
+      setError('Enter at least 3 characters to search Salesforce.');
+      return;
+    }
+    setSearching(true);
     setError('');
     try {
-      const result = await post<{ imported: number }>(
-        'integrations/salesforce/sync',
-        {},
+      const result = await api<{ users: SalesforceUser[] }>(
+        'integrations/salesforce/users?' +
+          new URLSearchParams({ q: sfQuery.trim() }),
       );
-      setMessage(
-        `${result.imported} Salesforce team members synchronized. Set their passwords and service access to activate them.`,
-      );
-      await load();
+      setSfResults(result.users);
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setBusy(false);
+      setSearching(false);
     }
+  }
+  function applySalesforceUser(u: SalesforceUser) {
+    if (!edit) return;
+    setEdit({
+      ...edit,
+      name: u.name,
+      username: edit.username || u.username || u.email || '',
+      email: u.email || '',
+      sfId: u.id,
+      managerSfId: u.managerId || '',
+    });
+    setSfResults(null);
+    setSfQuery('');
+  }
+  function openEditor(next: EditUser) {
+    setError('');
+    setSfQuery('');
+    setSfResults(null);
+    setEdit(next);
   }
   const online = users.filter(
     (u) =>
@@ -135,20 +168,14 @@ export default function Team({ user }: { user: User }) {
         <div className="panel-heading">
           <div>
             <h2>Your service team</h2>
-            <p>Connect Salesforce owners to queues and counters.</p>
+            <p>
+              Add members one at a time from Salesforce, then assign queues
+              and counters here.
+            </p>
           </div>
           {user.role === 'admin' && (
             <div className="section-actions">
-              <Button variant="outline" onClick={sync} disabled={busy}>
-                <RefreshCw size={15} />
-                Sync Salesforce
-              </Button>
-              <Button
-                onClick={() => {
-                  setEdit({ ...blank, services: [] });
-                  setError('');
-                }}
-              >
+              <Button onClick={() => openEditor({ ...blank, services: [] })}>
                 <Plus size={15} />
                 Add member
               </Button>
@@ -255,8 +282,7 @@ export default function Team({ user }: { user: User }) {
                           size="icon-sm"
                           aria-label={'Edit ' + u.name}
                           onClick={() => {
-                            setError('');
-                            setEdit({
+                            openEditor({
                               id: u.id,
                               username: u.username,
                               name: u.name,
@@ -311,6 +337,56 @@ export default function Team({ user }: { user: User }) {
                   {error}
                 </p>
               )}
+              <div className="sf-search">
+                <label htmlFor="team-sf-search">Find in Salesforce</label>
+                <div className="row">
+                  <Input
+                    id="team-sf-search"
+                    value={sfQuery}
+                    onChange={(e) => setSfQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void findInSalesforce(e);
+                    }}
+                    placeholder="Name, username or email (3+ characters)"
+                    maxLength={100}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={findInSalesforce}
+                    disabled={searching || sfQuery.trim().length < 3}
+                  >
+                    <Search size={14} />
+                    {searching ? 'Searching…' : 'Search'}
+                  </Button>
+                </div>
+                {sfResults && (
+                  <ul className="sf-results">
+                    {sfResults.map((u) => (
+                      <li key={u.id}>
+                        <button
+                          type="button"
+                          className="btn-link"
+                          onClick={() => applySalesforceUser(u)}
+                        >
+                          <strong>{u.name}</strong>
+                          <span className="ticket-meta">
+                            {u.email || u.username || u.id}
+                            {u.managerName ? ' · reports to ' + u.managerName : ''}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                    {!sfResults.length && (
+                      <li className="muted">No active Salesforce user matched.</li>
+                    )}
+                  </ul>
+                )}
+                <small className="field-hint">
+                  Selecting a person fills their name, email, Salesforce ID and
+                  manager. Only members you save exist in the app.
+                </small>
+              </div>
               <div className="form-grid">
                 <div>
                   <label htmlFor="team-name">Full name</label>

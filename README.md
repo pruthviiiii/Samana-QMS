@@ -32,8 +32,8 @@ Open the exact URL printed by the server. Set `APP_ORIGIN` to that origin. Local
 
 Sign in using `BOOTSTRAP_USERNAME` (currently `admin`) and `BOOTSTRAP_PASSWORD` from the local `.env`. Change the temporary password when prompted. Bootstrap never overwrites an existing administrator. Remove the bootstrap password from a production host after provisioning.
 
-1. In Team, sync the Salesforce directory. Imported users are disabled, have no password, and have no service access until configured.
-2. In Settings, choose Salesforce queues/public groups for services and sync membership, or configure service membership individually in Team. Sync changes app data only. Nested public groups, queues, roles, subordinate roles, and organization groups are resolved. Unsupported dynamic group types produce an explicit error without changing memberships.
+1. In Team, add each staff member: search Salesforce by name or email, pick the person, then set role, queues, counter and a temporary password. Nothing is imported in bulk.
+2. In Queues, put members into each service queue. Queues live in the app database only; nothing is read from or written to Salesforce groups.
 3. Set staff passwords, roles, counters, and enabled status. Members change temporary passwords at first sign-in. Staff go online to receive tickets. Collection managers must be mapped to the correct Salesforce user IDs.
 4. Create a dedicated `display` account for each TV. Sign in, open TV Display, enter fullscreen, and enable speech announcements if desired. Browser audio requires a user gesture. Display accounts cannot retrieve customer records or reports. Sessions last eight hours; re-authenticate at shift start.
 5. Show the rotating QR on the TV or reception's Check-in QR dialog. Invite links expire after five minutes; the display refreshes them every two minutes. Customer sessions last 45 minutes. Customers must scan a fresh QR for a new session.

@@ -1,16 +1,16 @@
 # Integration contracts
 
-## Salesforce: read-only by default
+## Salesforce: Apex REST only
 
-The server obtains OAuth tokens using `client_credentials` against `SALESFORCE_INSTANCE_URL`, caches tokens briefly, and retries authentication once after a 401. Credentials never reach the browser. The instance must be HTTPS under `salesforce.com`. Requests have timeouts, bounded pagination, and sanitized errors.
+The server obtains OAuth tokens using `client_credentials` against `SALESFORCE_INSTANCE_URL`, caches tokens briefly, and retries authentication once after a 401. Credentials never reach the browser. The instance must be HTTPS under `salesforce.com`. Requests have timeouts, bounded sizes, and sanitized errors.
 
-`GET /services/apexrest/api/AccountLookupAPI` accepts exactly one of `mobile`, `emiratesId`, or `passportNumber`. Mobile input is 8–15 digits with country code; EID is `784-XXXX-XXXXXXX-X`; passport input is normalized uppercase. The first `accounts` entry is used as required by the BRD. Salesforce's API does not specify an ordering for duplicate accounts; the app preserves the API's first result.
+Every Salesforce call goes to an Apex REST class under `/services/apexrest/api/`. The app runs no SOQL and never calls `/services/data`; `tests/apex-only.test.ts` fails the build if such a call is introduced. The integration user therefore needs only **API Enabled** and class access to `AccountLookupAPI`, `QMSUserAPI` and `QMSTicketAPI`. The classes run in system mode, so no object or field permissions are required. The package for the Salesforce team is in `salesforce/qms-integration/`.
 
-The supplied API returns account ID/name/email/phone/identifiers and unit IDs/numbers, SB references, and Collection agent/manager names/emails. Supplemental **read-only** Salesforce REST queries retrieve name components, project names, Collection user IDs, and CRM calling-list owner IDs. CRM service owners use the latest calling-list entry for CRM, Resale, or Handover, falling back to CRM. Collection uses `Customer_Unit__c.Collection_Agent__c` and the user's `ManagerId`. A queue-owned calling list cannot identify one preferred person, so service-group fallback applies. Missing project/owner fields remain visibly unavailable; the app does not invent data.
+`GET /services/apexrest/api/AccountLookupAPI` accepts exactly one of `mobile`, `emiratesId`, or `passportNumber`. Mobile input is 8–15 digits with country code; EID is `784-XXXX-XXXXXXX-X`; passport input is normalized uppercase. The first `accounts` entry is used as required by the BRD. Per account the class returns identifiers, first/middle/last names and active units; per unit it returns `projectName`, `collectionAgentId`, `collectionAgentManagerId` and `callingOwners` (latest `Calling_List__c` row per department with `ownerId` and `ownerManagerId`). CRM services use the CRM, Resale or Handover owner with CRM as fallback; Collection uses the unit's collection agent and that agent's manager. Ids that are not Salesforce user ids are ignored. Missing project or owner fields remain visibly unavailable; the app does not invent data.
 
-Directory import fetches active standard Salesforce users, manager IDs, and emails. It updates names and manager mappings while preserving existing app privileges. Newly imported users have no password, are disabled, and have no service access. Explicit group sync maps each service to a Salesforce public group/queue and stores the resulting app memberships. Local staff without Salesforce IDs remain under manual control. Group selection is an operational decision because the organization contains many similarly named queues; no mapping is guessed.
+`GET /services/apexrest/api/QMSUserAPI?q=<text>` searches active standard users by name, username or email (3–100 characters, at most 20 results). The Team page calls it only when an administrator types a search; nothing is imported in bulk and only members the administrator saves exist in the app. `?ping=1` is the health probe. Until the class is deployed the app reports user search as unavailable and everything else keeps working.
 
-The live read-only verification authenticated successfully and retrieved an account with eight units: six contained project names, one had a Collection owner, and none had a user-owned CRM calling-list match. These are source-data gaps on the sampled account, not evidence that all accounts have complete mappings.
+Queues (service membership) are managed in the app and stored in PostgreSQL only. Nothing about queues is read from or written to Salesforce.
 
 ## Optional Salesforce ticket upsert
 
@@ -57,8 +57,7 @@ All responses containing application data use `Cache-Control: no-store`. State-c
 | `GET /api/display` | Authenticated TV: ticket number/service/counter only |
 | `GET/POST /api/team` | Managers view; administrators edit |
 | `GET /api/reports`, `/audit`, `/integrations` | Manager/HOD/admin reports, audit, health |
-| `POST /api/integrations/salesforce/sync` | Administrator directory import |
-| `GET/POST /api/integrations/salesforce/groups` | Administrator group selection and service sync |
+| `GET /api/integrations/salesforce/users?q=` | Administrator on-demand Salesforce user search (Apex `QMSUserAPI`) |
 | `POST /api/jobs/run` | Scheduler bearer credential; routing and outbox tick |
 
 Private ticket status links expire one day after completion. They show no customer identity. Identifying yourself by mobile/EID/passport follows the requested BRD; it is not an OTP-based proof of identity. Customer lookup results disclose only a first name and selectable units/projects and are rate-limited. If stronger identity proof is required, add OTP after choosing the SMS provider.

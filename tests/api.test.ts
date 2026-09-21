@@ -3,9 +3,11 @@ import { query } from '../lib/db';
 import { hashPassword, sha256 } from '../lib/security';
 import type { Customer } from '../lib/domain';
 const lookup = vi.hoisted(() => vi.fn());
+const search = vi.hoisted(() => vi.fn());
 vi.mock('../lib/salesforce', async (original) => ({
   ...(await original<typeof import('../lib/salesforce')>()),
   lookupCustomer: lookup,
+  searchUsers: search,
 }));
 import { GET, POST } from '../app/api/[...path]/route';
 const prefix = 'api-test-' + crypto.randomUUID().slice(0, 8);
@@ -526,4 +528,36 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
   });
   it('guards scheduler with a separate credential', async () =>
     expect((await send('jobs/run', 'POST', {}, '')).response.status).toBe(401));
+});
+
+describe('On-demand Salesforce user search', () => {
+  const found = {
+    id: '005000000000001AAA',
+    name: 'Synthetic Agent',
+    username: 'synthetic.agent@example.test',
+    email: 'synthetic.agent@example.test',
+    managerId: '005000000000002AAA',
+    managerName: 'Synthetic Manager',
+  };
+  it('returns matches to an administrator only when a query is given', async () => {
+    search.mockResolvedValueOnce([found]);
+    const ok = await send('integrations/salesforce/users?q=synthetic');
+    expect(ok.response.status).toBe(200);
+    expect(ok.result.users).toEqual([found]);
+    expect(search).toHaveBeenCalledWith('synthetic');
+  });
+  it('rejects short queries before contacting Salesforce', async () => {
+    search.mockClear();
+    const short = await send('integrations/salesforce/users?q=ab');
+    expect(short.response.status).toBe(400);
+    expect(search).not.toHaveBeenCalled();
+  });
+  it('is not available to agents', async () => {
+    const denied = await send('integrations/salesforce/users?q=synthetic', 'GET', undefined, agentCookie);
+    expect(denied.response.status).toBe(403);
+  });
+  it('no longer exposes bulk import or group sync', async () => {
+    expect((await send('integrations/salesforce/sync', 'POST', {})).response.status).toBe(404);
+    expect((await send('integrations/salesforce/groups')).response.status).toBe(404);
+  });
 });

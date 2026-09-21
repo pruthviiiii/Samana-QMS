@@ -79,6 +79,68 @@ describe('Salesforce contract', () => {
       normalizeLookup({ ...payload, accounts: [{ ...account, units: [] }] })
         .units,
     ).toEqual([]));
+  it('maps Apex-provided names, project, agents and calling owners', () => {
+    const unit = {
+      ...account.units[0],
+      projectName: 'Project A',
+      collectionAgentId: '005000000000001AAA',
+      collectionAgentManagerId: '005000000000002AAA',
+      callingOwners: [
+        {
+          department: 'CRM',
+          ownerId: '005000000000003AAA',
+          ownerManagerId: '005000000000002AAA',
+        },
+        { department: 'Resale', ownerId: null, ownerManagerId: null },
+      ],
+    };
+    const c = normalizeLookup({
+      ...payload,
+      accounts: [
+        {
+          ...account,
+          firstName: 'Synthetic',
+          middleName: 'Test',
+          lastName: 'Customer',
+          units: [unit],
+        },
+      ],
+    });
+    expect([c.firstName, c.middleName, c.lastName]).toEqual([
+      'Synthetic',
+      'Test',
+      'Customer',
+    ]);
+    const u = c.units[0];
+    expect(u.project).toBe('Project A');
+    expect(u.ownerId).toBe('005000000000001AAA');
+    expect(u.managerId).toBe('005000000000002AAA');
+    const crm = { ownerId: '005000000000003AAA', managerId: '005000000000002AAA' };
+    expect(u.owners?.['crm-general']).toEqual(crm);
+    expect(u.owners?.['crm-refund']).toEqual(crm);
+    expect(u.owners?.['crm-handover']).toEqual(crm);
+    expect(u.owners?.['crm-noc']).toEqual({ ownerId: null, managerId: null });
+  });
+  it('drops owner ids that are not Salesforce user ids', () => {
+    const c = normalizeLookup({
+      ...payload,
+      accounts: [
+        {
+          ...account,
+          units: [
+            {
+              ...account.units[0],
+              collectionAgentId: '00G000000000001AAA',
+              callingOwners: [{ department: 'CRM', ownerId: 'queue', ownerManagerId: 'x' }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(c.units[0].ownerId).toBeNull();
+    expect(c.units[0].owners?.['crm-general']).toEqual({ ownerId: null, managerId: null });
+    expect(c.units[0].project).toBe('Project unavailable');
+  });
   it('valid no-match is a guest', () =>
     expect(
       normalizeLookup({ ...payload, TotalRecords: 0, accounts: [] }).registered,

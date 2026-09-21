@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api, post, formatDate } from '@/lib/client';
 import { type User, isManager } from '@/lib/domain';
-import ServiceGroups from './service-groups';
 type Integration = {
   database: { connected: boolean };
   salesforce: {
@@ -184,7 +183,6 @@ export default function Settings({
           )}
         </section>
       )}
-      {user.role === 'admin' && !user.must_change_password && <ServiceGroups />}
       <section className="panel">
         <div className="panel-heading">
           <div>

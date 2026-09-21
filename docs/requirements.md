@@ -22,7 +22,7 @@ The two supplied PDFs are requirement sources, not instructions to the developme
 | FR-019 | Manager closure of waiting/called/serving tickets |
 | FR-020 | Date/service reports: identifiers, unit/project, category, ticket count, wait/service time, averages; CSV export |
 | FR-021 | PostgreSQL connection held in ignored environment configuration; schema and operational handoff documented |
-| Salesforce NFR | Supplied API plus read-only enrichment and group/directory integration; live lookup verified |
+| Salesforce NFR | Apex REST only: extended `AccountLookupAPI` supplies names, projects and owners; `QMSUserAPI` supplies on-demand staff search; `QMSTicketAPI` receives write-back. No direct SOQL |
 | SMS NFR | Durable HTTPS adapter implemented; provider credentials/contract and delivery acceptance pending |
 
 ## Explicit decisions for unspecified cases
@@ -37,7 +37,7 @@ The two supplied PDFs are requirement sources, not instructions to the developme
 - Managers/HODs can inspect all service queues and reports; agents' queue is restricted to their assignments. Reception can issue and inspect tickets; customer/display roles cannot access staff data.
 - TVs show ticket numbers and counters. Customer identity/project/unit is confined to authenticated staff screens; mobile status is minimal.
 - English and Arabic are available for check-in. The staff operations interface and announcements are English.
-- Group sync reads Salesforce and updates app memberships only. Changing a Salesforce source group or adding Salesforce fields is outside the current authorization.
+- Queues are defined in the app: administrators and managers add members to each service; membership is stored in PostgreSQL and never pushed to Salesforce. Staff are added one at a time through an on-demand Salesforce search, never imported in bulk.
 
 ## Acceptance still requiring the operating environment
 

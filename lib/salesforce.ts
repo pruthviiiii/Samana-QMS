@@ -1,7 +1,14 @@
 import { z } from 'zod';
 import { query } from './db';
 import { HttpError } from './http';
-import type { Customer, IdentifierType } from './domain';
+import type { Customer, IdentifierType, Unit } from './domain';
+
+// Apex-only client. The integration user holds "API Enabled" and class access to
+// AccountLookupAPI, QMSUserAPI and QMSTicketAPI, and nothing else. No SOQL, no
+// /services/data object access; every read and write goes through those classes.
+const APEX_PREFIX = '/services/apexrest/api/';
+const SF_USER_ID = /^005[a-zA-Z0-9]{12,15}$/;
+
 let cached: { token: string; expires: number } | null = null;
 let pending: Promise<string> | null = null;
 function instance() {
@@ -67,28 +74,55 @@ async function accessToken(force = false) {
     pending = null;
   }
 }
+function assertApexPath(path: string) {
+  if (!path.startsWith(APEX_PREFIX) || path.includes('://'))
+    throw new Error('Invalid Salesforce path.');
+}
+async function apexFetch(path: string, init: RequestInit, retry: boolean) {
+  const token = await accessToken();
+  const headers = new Headers(init.headers);
+  headers.set('Authorization', 'Bearer ' + token);
+  headers.set('Content-Type', 'application/json');
+  const response = await fetch(instance() + path, {
+    ...init,
+    headers,
+    redirect: 'manual', // workerd rejects 'error'; 3xx fails the ok checks
+    signal: AbortSignal.timeout(20000),
+  });
+  if (response.status === 401 && retry) {
+    await accessToken(true);
+    return apexFetch(path, init, false);
+  }
+  return response;
+}
+function transportFailure(error: unknown): never {
+  if (error instanceof HttpError) throw error;
+  const cause =
+    error instanceof Error && 'cause' in error ? error.cause : undefined;
+  const code =
+    cause && typeof cause === 'object' && 'code' in cause
+      ? String(cause.code)
+      : undefined;
+  console.error(
+    JSON.stringify({
+      event: 'salesforce_transport_failed',
+      type: error instanceof Error ? error.name : 'Unknown',
+      ...(code && /^[A-Z0-9_]{1,60}$/.test(code) ? { code } : {}),
+    }),
+  );
+  throw new HttpError(
+    502,
+    'Salesforce is temporarily unreachable. Check the server connection and retry.',
+  );
+}
 export async function sfRequest(
   path: string,
   init: RequestInit = {},
   retry = true,
 ): Promise<unknown> {
-  if (!path.startsWith('/services/') || path.includes('://'))
-    throw new Error('Invalid Salesforce path.');
+  assertApexPath(path);
   try {
-    const token = await accessToken();
-    const headers = new Headers(init.headers);
-    headers.set('Authorization', 'Bearer ' + token);
-    headers.set('Content-Type', 'application/json');
-    const response = await fetch(instance() + path, {
-      ...init,
-      headers,
-      redirect: 'manual', // workerd rejects 'error'; 3xx fails the ok check below
-      signal: AbortSignal.timeout(20000),
-    });
-    if (response.status === 401 && retry) {
-      await accessToken(true);
-      return sfRequest(path, init, false);
-    }
+    const response = await apexFetch(path, init, retry);
     if (!response.ok)
       throw new HttpError(
         response.status === 429 ? 503 : 502,
@@ -96,64 +130,38 @@ export async function sfRequest(
       );
     return await response.json();
   } catch (error) {
-    if (error instanceof HttpError) throw error;
-    const cause =
-      error instanceof Error && 'cause' in error ? error.cause : undefined;
-    const code =
-      cause && typeof cause === 'object' && 'code' in cause
-        ? String(cause.code)
-        : undefined;
-    console.error(
-      JSON.stringify({
-        event: 'salesforce_transport_failed',
-        type: error instanceof Error ? error.name : 'Unknown',
-        ...(code && /^[A-Z0-9_]{1,60}$/.test(code) ? { code } : {}),
-      }),
-    );
-    throw new HttpError(
-      502,
-      'Salesforce is temporarily unreachable. Check the server connection and retry.',
-    );
+    transportFailure(error);
   }
 }
-export async function sfQuery<T>(soql: string) {
-  let path =
-    '/services/data/v' +
-    (process.env.SALESFORCE_API_VERSION || '67.0') +
-    '/query?q=' +
-    encodeURIComponent(soql);
-  const records: T[] = [];
-  let pages = 0;
-  while (path) {
-    const data = (await sfRequest(path)) as {
-      records: T[];
-      done: boolean;
-      nextRecordsUrl?: string;
-    };
-    if (!Array.isArray(data.records))
-      throw new HttpError(
-        502,
-        'Salesforce returned an invalid query response.',
-      );
-    records.push(...data.records);
-    if (++pages > 20 || records.length > 20000)
-      throw new HttpError(
-        502,
-        'Salesforce query exceeded the supported result size.',
-      );
-    path = data.done ? '' : data.nextRecordsUrl || '';
+// Status-only probe for health checks: never throws on an HTTP error status.
+async function apexStatus(path: string): Promise<number> {
+  assertApexPath(path);
+  try {
+    return (await apexFetch(path, {}, true)).status;
+  } catch (error) {
+    transportFailure(error);
   }
-  return records;
 }
+
 const nullable = z.string().nullable().optional();
+const rawOwner = z.object({
+  department: nullable,
+  ownerId: nullable,
+  ownerManagerId: nullable,
+});
 const rawUnit = z.object({
   customerUnitId: z.string(),
   unitNumber: nullable,
   salesBookingReference: nullable,
+  projectId: nullable,
+  projectName: nullable,
+  collectionAgentId: nullable,
   collectionAgentName: nullable,
+  collectionAgentManagerId: nullable,
   collectionAgentManagerName: nullable,
   collectionAgentEmail: nullable,
   collectionAgentManagerEmail: nullable,
+  callingOwners: z.array(rawOwner).nullable().optional(),
 });
 const lookupSchema = z.object({
   isSuccess: z.boolean(),
@@ -163,6 +171,9 @@ const lookupSchema = z.object({
     z.object({
       id: z.string().regex(/^[a-zA-Z0-9]{15,18}$/),
       name: z.string(),
+      firstName: nullable,
+      middleName: nullable,
+      lastName: nullable,
       email: nullable,
       phoneNumber: nullable,
       phoneCountryCode: nullable,
@@ -172,6 +183,16 @@ const lookupSchema = z.object({
     }),
   ),
 });
+// Which Calling_List__c department feeds each CRM service; CRM is the fallback.
+const SERVICE_DEPARTMENTS: [string, string][] = [
+  ['crm-general', 'CRM'],
+  ['crm-refund', 'CRM'],
+  ['crm-noc', 'Resale'],
+  ['crm-handover', 'Handover'],
+];
+const userId = (value: string | null | undefined) =>
+  value && SF_USER_ID.test(value) ? value : null;
+
 export function normalizeLookup(payload: unknown): Customer {
   const parsed = lookupSchema.safeParse(payload);
   if (
@@ -198,168 +219,131 @@ export function normalizeLookup(payload: unknown): Customer {
       units: [],
     };
   const names = account.name.trim().split(/\s+/);
+  const units: Unit[] = account.units.map((u) => {
+    const owners: Unit['owners'] = {};
+    const calling = u.callingOwners || [];
+    for (const [service, department] of SERVICE_DEPARTMENTS) {
+      const row =
+        calling.find((c) => c.department === department) ||
+        calling.find((c) => c.department === 'CRM');
+      owners[service] = {
+        ownerId: userId(row?.ownerId),
+        managerId: userId(row?.ownerManagerId),
+      };
+    }
+    return {
+      id: u.customerUnitId,
+      name: u.unitNumber || 'Unit',
+      project: u.projectName || 'Project unavailable',
+      bookingNumber: u.salesBookingReference || '',
+      ownerId: userId(u.collectionAgentId),
+      ownerName: u.collectionAgentName || null,
+      managerId: userId(u.collectionAgentManagerId),
+      managerName: u.collectionAgentManagerName || null,
+      owners,
+    };
+  });
   return {
     registered: true,
     salesforceId: account.id,
     name: account.name,
     email: account.email || null,
-    firstName: names[0] || '',
-    middleName: names.length > 2 ? names.slice(1, -1).join(' ') : '',
-    lastName: names.length > 1 ? names.at(-1) || '' : '',
+    firstName: account.firstName || names[0] || '',
+    middleName:
+      account.middleName ||
+      (names.length > 2 ? names.slice(1, -1).join(' ') : ''),
+    lastName:
+      account.lastName || (names.length > 1 ? names.at(-1) || '' : ''),
     mobile: account.phoneNumber || null,
     emiratesId: account.emiratesId || null,
     passportNumber: account.passportNumber || null,
-    units: account.units.map((u) => ({
-      id: u.customerUnitId,
-      name: u.unitNumber || 'Unit',
-      project: '',
-      bookingNumber: u.salesBookingReference || '',
-      ownerId: null,
-      ownerName: u.collectionAgentName || null,
-      managerId: null,
-      managerName: u.collectionAgentManagerName || null,
-    })),
+    units,
   };
 }
 export async function lookupCustomer(type: IdentifierType, value: string) {
   const raw = await sfRequest(
-    '/services/apexrest/api/AccountLookupAPI?' +
-      new URLSearchParams({ [type]: value }),
+    APEX_PREFIX + 'AccountLookupAPI?' + new URLSearchParams({ [type]: value }),
   );
-  const customer = normalizeLookup(raw);
-  if (!customer.registered) return customer;
-  const accountId = customer.salesforceId!; // Validated as a Salesforce ID by lookupSchema.
-  const [account] = await sfQuery<{
-    FirstName: string | null;
-    MiddleName: string | null;
-    LastName: string | null;
-    First_Name__c: string | null;
-    Middle_Name__c: string | null;
-    Last_Name__c: string | null;
-  }>(
-    `SELECT FirstName,MiddleName,LastName,First_Name__c,Middle_Name__c,Last_Name__c FROM Account WHERE Id='${accountId}' LIMIT 1`,
-  );
-  if (account) {
-    customer.firstName =
-      account.FirstName || account.First_Name__c || customer.firstName;
-    customer.middleName = account.MiddleName || account.Middle_Name__c || '';
-    customer.lastName =
-      account.LastName || account.Last_Name__c || customer.lastName;
-  }
-  if (customer.units.length) {
-    type UnitRow = {
-      Id: string;
-      Project__r: { Name: string } | null;
-      Project_Name__c: string | null;
-      Collection_Agent__c: string | null;
-      Collection_Agent__r: {
-        Name: string;
-        ManagerId: string | null;
-        Manager: { Name: string } | null;
-      } | null;
-    };
-    type Calling = {
-      Customer_Unit__c: string;
-      OwnerId: string;
-      Department__c: string | null;
-      Collection_Agent_Manager__c: string | null;
-    };
-    const [units, calling] = await Promise.all([
-      sfQuery<UnitRow>(
-        `SELECT Id,Project__r.Name,Project_Name__c,Collection_Agent__c,Collection_Agent__r.Name,Collection_Agent__r.ManagerId,Collection_Agent__r.Manager.Name FROM Customer_Unit__c WHERE Account__c='${accountId}' AND Unit_Active__c='Yes' ORDER BY Id LIMIT 500`,
-      ),
-      sfQuery<Calling>(
-        `SELECT Customer_Unit__c,OwnerId,Department__c,Collection_Agent_Manager__c FROM Calling_List__c WHERE Account__c='${accountId}' AND Customer_Unit__c!=null ORDER BY LastModifiedDate DESC,Id LIMIT 500`,
-      ),
-    ]);
-    const ownerIds = [
-      ...new Set(
-        calling
-          .map((c) => c.OwnerId)
-          .filter((id) => /^005[a-zA-Z0-9]{12,15}$/.test(id)),
-      ),
-    ];
-    const owners = ownerIds.length
-      ? await sfQuery<{ Id: string; ManagerId: string | null }>(
-          `SELECT Id,ManagerId FROM User WHERE Id IN (${ownerIds.map((id) => "'" + id + "'").join(',')})`,
-        )
-      : [];
-    for (const unit of customer.units) {
-      const row = units.find((u) => u.Id === unit.id);
-      unit.project =
-        row?.Project__r?.Name || row?.Project_Name__c || 'Project unavailable';
-      unit.ownerId = row?.Collection_Agent__c || null;
-      unit.ownerName = row?.Collection_Agent__r?.Name || unit.ownerName;
-      unit.managerId = row?.Collection_Agent__r?.ManagerId || null;
-      unit.managerName =
-        row?.Collection_Agent__r?.Manager?.Name || unit.managerName;
-      unit.owners = {};
-      for (const [service, department] of [
-        ['crm-general', 'CRM'],
-        ['crm-refund', 'CRM'],
-        ['crm-noc', 'Resale'],
-        ['crm-handover', 'Handover'],
-      ]) {
-        const call =
-          calling.find(
-            (c) =>
-              c.Customer_Unit__c === unit.id && c.Department__c === department,
-          ) ||
-          calling.find(
-            (c) => c.Customer_Unit__c === unit.id && c.Department__c === 'CRM',
-          );
-        unit.owners[service] = {
-          ownerId: call?.OwnerId?.startsWith('005') ? call.OwnerId : null,
-          managerId:
-            call?.Collection_Agent_Manager__c ||
-            owners.find((o) => o.Id === call?.OwnerId)?.ManagerId ||
-            null,
-        };
-      }
-    }
-  }
-  return customer;
+  return normalizeLookup(raw);
 }
-export async function syncDirectory() {
-  const users = await sfQuery<{
-    Id: string;
-    Name: string;
-    Username: string;
-    Email: string;
-    ManagerId: string | null;
-  }>(
-    "SELECT Id,Name,Username,Email,ManagerId FROM User WHERE IsActive=true AND UserType='Standard' ORDER BY Name LIMIT 2000",
-  );
-  const managerIds = new Set(users.map((u) => u.ManagerId).filter(Boolean));
-  await query(
-    `INSERT INTO qms.users(username,name,role,sf_id,manager_sf_id,email,enabled,must_change_password)
-    SELECT 'sf-'||r.id,r.name,r.role,r.id,r.manager,r.email,false,true
-    FROM jsonb_to_recordset($1::jsonb) AS r(id text,name text,role text,manager text,email text)
-    ON CONFLICT(sf_id) DO UPDATE SET name=excluded.name,manager_sf_id=excluded.manager_sf_id,email=excluded.email`,
-    [
-      JSON.stringify(
-        users.map((u) => ({
-          id: u.Id,
-          name: u.Name,
-          role: managerIds.has(u.Id) ? 'manager' : 'agent',
-          manager: u.ManagerId,
-          email: u.Email,
-        })),
-      ),
-    ],
-  );
-  return { imported: users.length };
+
+const userSearchSchema = z.object({
+  isSuccess: z.boolean(),
+  statusCode: z.number(),
+  users: z.array(
+    z.object({
+      id: z.string().regex(SF_USER_ID),
+      name: z.string(),
+      username: nullable,
+      email: nullable,
+      managerId: nullable,
+      managerName: nullable,
+    }),
+  ),
+});
+export type SalesforceUser = {
+  id: string;
+  name: string;
+  username: string | null;
+  email: string | null;
+  managerId: string | null;
+  managerName: string | null;
+};
+// On-demand staff search through QMSUserAPI. Nothing is imported in bulk; an
+// administrator searches, picks one person and saves them on the Team page.
+export async function searchUsers(q: string): Promise<SalesforceUser[]> {
+  const term = q.trim();
+  if (term.length < 3 || term.length > 100)
+    throw new HttpError(400, 'Enter between 3 and 100 characters to search.');
+  let raw: unknown;
+  try {
+    raw = await sfRequest(
+      APEX_PREFIX + 'QMSUserAPI?' + new URLSearchParams({ q: term }),
+    );
+  } catch (error) {
+    if (error instanceof HttpError && error.message.includes('(404)'))
+      throw new HttpError(
+        503,
+        'Salesforce user search is not available yet. The QMSUserAPI class must be deployed to this org.',
+      );
+    throw error;
+  }
+  const parsed = userSearchSchema.safeParse(raw);
+  if (!parsed.success || !parsed.data.isSuccess)
+    throw new HttpError(
+      502,
+      'Salesforce returned an invalid user search response.',
+    );
+  return parsed.data.users.map((u) => ({
+    id: u.id,
+    name: u.name,
+    username: u.username || null,
+    email: u.email || null,
+    managerId: userId(u.managerId),
+    managerName: u.managerName || null,
+  }));
 }
+
 export async function integrationHealth() {
   let connected = false;
+  let userSearchAvailable = false;
   let error: string | undefined;
   try {
-    await sfRequest(
-      '/services/data/v' +
-        (process.env.SALESFORCE_API_VERSION || '67.0') +
-        '/limits',
-    );
-    connected = true;
+    // A parameterless lookup returns 400 from the class itself, which proves
+    // authentication and class access without touching any record.
+    const lookup = await apexStatus(APEX_PREFIX + 'AccountLookupAPI');
+    connected = lookup === 400 || lookup === 200;
+    if (!connected)
+      error =
+        lookup === 401 || lookup === 403
+          ? 'The integration user has no access to AccountLookupAPI.'
+          : lookup === 404
+            ? 'AccountLookupAPI is not deployed in this org.'
+            : `Salesforce request failed (${lookup}).`;
+    if (connected) {
+      const ping = await apexStatus(APEX_PREFIX + 'QMSUserAPI?ping=1');
+      userSearchAvailable = ping === 200;
+    }
   } catch (e) {
     error = e instanceof HttpError ? e.message : 'Connection failed.';
   }
@@ -373,8 +357,9 @@ export async function integrationHealth() {
         !!process.env.SALESFORCE_CLIENT_ID &&
         !!process.env.SALESFORCE_CLIENT_SECRET,
       connected,
+      userSearchAvailable,
       instance: process.env.SALESFORCE_INSTANCE_URL || '',
-      authMode: 'OAuth client credentials',
+      authMode: 'OAuth client credentials (Apex REST only)',
       error,
       writeEnabled: process.env.SALESFORCE_WRITE_ENABLED === 'true',
     },
