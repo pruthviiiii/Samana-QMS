@@ -50,6 +50,29 @@ export default function Audit() {
   const [action, setAction] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  async function exportCsv() {
+    setBusy(true);
+    try {
+      const params = new URLSearchParams({ from, to, action, format: 'csv' });
+      const response = await fetch('/api/audit?' + params, {
+        credentials: 'same-origin',
+      });
+      if (!response.ok)
+        throw new Error(((await response.json()) as { error: string }).error);
+      const blob = await response.blob();
+      const uri = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = uri;
+      a.download = `samana-qms-audit-${from || 'all'}-${to || 'all'}.csv`;
+      a.click();
+      URL.revokeObjectURL(uri);
+      setError('');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const load = useCallback(
     async (before?: string | null) => {
       setBusy(true);
@@ -83,7 +106,8 @@ export default function Audit() {
           <h2>Operations audit trail</h2>
           <p>
             Sign-ins, availability, ticket, team and reporting events. Filter
-            by date and action; load older pages as needed.
+            by date and action, load older pages, or export the filtered
+            trail as CSV.
           </p>
         </div>
       </div>
@@ -166,6 +190,14 @@ export default function Audit() {
           {events.length} event{events.length === 1 ? '' : 's'} shown
         </span>
         <div className="section-actions">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy || !events.length}
+            onClick={exportCsv}
+          >
+            Export CSV
+          </Button>
           <Button
             variant="outline"
             size="sm"

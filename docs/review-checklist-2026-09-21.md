@@ -2,7 +2,7 @@
 
 Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by the internal architecture review and by the production-path note, with its current state. A ticked box means the change is in the repository and covered by the checks in "Verification" below. An open box names who has to decide or act.
 
-**Ticked: 43 of 60.** Of the 17 open boxes, 14 need a business decision or an operator outside the code, and 3 are frontend work not started. Every backend item that did not need a decision is done and applied to the `samana_qms` database as well as the test database, and the code now runs on any PostgreSQL server through the standard driver.
+**Ticked: 52 of 68** (updated 22 September 2026). Of the 16 open boxes, 14 need a business decision or an operator outside the code, and 2 are frontend work not started (one styling system, browser tests). Every item the external review raised that is a code defect is closed and tested; the point-by-point response is `docs/review-response-2026-09-22.html` (PDF beside it).
 
 ## A. Security and access
 
@@ -15,6 +15,10 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [x] Unknown views and hidden paths (for example `/.env`) return 404. `app/[view]/page.tsx`, `app/not-found.tsx`, `proxy.ts`.
 - [x] Security headers, CSP and HSTS are applied by the real Next.js proxy and static header config rather than by the beta framework's shim. `proxy.ts`, `next.config.ts`.
 - [x] Settings warns when the bootstrap password is still present on the host and when Salesforce is paused. `lib/salesforce.ts`, `components/qms/settings.tsx`.
+- [x] In production the alert endpoint also reports a bootstrap password left on the host, so the uptime monitor pages until it is removed. `lib/api/public.ts`.
+- [x] Report exports carry customer identifiers only when the manager ticks the option; every report export and audit export is recorded with its filters. `lib/operations.ts`, `lib/api/reports.ts`, `components/qms/reports.tsx`.
+- [x] The audit trail exports as CSV with the same filters. `lib/operations.ts`, `components/qms/audit.tsx`.
+- [x] Browser code cannot import server modules: a test pins the client-safe modules and the single API entry point. `tests/boundary.test.ts`.
 - [ ] SSO or MFA for staff sign-in. Needs an IT decision on the identity provider.
 - [ ] Offboarding lifecycle beyond disabling the account. Needs an HR/IT process definition.
 - [ ] OTP on mobile check-in, which closes identifier probing. Needs the SMS gateway first.
@@ -36,7 +40,8 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [x] Tickets left waiting or called from a previous day are marked no-show two hours after issue, and a number an earlier day's ticket still shows is skipped. Migration 014.
 - [x] Malformed paging parameters (`page=Infinity`) return 400 instead of a database error. `lib/http.ts`, `lib/operations.ts`.
 - [x] The migration runner applies only numbered files. It had been picking up `db/schema.sql` and would have failed the Render pre-deploy step. `scripts/migrate.mjs`, `scripts/sql.mjs`.
-- [x] Migrations 012 to 014 applied to the local `samana_qms` database as well as `samana_qms_test`.
+- [x] Migrations 012 to 015 applied to the local `samana_qms` database as well as `samana_qms_test`.
+- [x] The Render worker runs in direct database mode: routing tick, deliveries and retention without an HTTP hop or a shared secret between the services. `render.yaml`, `scripts/worker-entry.ts`.
 - [ ] Point an uptime monitor at `/api/health/alerts`. Render or the monitoring tool, IT.
 - [ ] A rehearsed backup restore into a Neon branch, following the steps in `docs/operations.md`. Operational, not yet exercised.
 - [ ] Choose the two retention periods. Off (keep everything) until set. Product and IT.
@@ -47,7 +52,10 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [x] The TV shows a sign-in message when its session expires instead of "Reconnecting" forever, keeps the sound preference, and refreshes on live changes. `components/qms/tv-display.tsx`.
 - [x] The ticket drawer refreshes every 5 s while open, and the visit page stops polling once the visit is closed or missing. `components/qms/ticket-detail.tsx`, `components/qms/mobile-visit.tsx`.
 - [x] The team list is fetched only when reassigning. `components/qms/ticket-detail.tsx`.
-- [ ] Single advisory lock around queue writes. Kept deliberately: it settles races in the database for one centre. Revisit only if the load test below shows contention.
+- [x] A dead screen stops receiving customers 45 seconds after its last heartbeat (15-second heartbeat, migration 015) and its waiting customers move on within 60 seconds; the windows were 90 and 105 seconds. `db/015_presence_window.sql`, `components/qms/app.tsx`.
+- [x] The TV announces the ticket already showing when it loads, browser permitting. `components/qms/tv-display.tsx`.
+- [x] The single lock is measured: 200 concurrent check-ins in 1.3 s, the routing tick with 200 to 400 waiting customers holds the lock for 96 to 214 ms, and 1,200 parallel agent actions run at a median of 11 ms. `scripts/load-check.mjs`.
+- [ ] Single advisory lock around queue writes. Kept deliberately: it settles races in the database for one centre and the measurement above shows it idle almost all the time. Revisit only if a load test at the real counter count shows contention.
 - [ ] Load test at the expected number of consoles and TVs. Operational, pending.
 
 ## D. Code quality and maintainability
@@ -59,7 +67,7 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [x] 54 unused UI components, the unused mobile hook and the Vite, Cloudflare and OpenAI configuration are removed (about 2,800 lines).
 - [x] A schema snapshot generated from the database, with a drift test, replaces reading four generations of `CREATE OR REPLACE FUNCTION`. `db/schema.sql`, `scripts/schema-snapshot.mjs`, `tests/schema.test.ts`.
 - [x] Migrations are checksummed; editing an applied migration is refused. `scripts/migrate.mjs`.
-- [ ] React error boundaries around the lazy views. Not started.
+- [x] React error boundaries around every lazy view and the TV: a failing view shows a retry panel instead of blanking the workspace. `components/qms/view-boundary.tsx`.
 - [ ] One styling system. About 6,300 lines of CSS remain across three files. Not started.
 - [x] OpenAPI document generated from the route table with each route's access and request schema; `npm run api:docs` writes it and a test fails when it is stale. `lib/openapi.ts`, `docs/openapi.json`.
 - [ ] Browser tests (Playwright) for check-in, queue and TV flows. Not started.
@@ -108,7 +116,8 @@ No box, because nothing needed changing:
 | --- | --- |
 | `npm run typecheck` | clean |
 | `npm run lint` | clean |
-| `npm test` (needs `samana_qms_test`) | 141 passed, run as the restricted `qms_app` role |
+| `npm test` (needs `samana_qms_test`) | 147 passed across 12 files, run as the restricted `qms_app` role |
+| `node --env-file=.env.test scripts/load-check.mjs` | 200 concurrent check-ins in 1.3 s; routing tick 19 to 214 ms with 200 to 400 waiting; 600 to 1,200 parallel agent actions at 11 to 23 ms median, 65 ms maximum |
 | `npm run build` (Next.js standalone) | passed, 34 MB output |
 | `npm run build:worker` | passed |
 | `node scripts/migrate.mjs` on `samana_qms` and `samana_qms_test` | 012, 013, 014 applied; re-run reports all applied and exits 0 |

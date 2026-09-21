@@ -9,6 +9,7 @@ import {
   Suspense,
 } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { ViewBoundary } from './view-boundary';
 import {
   LayoutDashboard,
   Layers,
@@ -182,7 +183,8 @@ export default function QmsApp({
         setError('Unable to update your availability. Check your connection.'),
       );
     void heartbeat();
-    const id = setInterval(heartbeat, 30000);
+    // Every 15 s; the database treats an agent silent for 45 s as gone.
+    const id = setInterval(heartbeat, 15000);
     return () => clearInterval(id);
   }, [user?.online, user?.must_change_password, serviceStaff, setError]);
   useEffect(() => {
@@ -279,9 +281,11 @@ export default function QmsApp({
           <h1>Make your account yours</h1>
           <p>Change your temporary password before entering the workspace.</p>
         </div>
-        <Suspense fallback={<QueueSkeleton />}>
-          <Settings user={user} onPasswordChanged={refreshIdentity} />
-        </Suspense>
+        <ViewBoundary name="settings">
+          <Suspense fallback={<QueueSkeleton />}>
+            <Settings user={user} onPasswordChanged={refreshIdentity} />
+          </Suspense>
+        </ViewBoundary>
         <Button variant="ghost" onClick={logout}>
           Sign out
         </Button>
@@ -289,9 +293,11 @@ export default function QmsApp({
     );
   if (view === 'display' || user.role === 'display')
     return (
-      <Suspense fallback={<div className="app-loading">Loading display…</div>}>
-        <TVDisplay />
-      </Suspense>
+      <ViewBoundary name="display">
+        <Suspense fallback={<div className="app-loading">Loading display…</div>}>
+          <TVDisplay />
+        </Suspense>
+      </ViewBoundary>
     );
   const navigation = [
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
@@ -852,17 +858,19 @@ export default function QmsApp({
               </div>
             </>
           )}
-          <Suspense fallback={<QueueSkeleton />}>
-            {view === 'team' && manager && <Team user={user} />}
-            {view === 'queues' && manager && <Queues />}
-            {view === 'reports' && manager && (
-              <Reports onTicket={setSelected} />
-            )}
-            {view === 'settings' && (
-              <Settings user={user} onPasswordChanged={refreshIdentity} />
-            )}
-            {view === 'audit' && manager && <Audit />}
-          </Suspense>
+          <ViewBoundary name={view}>
+            <Suspense fallback={<QueueSkeleton />}>
+              {view === 'team' && manager && <Team user={user} />}
+              {view === 'queues' && manager && <Queues />}
+              {view === 'reports' && manager && (
+                <Reports onTicket={setSelected} />
+              )}
+              {view === 'settings' && (
+                <Settings user={user} onPasswordChanged={refreshIdentity} />
+              )}
+              {view === 'audit' && manager && <Audit />}
+            </Suspense>
+          </ViewBoundary>
           {!viewNames[view] && (
             <div className="empty-state">
               <h3>Page not found</h3>

@@ -1,10 +1,12 @@
 # Render Blueprint for Samana QMS.
 #   samana-qms            web app (standalone Node build of the Next.js app)
-#   samana-qms-scheduler  background worker that ticks routing and outbox delivery every 15 s
+#   samana-qms-scheduler  background worker: routing tick, outbox delivery and
+#                         retention every 15 s, directly against the database
 # Spec: https://render.com/docs/blueprint-spec
 #
 # Secrets (sync: false) are entered once in the Render dashboard and never live in git.
-# The scheduler copies the shared secret and database URL from the web service.
+# The scheduler copies the database URL and the Salesforce, SMS and retention
+# settings from the web service, so both run the same integration configuration.
 # DATABASE_URL is the restricted qms_app role (scripts/create-app-role.mjs);
 # MIGRATE_DATABASE_URL is the owner string the pre-deploy migration runs with.
 
@@ -42,6 +44,8 @@ services:
         value: "67.0"
       - key: SALESFORCE_WRITE_ENABLED
         value: "true"
+      # Kept for hosts that drive the tick through POST /api/jobs/run instead
+      # of running the worker directly; the Render worker does not use it.
       - key: WORKER_SECRET
         generateValue: true
       - key: QR_SIGNING_SECRET
@@ -66,22 +70,62 @@ services:
     region: frankfurt
     plan: starter
     branch: main
-    buildCommand: npm ci --omit=dev
-    startCommand: node scripts/worker.mjs
+    # Direct database mode: no HTTP hop and no shared secret between the two
+    # services. The worker needs the same integration settings as the web app.
+    buildCommand: npm ci --include=dev && npm run build:worker
+    startCommand: node dist-worker/worker.mjs
     envVars:
       - key: NODE_VERSION
         value: "22"
       - key: NODE_ENV
         value: production
-      - key: WORKER_ORIGIN
-        value: https://samana-qms.onrender.com
-      - key: WORKER_SECRET
-        fromService:
-          type: web
-          name: samana-qms
-          envVarKey: WORKER_SECRET
       - key: DATABASE_URL
         fromService:
           type: web
           name: samana-qms
           envVarKey: DATABASE_URL
+      - key: SALESFORCE_INSTANCE_URL
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: SALESFORCE_INSTANCE_URL
+      - key: SALESFORCE_CLIENT_ID
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: SALESFORCE_CLIENT_ID
+      - key: SALESFORCE_CLIENT_SECRET
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: SALESFORCE_CLIENT_SECRET
+      - key: SALESFORCE_API_VERSION
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: SALESFORCE_API_VERSION
+      - key: SALESFORCE_WRITE_ENABLED
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: SALESFORCE_WRITE_ENABLED
+      - key: SMS_ENABLED
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: SMS_ENABLED
+      - key: SMS_SENDER
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: SMS_SENDER
+      - key: RETENTION_IDENTIFIER_DAYS
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: RETENTION_IDENTIFIER_DAYS
+      - key: RETENTION_EVENT_DAYS
+        fromService:
+          type: web
+          name: samana-qms
+          envVarKey: RETENTION_EVENT_DAYS

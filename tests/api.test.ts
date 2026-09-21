@@ -731,4 +731,47 @@ describe('Audit trail, walk-ins and error messages', () => {
     const after = await handlers.GET(request('health/alerts'));
     expect(after.status).toBe(others === 0 ? 200 : 503);
   });
+  it('pages the monitor while the bootstrap password is still on a production host', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('BOOTSTRAP_PASSWORD', 'still-on-the-host-1234');
+    try {
+      const alert = await handlers.GET(request('health/alerts'));
+      const body = (await alert.json()) as { problems: string[] };
+      expect(alert.status).toBe(503);
+      expect(body.problems).toContain('bootstrap_password_present');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  it('exports reports without identifiers unless asked, and records the choice', async () => {
+    const plain = await handlers.GET(
+      request('reports?format=csv', 'GET', undefined, adminCookie),
+    );
+    expect(plain.status).toBe(200);
+    expect((await plain.text()).split('\r\n')[0]).not.toContain('emirates_id');
+    const full = await handlers.GET(
+      request('reports?format=csv&identifiers=true', 'GET', undefined, adminCookie),
+    );
+    expect((await full.text()).split('\r\n')[0]).toContain('emirates_id');
+    const [event] = await query<{ details: { identifiers: boolean } }>(
+      "SELECT details FROM qms.events WHERE actor_id=$1 AND action='report_export' ORDER BY id DESC LIMIT 1",
+      [adminId],
+    );
+    expect(event.details.identifiers).toBe(true);
+  });
+  it('exports the audit trail as CSV and records the export', async () => {
+    const csv = await handlers.GET(
+      request('audit?format=csv&action=login', 'GET', undefined, adminCookie),
+    );
+    expect(csv.status).toBe(200);
+    expect(csv.headers.get('content-type')).toContain('text/csv');
+    const lines = (await csv.text()).split('\r\n');
+    expect(lines[0]).toContain('"action"');
+    expect(lines.length).toBeGreaterThan(1);
+    const [event] = await query<{ action: string }>(
+      'SELECT action FROM qms.events WHERE actor_id=$1 ORDER BY id DESC LIMIT 1',
+      [adminId],
+    );
+    expect(event.action).toBe('audit_export');
+  });
 });

@@ -109,9 +109,8 @@ export default function TVDisplay() {
     if (!ticket) return;
     const key = ticket.number + '|' + ticket.called_at;
     if (lastCall.current === key) return;
-    const prior = lastCall.current;
     lastCall.current = key;
-    if (sound && prior && 'speechSynthesis' in window) {
+    if (sound && 'speechSynthesis' in window) {
       const announcement = new SpeechSynthesisUtterance(
         `Ticket ${ticket.number.replace('-', ' ')}. Please proceed to ${ticket.counter || 'the service desk'}.`,
       );

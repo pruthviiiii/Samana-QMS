@@ -6,11 +6,13 @@ always-on scheduler. Render reads it when you create or sync a Blueprint from th
 ## Why Render
 
 The app needs two long-running processes: the standalone Node server and the 15-second
-scheduler that performs five-minute reassignment and outbox delivery. Render runs both as
-native Node services. The Render scheduler runs `node scripts/worker.mjs` and calls the
-web service's authenticated `/api/jobs/run` endpoint. Salesforce/SMS credentials and enable
-flags therefore live on the web service. Other hosting arrangements need an equivalent
-persistent scheduler.
+scheduler that performs five-minute reassignment, outbox delivery and retention. Render runs
+both as native Node services. The scheduler runs `node dist-worker/worker.mjs` directly
+against the database; the Blueprint copies the database URL and the Salesforce, SMS and
+retention settings from the web service so both use the same configuration. There is no
+HTTP hop or shared secret between the two services. `POST /api/jobs/run` with
+`WORKER_SECRET` remains for hosts that can only run a cron-style caller. Other hosting
+arrangements need an equivalent persistent scheduler.
 
 ## One-time setup
 
@@ -25,7 +27,9 @@ persistent scheduler.
      The same owner string in both is accepted until the role exists.
    - `SALESFORCE_INSTANCE_URL`, `SALESFORCE_CLIENT_ID`, `SALESFORCE_CLIENT_SECRET` — the
      connected app credentials for the org in use.
-     The scheduler copies `WORKER_SECRET` and `DATABASE_URL` from the web service automatically.
+     The scheduler copies `DATABASE_URL` and the Salesforce, SMS and retention settings from
+     the web service automatically. If SMS is switched on later, add `SMS_GATEWAY_URL` and
+     `SMS_GATEWAY_TOKEN` to both services.
 4. Apply. Render builds both services, runs `scripts/migrate.mjs` before the web service
    starts, and reports the web URL.
 5. If the assigned URL differs from `https://samana-qms.onrender.com`, update `APP_ORIGIN`
@@ -58,9 +62,11 @@ Then sign in at the web URL as `admin` and change the password when prompted.
   within 30 seconds of the worker starting.
 - Issue one ticket from the overview page and confirm it appears in the live queue.
 - Run `node scripts/security-smoke.mjs https://<web-url>` to check headers and access guards.
-- Existing services created manually must use the scheduler start command
-  `node scripts/worker.mjs` and build command `npm ci --omit=dev`. Pushing a Blueprint file
-  does not reconfigure a manually created service. Confirm both commands in Render.
+- Existing services created manually must use the scheduler build command
+  `npm ci --include=dev && npm run build:worker` and start command
+  `node dist-worker/worker.mjs`, with the Salesforce, SMS and retention variables copied
+  from the web service. Pushing a Blueprint file does not reconfigure a manually created
+  service. Confirm both commands in Render.
 
 ## Switching to another Salesforce org (UAT, production)
 

@@ -124,15 +124,16 @@ export async function reports(url: URL) {
     ),
   ]);
   if (csv) {
+    // Identifiers leave the system only when the manager asks for them
+    // explicitly (identifiers=true), and the export event records that.
+    const identifiers = url.searchParams.get('identifiers') === 'true';
     const columns = [
       'number',
       'customer_name',
       'project_name',
       'unit_name',
       'booking_number',
-      'mobile',
-      'emirates_id',
-      'passport_number',
+      ...(identifiers ? ['mobile', 'emirates_id', 'passport_number'] : []),
       'department',
       'service_name',
       'status',
@@ -171,7 +172,9 @@ const day = /^\d{4}-\d{2}-\d{2}$/;
 // Audit trail with a cursor (`before` = last id seen), an action filter and a
 // Dubai-day date range, so any dispute can be traced however old it is.
 export async function auditEvents(url: URL) {
-  const limit = intParam(url, 'limit', 100, 1, 200);
+  // format=csv exports the filtered trail (up to 10,000 rows) instead of a page.
+  const csv = url.searchParams.get('format') === 'csv';
+  const limit = csv ? 10000 : intParam(url, 'limit', 100, 1, 200);
   const before = url.searchParams.get('before') || '';
   const action = (url.searchParams.get('action') || '').slice(0, 40);
   const from = url.searchParams.get('from') || '';
@@ -188,6 +191,27 @@ export async function auditEvents(url: URL) {
       limit,
     ],
   );
+  if (csv) {
+    const columns = ['id', 'created_at', 'action', 'actor_name', 'number', 'details'];
+    const output = [
+      columns.map(csvCell).join(','),
+      ...(events as Record<string, unknown>[]).map((row) =>
+        columns
+          .map((key) =>
+            csvCell(key === 'details' ? JSON.stringify(row[key] ?? {}) : row[key]),
+          )
+          .join(','),
+      ),
+    ].join('\r\n');
+    return new Response('﻿' + output, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="samana-qms-audit-${from || 'all'}-${to || 'all'}.csv"`,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  }
   return {
     events,
     nextBefore: events.length === limit ? events[events.length - 1].id : null,

@@ -89,12 +89,17 @@ export default function Reports({
     setTo(end);
     setPage(1);
   }
+  const [identifiers, setIdentifiers] = useState(false);
   async function exportCsv() {
     setBusy(true);
     try {
-      const response = await fetch('/api/reports?' + params + '&format=csv', {
-        credentials: 'same-origin',
-      });
+      const response = await fetch(
+        '/api/reports?' +
+          params +
+          '&format=csv' +
+          (identifiers ? '&identifiers=true' : ''),
+        { credentials: 'same-origin' },
+      );
       if (!response.ok) {
         const error = (await response.json()) as { error: string };
         throw new Error(error.error);
@@ -189,6 +194,17 @@ export default function Reports({
             ))}
           </select>
         </div>
+        <label
+          className="filter-check"
+          style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}
+        >
+          <input
+            type="checkbox"
+            checked={identifiers}
+            onChange={(e) => setIdentifiers(e.target.checked)}
+          />
+          Include mobile, Emirates ID and passport
+        </label>
         <Button
           onClick={exportCsv}
           disabled={busy || !data?.total}
@@ -318,8 +334,9 @@ export default function Reports({
               <div>
                 <h2>Visit report</h2>
                 <p>
-                  {data.total} tickets · Export includes customer identifiers
-                  and closing notes.
+                  {data.total} tickets · Export includes closing notes;
+                  customer identifiers only when ticked. Every export is
+                  recorded in the activity log.
                 </p>
               </div>
             </div>

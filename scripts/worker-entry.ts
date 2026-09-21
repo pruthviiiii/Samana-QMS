@@ -1,5 +1,6 @@
 import { query } from '../lib/db';
 import { processJobs } from '../lib/jobs';
+import { applyRetention } from '../lib/retention';
 let stopping = false;
 process.on('SIGINT', () => {
   stopping = true;
@@ -14,11 +15,13 @@ while (!stopping) {
   try {
     await query('SELECT qms.route_due()');
     const result = await processJobs();
+    const retention = await applyRetention();
     console.log(
       JSON.stringify({
         event: 'scheduler_tick',
         at: new Date().toISOString(),
         jobs: result.processed,
+        ...(retention && !retention.skipped ? { retention } : {}),
       }),
     );
   } catch (error) {

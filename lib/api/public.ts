@@ -63,6 +63,14 @@ export const publicRoutes = [
         problems.push('scheduler_stale');
       if (state.failed > 0) problems.push('outbox_failed:' + state.failed);
       if (salesforcePaused()) problems.push('salesforce_paused');
+      // The first administrator's password must leave the host once used;
+      // in production its presence pages the monitor instead of relying on a
+      // README instruction.
+      if (
+        process.env.NODE_ENV === 'production' &&
+        process.env.BOOTSTRAP_PASSWORD
+      )
+        problems.push('bootstrap_password_present');
       return json(
         {
           status: problems.length ? 'alert' : 'ready',

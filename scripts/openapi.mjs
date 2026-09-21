@@ -1,32 +1,42 @@
 import { build } from 'esbuild';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 // Writes docs/openapi.json from the route table (lib/api) and the body
 // schemas each route declares. tests/openapi.test.ts fails when the file is
 // out of date, so run `npm run api:docs` after changing a route.
 // `--check` only compares and exits 1 when the file is stale.
-const dir = await mkdtemp(join(tmpdir(), 'samana-qms-openapi-'));
-const outfile = join(dir, 'openapi.mjs');
+//
+// The route modules are bundled with esbuild into a throwaway file inside the
+// project (so `pg` and `zod` resolve from node_modules) and imported once.
+const root = fileURLToPath(new URL('..', import.meta.url));
+const scratch = join(root, 'dist-worker');
+await mkdir(scratch, { recursive: true });
+const outfile = join(scratch, `.openapi-${randomBytes(4).toString('hex')}.mjs`);
 await build({
   stdin: {
     contents:
       "import { routes } from './lib/api'; import { openApiDocument } from './lib/openapi'; export const document = openApiDocument(routes);",
-    resolveDir: process.cwd(),
+    resolveDir: root,
     loader: 'ts',
   },
   bundle: true,
   platform: 'node',
   format: 'esm',
   target: 'node22',
+  packages: 'external',
   outfile,
   logLevel: 'error',
 });
-const { document } = await import(pathToFileURL(outfile).href);
-await rm(dir, { recursive: true, force: true });
+let document;
+try {
+  ({ document } = await import(pathToFileURL(outfile).href));
+} finally {
+  await rm(outfile, { force: true });
+}
 const text = JSON.stringify(document, null, 2) + '\n';
-const target = new URL('../docs/openapi.json', import.meta.url);
+const target = join(root, 'docs', 'openapi.json');
 if (process.argv.includes('--check')) {
   const current = await readFile(target, 'utf8').catch(() => '');
   if (current.replace(/\r\n/g, '\n') !== text) {

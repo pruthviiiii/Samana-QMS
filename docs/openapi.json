@@ -1437,7 +1437,7 @@
     },
     "/api/audit": {
       "get": {
-        "summary": "Audit trail page (limit, before cursor, action, from, to)",
+        "summary": "Audit trail page (limit, before cursor, action, from, to); format=csv exports",
         "description": "Signed-in session with role admin, hod, manager.",
         "security": [
           {

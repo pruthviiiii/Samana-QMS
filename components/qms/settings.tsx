@@ -295,7 +295,7 @@ export default function Settings({
             <strong>Agent availability</strong>
             <p>
               Online status requires an active heartbeat. A disconnected agent
-              goes offline after 90 seconds.
+              goes offline after 45 seconds.
             </p>
           </div>
           <div>

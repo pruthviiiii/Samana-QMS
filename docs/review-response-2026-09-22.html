@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QMS Review Response</title>
+<meta name="description" content="Point-by-point response to the independent code review of Samana QMS dated 21 September 2026: what was valid and fixed, what was not a defect, and what remains a decision.">
+<style>
+  :root { --ink: #1c1c1c; --muted: #5c5c5c; --line: #d9d9d9; --closed: #1b6e3a; --closed-bg: #e6f4ea; --today: #0b5394; --today-bg: #e3edf7; --no: #7a4a00; --no-bg: #fbf0d9; --decide: #6b1a6b; --decide-bg: #f3e6f3; --ops: #444; --ops-bg: #ececec; --bad: #9b1c1c; }
+  * { box-sizing: border-box; }
+  html { font-size: 15px; }
+  body { margin: 0; padding: 32px 16px; color: var(--ink); background: #fff; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; line-height: 1.5; max-width: 1000px; margin-inline: auto; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 1.35rem; margin: 36px 0 10px; padding-top: 10px; border-top: 2px solid var(--ink); }
+  h3 { font-size: 1.05rem; margin: 22px 0 6px; }
+  p, li { max-width: 78ch; }
+  .meta { color: var(--muted); font-size: .92rem; margin-bottom: 20px; }
+  .lead { border-left: 4px solid var(--ink); padding: 8px 14px; margin: 18px 0; background: #fafafa; }
+  .lead p { margin: 6px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 16px; font-size: .92rem; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+  th { background: #f3f3f3; font-weight: 600; }
+  td.n { white-space: nowrap; }
+  .tag { display: inline-block; font-size: .78rem; font-weight: 600; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+  .closed { color: var(--closed); background: var(--closed-bg); }
+  .today { color: var(--today); background: var(--today-bg); }
+  .no { color: var(--no); background: var(--no-bg); }
+  .decide { color: var(--decide); background: var(--decide-bg); }
+  .ops { color: var(--ops); background: var(--ops-bg); }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: .88em; background: #f4f4f4; padding: 0 4px; border-radius: 3px; }
+  .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+  .kpi div { border: 1px solid var(--line); padding: 10px 12px; }
+  .kpi b { display: block; font-size: 1.5rem; line-height: 1.1; }
+  .kpi span { color: var(--muted); font-size: .85rem; }
+  .small { color: var(--muted); font-size: .88rem; }
+  @media print {
+    html { font-size: 11.5px; }
+    body { padding: 0; max-width: none; }
+    h2 { break-before: page; margin-top: 0; }
+    h2.first { break-before: auto; }
+    table, .lead, .kpi { break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+  @page { size: A4; margin: 16mm 14mm; }
+</style>
+</head>
+<body>
+<h1>Samana QMS: response to the independent code review</h1>
+<div class="meta">Response dated 22 September 2026 · Review dated 21 September 2026 (reviewed commit d2f6a31) · Code as of commit 22 September 2026 (the commit following 8d19e99) · Written for management and engineering</div>
+
+<div class="lead">
+  <p><b>Verdict: the code is production-ready. Every defect the review found that is real is fixed and covered by an automated test. What remains open is not code: four routing-policy questions for the business, two identity questions for IT, and the production hosting steps.</b></p>
+  <p>The review was written against the code of 21 September, 11:04. Since then the codebase has changed substantially in direct response to it: eight commits, a real Next.js runtime, a declared API route table, a connection pool with transactions, push updates instead of polling, a restricted database role, a retention job, an alert endpoint, and a move to the standard PostgreSQL driver. This document takes the review section by section, states whether each finding was valid, shows what changed, and names the test that now guards it.</p>
+</div>
+
+<div class="kpi">
+  <div><b>13</b><span>review sections</span></div>
+  <div><b>9</b><span>valid and fully closed in code</span></div>
+  <div><b>2</b><span>partly wrong; the valid part closed</span></div>
+  <div><b>2</b><span>policy, not defects (decisions listed)</span></div>
+  <div><b>147</b><span>automated tests, all passing</span></div>
+  <div><b>3</b><span>environments verified: local PostgreSQL 18, Neon, live Render</span></div>
+</div>
+
+<p>Status labels used below: <span class="tag closed">Closed</span> fixed before this response and verified · <span class="tag today">Closed today</span> fixed in this response · <span class="tag no">Not a defect</span> the claim does not hold, with the evidence · <span class="tag decide">Decision</span> a business or IT choice, not a code fault · <span class="tag ops">Operations</span> a launch step outside the code.</p>
+
+<h2 class="first">Scorecard</h2>
+<table>
+  <tr><th>§</th><th>Reviewer's headline</th><th>Status</th><th>Where it stands now</th></tr>
+  <tr><td class="n">01</td><td>Missing structure in six places</td><td><span class="tag closed">Closed</span></td><td>Modules per feature, one schema definition with a drift test, declared permissions, one roles definition, an enforced browser/server boundary. The single lock is kept and now measured (§07).</td></tr>
+  <tr><td class="n">02</td><td>No backend; one 497-line file; access by line order</td><td><span class="tag closed">Closed</span> / <span class="tag no">Not a defect</span></td><td>Route table with declared access and verbs, per-resource handlers, scheduler death visible. The claim that assignment only happens when the scheduler calls was wrong: check-in routes in the same transaction.</td></tr>
+  <tr><td class="n">03</td><td>No Prisma, no database layer</td><td><span class="tag closed">Closed</span> / <span class="tag decide">Decision</span></td><td>Connection pool and transactions exist. Business rules stay in PostgreSQL functions by decision, with a searchable snapshot, column checks and 20 workflow tests. An ORM was considered and declined; reasons in §03.</td></tr>
+  <tr><td class="n">04</td><td>Migrations compound it</td><td><span class="tag closed">Closed</span></td><td>Checksums, numbered files only, one current definition of every function, parser and filter tested. Forward-only policy documented instead of down migrations.</td></tr>
+  <tr><td class="n">05</td><td>Not built on Next.js</td><td><span class="tag closed">Closed</span></td><td>Real Next.js 16.3.5, standalone output, browser protections in <code>proxy.ts</code>, verified live.</td></tr>
+  <tr><td class="n">06</td><td>Neon serverless is the wrong choice</td><td><span class="tag closed">Closed</span> / <span class="tag ops">Operations</span></td><td>Standard PostgreSQL driver; the same build runs on the company's PostgreSQL 18 server today. Render moves off Neon when the production server exists.</td></tr>
+  <tr><td class="n">07</td><td>No push; one lock; 105 s to notice a dead agent</td><td><span class="tag closed">Closed</span> / <span class="tag today">Closed today</span></td><td>Push via server-sent events; plain-language errors; dead agent noticed within 45 s and re-routed within 60 s (was 90 and 105). Lock kept: measured under load in this response.</td></tr>
+  <tr><td class="n">08</td><td>Roles from nowhere; list in 24 places</td><td><span class="tag closed">Closed</span> / <span class="tag decide">Decision</span></td><td>One roles definition in code, validated Salesforce ids, guest accounts purged, sign-in audited, bootstrap password now pages the monitor. SSO or MFA is an IT decision.</td></tr>
+  <tr><td class="n">09</td><td>No consistent standard, front or back</td><td><span class="tag closed">Closed</span></td><td>Every row of the reviewer's table is fixed; error boundaries added today. Two cosmetic items remain (three CSS files, no browser tests).</td></tr>
+  <tr><td class="n">10</td><td>How a customer is given to staff</td><td><span class="tag decide">Decision</span></td><td>The rules implement the BRD. Four fairness questions are listed for the business with a recommendation each; one claim ("nobody else can pick them up") is wrong.</td></tr>
+  <tr><td class="n">11</td><td>Screen by screen</td><td><span class="tag closed">Closed</span> / <span class="tag today">Closed today</span></td><td>Of 33 screen findings, 29 are fixed, 2 were not defects, 2 are device tests. Table in §11.</td></tr>
+  <tr><td class="n">12</td><td>690,000 idle database questions a day</td><td><span class="tag closed">Closed</span></td><td>Screens now sit on a push stream. Idle load per staff screen fell from 72 to 16 database queries a minute, and a change reaches every screen in under a second instead of up to five.</td></tr>
+  <tr><td class="n">13</td><td>Salesforce outage stops check-in; sign-in never recorded</td><td><span class="tag closed">Closed</span></td><td>Walk-in fallback, circuit breaker, lookup reuse, sign-in and presence audited, audit paging with filters and export.</td></tr>
+</table>
+
+<h2>§01 The findings in one page</h2>
+<table>
+  <tr><th>Structure would give you</th><th>Review said</th><th>Now</th><th>Guarded by</th></tr>
+  <tr><td>Features in their own place</td><td>One file for the back end, one for the front end</td><td><span class="tag closed">Closed</span> API handlers live in <code>lib/api/</code> per resource; the workspace shell is split into views and hooks that load on demand.</td><td><code>tests/routes.test.ts</code>, <code>tests/boundary.test.ts</code></td></tr>
+  <tr><td>Mistakes caught before a customer sees them</td><td>No master description of the data</td><td><span class="tag closed">Closed</span> <code>db/schema.sql</code> is generated from the database and compared on every test run; a test also checks that every column the API selects exists. TypeScript is strict.</td><td><code>tests/schema.test.ts</code></td></tr>
+  <tr><td>One current version of each rule</td><td>Six rules with two to four live versions</td><td><span class="tag closed">Closed</span> The snapshot holds the one current definition of every function. Applied migrations are checksummed and cannot be edited.</td><td><code>tests/schema.test.ts</code>, <code>scripts/migrate.mjs</code></td></tr>
+  <tr><td>Boundaries so one slow job cannot stall the rest</td><td>A single lock shared by every action</td><td><span class="tag decide">Decision</span> Kept, and measured under load in §07: with 200 customers waiting the tick holds the lock for 96 to 214 ms.</td><td><code>scripts/load-check.mjs</code></td></tr>
+  <tr><td>One definition of each concept</td><td>Roles hand-copied into 24 places</td><td><span class="tag closed">Closed</span> Roles and role groups are defined once in <code>lib/domain.ts</code> and <code>lib/api/shared.ts</code>. The database keeps one check constraint and its function bodies, all visible in the snapshot.</td><td><code>tests/routes.test.ts</code>, workflow tests</td></tr>
+  <tr><td>Permissions declared once, per feature</td><td>Access depends on the line a feature was pasted at</td><td><span class="tag closed">Closed</span> Every route declares method, path and who may call it. A test pins the exact set of unauthenticated and guest-reachable routes, so a new route is closed by default.</td><td><code>tests/routes.test.ts</code></td></tr>
+</table>
+<p>On the review's note that the project's own "Security and code review" is not independent assurance: agreed. This response is also written by the developer. Everything in it can be reproduced with the commands in the Verification section.</p>
+
+<h2>§02 There is no backend</h2>
+<table>
+  <tr><th>Claim</th><th>Status</th><th>Evidence</th></tr>
+  <tr><td>The whole API is one 497-line file matched by comparing text</td><td><span class="tag closed">Closed</span></td><td><code>lib/router.ts</code> dispatches a declared table; handlers are grouped in <code>lib/api/auth.ts</code>, <code>tickets.ts</code>, <code>queue.ts</code>, <code>team.ts</code>, <code>reports.ts</code>, <code>public.ts</code>, <code>events.ts</code>. Path parameters are matched by the router.</td></tr>
+  <tr><td>Whether an action needs a login depends on which line it sits at</td><td><span class="tag closed">Closed</span></td><td>Each route states <code>public</code>, <code>worker</code>, <code>session</code> or a role list. The dispatcher enforces origin, bearer, session, forced password change and role before any handler runs.</td></tr>
+  <tr><td>The notifications endpoint has no permission check</td><td><span class="tag closed">Closed</span></td><td><code>PATCH /api/notifications</code> requires a staff role; a guest session is refused (test "refuses notification changes from a guest session").</td></tr>
+  <tr><td>Only GET and POST exist</td><td><span class="tag closed">Closed</span></td><td>PUT for presence, password and team edits, PATCH for notifications, DELETE for queue membership.</td></tr>
+  <tr><td>Assignment only happens when the scheduler phones in; if it stops nobody is called</td><td><span class="tag no">Not a defect</span></td><td>This was wrong when written. <code>qms.issue_ticket</code> calls <code>qms.route_ticket</code> in the same transaction, so a customer is assigned at check-in (workflow test "routes an available unit owner directly"). The scheduler only re-routes after five minutes and expires stale presence.</td></tr>
+  <tr><td>If the scheduler dies nothing raises an alarm</td><td><span class="tag closed">Closed</span></td><td>The staff queue shows a banner after 90 s; <code>GET /api/health/scheduler</code> and <code>GET /api/health/alerts</code> return 503 for an uptime monitor.</td></tr>
+  <tr><td>A second service phones the website every 15 s over a shared password</td><td><span class="tag today">Closed today</span></td><td>The Render worker now runs the tick directly against the database (<code>render.yaml</code>): no HTTP hop and no shared secret. The web endpoint remains for hosts that can only run a cron caller.</td></tr>
+  <tr><td>The boundary is a naming convention; a wrong import is all it takes</td><td><span class="tag today">Closed today</span></td><td>Next.js already refuses to bundle Node-only modules into browser code. <code>tests/boundary.test.ts</code> now makes it a rule: browser code may import only the three client-safe modules, and only the API entry point may import the route table.</td></tr>
+</table>
+<h3>Why the API stays inside Next.js for now</h3>
+<p>The review argues for a separate backend service. Every benefit it lists is now present without one: background work runs in its own worker process, screens receive push updates, the database is pooled with transactions, every client uses the same HTTP API, web and worker deploy as separate services, and the browser/server boundary is enforced by the bundler and a test. What a separate service would add is an independent deploy cadence for the API and a second team's autonomy. For one centre and one developer that is cost without value: a third always-on service, a shared cookie domain, and more places for secrets. The route table takes a standard request and returns a standard response, so extracting it behind a small Node server under the same <code>/api</code> path is a two-to-three-day task. The trigger is written in the design document: a second client, a second centre, or a second team.</p>
+
+<h2>§03 No Prisma, no database layer</h2>
+<table>
+  <tr><th>Claim</th><th>Status</th><th>Evidence</th></tr>
+  <tr><td>A new connection per query; no pool; no transactions</td><td><span class="tag closed">Closed</span></td><td><code>lib/db.ts</code> keeps a pool of ten connections over the standard PostgreSQL protocol and offers <code>transaction()</code> with BEGIN, COMMIT and ROLLBACK. Guest creation and migrations use it.</td></tr>
+  <tr><td>Query results are asserted, not checked</td><td><span class="tag closed">Closed</span></td><td>The columns each API query selects are checked against the live schema in <code>tests/schema.test.ts</code>; the database snapshot fails the build when it drifts.</td></tr>
+  <tr><td>Business rules live in the database because the driver forced it</td><td><span class="tag decide">Decision</span></td><td>They live there because issuing a ticket must number it, insert it, route it and notify screens as one unit under one lock, and PostgreSQL is the only place that can guarantee that for every caller. That was a design choice and it stands with a real pool available.</td></tr>
+  <tr><td>Rules cannot be type-checked, searched, reviewed or tested</td><td><span class="tag closed">Closed</span></td><td>Searched and reviewed: <code>db/schema.sql</code> holds the current text of every function. Tested: 21 workflow tests call the functions directly (routing, five-minute boundary, escalation, idempotency, duplicate visits, rollover, retention). Type-checked at the boundary: the API document and column check.</td></tr>
+  <tr><td>Use Prisma</td><td><span class="tag decide">Decision</span></td><td>Declined. An ORM would add a second schema definition to keep in step, would still need the functions for atomic numbering and routing, and would not change any test. The reviewer's causal chain (no ORM causes the lock, the migrations and the polling) does not hold: polling is gone, migrations are checksummed and snapshotted, and the lock is a routing design that an ORM does not remove.</td></tr>
+</table>
+
+<h2>§04 The migrations compound it</h2>
+<table>
+  <tr><th>Claim</th><th>Status</th><th>Evidence</th></tr>
+  <tr><td>Rules rewritten across files, none marked current</td><td><span class="tag closed">Closed</span></td><td><code>db/schema.sql</code> is the current state, generated from the database. Migrations remain the history. A fresh database built from the migrations alone produces a snapshot identical to the file (verified on the local PostgreSQL 18 server).</td></tr>
+  <tr><td>No checksums; an edited migration is silently skipped</td><td><span class="tag closed">Closed</span></td><td>The runner stores a SHA-256 of each applied file and refuses to start when one was edited.</td></tr>
+  <tr><td>The runner would happily run anything</td><td><span class="tag closed">Closed</span></td><td>Found while re-testing: the runner picked up every <code>.sql</code> file, including the snapshot, and would have failed the Render pre-deploy step. It now applies numbered files only (test "applies only numbered migration files").</td></tr>
+  <tr><td>No down migrations</td><td><span class="tag decide">Decision</span></td><td>Forward-only by policy, documented in operations: migrations are additive, the app rolls back independently, and a schema defect gets a reviewed forward fix. Down migrations are rarely tested and give false comfort; a rehearsed restore is the real safety net and is on the launch list.</td></tr>
+  <tr><td>A hand-written SQL parser with no tests</td><td><span class="tag no">Not a defect</span></td><td>Two parser tests existed when the review was written; a third now covers the file filter. The parser handles quotes, comments and dollar-quoted bodies, and each file applies in one transaction.</td></tr>
+  <tr><td>Migration 001 had the wrong role list</td><td><span class="tag closed">Closed</span></td><td>Corrected by 002 the same day; the snapshot shows the single current constraint with all seven roles.</td></tr>
+</table>
+
+<h2>§05 It is not built on Next.js</h2>
+<p><span class="tag closed">Closed</span> The beta framework is gone. The project runs on Next.js 16.3.5 with standalone output; the same artifact runs on Render, in Docker and on a laptop. Browser protections live in the framework's supported <code>proxy.ts</code> and the static headers in <code>next.config.ts</code> are defence in depth for assets served without the proxy, not uncertainty. Verified on the live site: Content-Security-Policy, HSTS and frame denial present, unknown paths 404, hidden paths 404. The Cloudflare and OpenAI deployment targets were deleted, so there is one production path.</p>
+
+<h2>§06 Neon serverless is the wrong choice</h2>
+<table>
+  <tr><th>Claim</th><th>Status</th><th>Evidence</th></tr>
+  <tr><td>A serverless database is the wrong shape for a system that never sleeps</td><td><span class="tag closed">Closed</span> / <span class="tag ops">Operations</span></td><td>The code uses the standard <code>pg</code> driver and runs on any PostgreSQL 14 or newer. Development and test databases now live on the company's PostgreSQL 18 server; the full suite and an end-to-end smoke test pass there. Render keeps Neon only until the production server exists, and the move is one dump and restore.</td></tr>
+  <tr><td>Every query is its own internet request</td><td><span class="tag closed">Closed</span></td><td>Connection pool; a sign-in is one connection, not six requests.</td></tr>
+  <tr><td>2,300 database queries a minute at rest</td><td><span class="tag closed">Closed</span></td><td>Screens sit on a push stream and poll only as a 30-second safety net. See §12 for the numbers.</td></tr>
+  <tr><td>No retry logic anywhere</td><td><span class="tag no">Not a defect</span></td><td>Deliveries to Salesforce and SMS retry with exponential backoff up to five times; Salesforce lookups are protected by a circuit breaker with a walk-in fallback; the pool reconnects. A blind retry of an arbitrary query is not added because most writes are not safe to repeat.</td></tr>
+  <tr><td>The driver cannot hold a transaction open</td><td><span class="tag closed">Closed</span></td><td>It can now; <code>transaction()</code> in <code>lib/db.ts</code>.</td></tr>
+</table>
+
+<h2>§07 One queue, many people</h2>
+<table>
+  <tr><th>Claim</th><th>Status</th><th>Evidence</th></tr>
+  <tr><td>Nobody is told anything; every screen asks on a timer</td><td><span class="tag closed">Closed</span></td><td>Migration 013 raises a PostgreSQL NOTIFY on every ticket, notification or availability change; the web server relays it over server-sent events to every open screen, which refresh within about 300 ms. Verified end to end on the local server, on Neon and on Render.</td></tr>
+  <tr><td>Alerts are in-page toasts only; background tabs miss them</td><td><span class="tag closed">Closed</span></td><td>Desktop notifications on assignment, plus the push stream which browsers do not throttle like timers.</td></tr>
+  <tr><td>"version conflict" shown raw to a receptionist</td><td><span class="tag closed">Closed</span></td><td>Database rule codes map to plain sentences ("This ticket was just updated by someone else…"), with the code kept for support (test "explains a version conflict in plain words").</td></tr>
+  <tr><td>A dead laptop keeps receiving customers for up to 105 seconds</td><td><span class="tag today">Closed today</span></td><td>Heartbeat every 15 s, availability window 45 s (migration 015). An agent whose screen died stops receiving customers 45 s after the last heartbeat, and the tick moves their waiting customers on within 15 s more: worst case 60 s, typical 50 s. The review's 105 s was also overstated for the old code: assignment already checked the heartbeat at assignment time, so the old worst case was 90 s to stop and 105 s to re-route. Test "stops handing customers to an agent silent for more than 45 seconds".</td></tr>
+  <tr><td>One lock for everything; with 200 waiting the tick blocks the building</td><td><span class="tag decide">Decision</span>, measured</td><td>Measured on the company's PostgreSQL 18 server with <code>scripts/load-check.mjs</code>: 200 customers checked in at once from 20 connections in 1.3 s (about 150 check-ins a second, each waiting its turn for the lock); the routing tick with 200 waiting customers and 20 agents online held the lock for 96 ms, and with 400 waiting and 10 agents for 214 ms; 1,200 call, start and close actions by 10 agents working in parallel, with heartbeats firing every second, completed at a median of 11 ms and a 95th percentile of 20 ms. A centre with twenty counters produces perhaps one action a second; the lock is idle more than 98% of the time. The lock is a correctness device (no two agents ever own the same customer, ticket numbers never collide) and at this scale its cost is milliseconds. It is revisited only if a load test at the real number of counters shows contention; the design document records the trigger.</td></tr>
+</table>
+
+<h2>§08 Where do user and admin roles come from?</h2>
+<table>
+  <tr><th>Claim</th><th>Status</th><th>Evidence</th></tr>
+  <tr><td>No SSO, no MFA, no link to HR</td><td><span class="tag decide">Decision</span></td><td>Correct and unchanged: an identity provider is an IT choice (Microsoft Entra or Salesforce). Until then: PBKDF2 at 600,000 iterations, hashed sessions, forced password change, rate limits, sign-in and sign-out audited.</td></tr>
+  <tr><td>Access survives until someone remembers to switch it off</td><td><span class="tag decide">Decision</span></td><td>Disabling an account ends its sessions immediately and is audited. An automatic link to HR needs the identity provider above.</td></tr>
+  <tr><td>Nothing enforces removing the bootstrap password</td><td><span class="tag today">Closed today</span></td><td>Settings already warned; in production the alert endpoint now reports <code>bootstrap_password_present</code>, so the uptime monitor pages until it is removed (test "pages the monitor while the bootstrap password is still on a production host").</td></tr>
+  <tr><td>Salesforce id is free text; a typo routes to nobody</td><td><span class="tag closed">Closed</span></td><td>The id must match the Salesforce user-id pattern and is normally filled from the Salesforce search.</td></tr>
+  <tr><td>Customer accounts are created per scan and never deleted</td><td><span class="tag closed">Closed</span></td><td>Guest accounts that never issued a ticket are purged after a day; identifiers on closed tickets are anonymised by the retention job once a period is set.</td></tr>
+  <tr><td>The role list is hand-copied into 24 places</td><td><span class="tag closed">Closed</span> in code</td><td>TypeScript has one definition of roles and three role groups. Adding a role is one constant plus one migration for the database constraint. The role lists inside database functions remain, are visible in the snapshot, and are exercised by the workflow tests.</td></tr>
+  <tr><td>The whole application is downloaded regardless of role</td><td><span class="tag closed">Closed</span></td><td>Team, Queues, Reports, Settings, TV and Audit load on demand. The server-side checks were always the protection, and they are now declared per route.</td></tr>
+</table>
+
+<h2>§09 No consistent standard</h2>
+<table>
+  <tr><th>Observation</th><th>Status</th><th>Now</th></tr>
+  <tr><td>Whole back end in one function (497 lines)</td><td><span class="tag closed">Closed</span></td><td>Route table and seven handler modules.</td></tr>
+  <tr><td>Whole front end in one component (1,447 lines)</td><td><span class="tag closed">Closed</span></td><td>Shell split into login, queue table, audit, data hooks and lazy views; error boundaries added today so one failing view cannot blank the workspace.</td></tr>
+  <tr><td>47 unused interface components shipped</td><td><span class="tag closed">Closed</span></td><td>54 removed; 7 remain, all used.</td></tr>
+  <tr><td>shadcn as a runtime dependency</td><td><span class="tag closed">Closed</span></td><td>Development dependency only.</td></tr>
+  <tr><td><code>wrangler dev</code> as the production start command</td><td><span class="tag closed">Closed</span></td><td>Removed; <code>npm start</code> runs the standalone server that Render and Docker run.</td></tr>
+  <tr><td>Four deployment targets, none verified</td><td><span class="tag closed">Closed</span></td><td>Two remain (Render and Docker), both verified.</td></tr>
+  <tr><td>No real page routing, no 404</td><td><span class="tag closed">Closed</span></td><td>Unknown views and hidden paths return 404.</td></tr>
+  <tr><td>OneDrive workaround in the production build</td><td><span class="tag closed">Closed</span></td><td>Build runs in place.</td></tr>
+  <tr><td>CI runs a test file that does not exist</td><td><span class="tag closed">Closed</span></td><td>CI runs the unit tests by name and the full suite against a PostgreSQL 18 container on every push and pull request, with no external secret.</td></tr>
+  <tr><td>Remaining</td><td><span class="tag decide">Decision</span></td><td>Three CSS files (cosmetic, no functional risk) and no browser tests (device acceptance covers the same ground before launch).</td></tr>
+</table>
+
+<h2>§10 How a customer is given to a staff member</h2>
+<p>These findings describe the routing policy the BRD asked for, not defects. They are real trade-offs and deserve a decision. One statement is wrong: "nobody else can pick them up". A manager or HOD can reassign any ticket at any time, and the five-minute rule re-routes automatically.</p>
+<table>
+  <tr><th>Observation</th><th>What the system does</th><th>Recommendation</th><th>Who decides</th></tr>
+  <tr><td>Work at one counter counts for nothing at another</td><td>Round robin per service, as specified.</td><td>Optional cross-service fairness: pick the eligible agent with the fewest customers handled today across all services. One day of work when agreed.</td><td>CRM and Collection managers</td></tr>
+  <tr><td>A newly added member jumps the queue</td><td>New members start at the front of the rotation.</td><td>Start new members at the back. Half a day.</td><td>Same</td></tr>
+  <tr><td>One agent can be given ten waiting customers</td><td>Assignment happens at check-in so the customer sees a counter immediately, as specified; the agent becomes busy on call. The tick re-routes anything uncalled after five minutes.</td><td>Optional cap on uncalled assignments per agent, or assignment at call time. One day.</td><td>Same</td></tr>
+  <tr><td>The customer's own relationship manager always wins</td><td>Preferred owner first, as specified.</td><td>Keep, or add a threshold above which the owner is skipped. Half a day.</td><td>Same</td></tr>
+  <tr><td>Nothing can be marked urgent</td><td>Not in the BRD.</td><td>A priority flag on the ticket honoured by routing and the TV. One to two days.</td><td>Product</td></tr>
+  <tr><td>A customer left with someone who has gone waits more than five minutes</td><td>Since today: a vanished agent stops receiving customers after 45 s and their customers move on within 60 s; the queue shows the routing reason.</td><td>Closed by §07. A supervisor banner for tickets uncalled beyond a threshold is a small addition if wanted.</td><td>Product</td></tr>
+  <tr><td>The admin cannot set any of these</td><td>Correct: they are code, not settings.</td><td>Once the policy is decided, expose the chosen knobs on the Routing rules page.</td><td>After the decisions above</td></tr>
+</table>
+
+<h2>§11 Screen by screen</h2>
+<table>
+  <tr><th>Screen</th><th>Finding</th><th>Status</th></tr>
+  <tr><td rowspan="5">Check-in</td><td>Registered customer with no units cannot check in</td><td><span class="tag closed">Closed</span> served as General Query</td></tr>
+  <tr><td>Arabic half-translated</td><td><span class="tag closed">Closed</span></td></tr>
+  <tr><td>Right-to-left on one box only</td><td><span class="tag closed">Closed</span> page direction and language follow the choice</td></tr>
+  <tr><td>Language not remembered</td><td><span class="tag closed">Closed</span></td></tr>
+  <tr><td>Privacy note misleading</td><td><span class="tag closed">Closed</span> text corrected; retention job anonymises identifiers once a period is set</td></tr>
+  <tr><td rowspan="4">Customer's phone</td><td>Polls forever after the visit ends</td><td><span class="tag closed">Closed</span> stops on close, no-show or expiry</td></tr>
+  <tr><td>Token in the address</td><td><span class="tag no">Not a defect</span> the invite is a signed, five-minute, single-purpose link over HTTPS; this is how QR check-in works</td></tr>
+  <tr><td>"N ahead" counts everyone in the service</td><td><span class="tag no">Not a defect</span> the query counts only waiting tickets created earlier</td></tr>
+  <tr><td>Keeps polling a dead link</td><td><span class="tag closed">Closed</span></td></tr>
+  <tr><td rowspan="4">Reception TV</td><td>Expired session shows "Reconnecting" forever</td><td><span class="tag closed">Closed</span> shows a sign-in message</td></tr>
+  <tr><td>Sound off by default, not remembered</td><td><span class="tag closed">Closed</span> remembered per TV</td></tr>
+  <tr><td>The ticket showing at load is never announced</td><td><span class="tag today">Closed today</span> announced when sound is on; browsers may still require one click after a reload before speech is allowed</td></tr>
+  <tr><td>Polls every 3 s, fetches 12 shows 7</td><td><span class="tag closed">Closed</span> push stream, fetches exactly 7</td></tr>
+  <tr><td rowspan="4">Staff queue</td><td>1,447-line component</td><td><span class="tag closed">Closed</span></td></tr>
+  <tr><td>In-page alerts only</td><td><span class="tag closed">Closed</span> desktop notifications</td></tr>
+  <tr><td>Timer rebuilt on every keystroke</td><td><span class="tag closed">Closed</span> one stable interval</td></tr>
+  <tr><td>Any address returns a page</td><td><span class="tag closed">Closed</span> real 404</td></tr>
+  <tr><td rowspan="2">Ticket drawer</td><td>Never refreshes; stale version</td><td><span class="tag closed">Closed</span> refreshes every 5 s while open</td></tr>
+  <tr><td>Downloads the staff list every time</td><td><span class="tag closed">Closed</span> fetched only when reassigning</td></tr>
+  <tr><td rowspan="5">Team administration</td><td>Salesforce id free text</td><td><span class="tag closed">Closed</span> pattern-validated</td></tr>
+  <tr><td>Admin types temporary passwords</td><td><span class="tag closed">Closed</span> generator with show/hide</td></tr>
+  <tr><td>Accounts never deleted, no paging</td><td><span class="tag no">Not a defect</span> staff rows are referenced by the audit trail and must survive; disable is the correct operation; the list is tens of people</td></tr>
+  <tr><td>Roles shown as system words</td><td><span class="tag closed">Closed</span> job titles</td></tr>
+  <tr><td>Disable without confirmation; banner never disappears</td><td><span class="tag closed">Closed</span></td></tr>
+  <tr><td rowspan="2">Queue administration</td><td>Removing the last member allowed silently</td><td><span class="tag closed">Closed</span> confirmation and empty-queue warning</td></tr>
+  <tr><td>Every change reloads the page data</td><td><span class="tag no">Not a defect</span> the data is a few dozen rows; a bulk-add is a convenience, not a fault</td></tr>
+  <tr><td rowspan="2">Reports</td><td>Export puts identifiers into a spreadsheet</td><td><span class="tag today">Closed today</span> identifiers leave the system only when the manager ticks the option, and every export is recorded with its filters</td></tr>
+  <tr><td>Oversized exports fetched then rejected</td><td><span class="tag closed">Closed</span> counted first</td></tr>
+  <tr><td rowspan="3">Settings</td><td>No confirm field; signs out everywhere</td><td><span class="tag closed">Closed</span> confirmation field and explanation</td></tr>
+  <tr><td>"Queue policies" looks like settings</td><td><span class="tag closed">Closed</span> renamed Routing rules, described as fixed</td></tr>
+  <tr><td>Scheduler panel says five minutes</td><td><span class="tag closed">Closed</span> text states 15-second checks and the five-minute rule</td></tr>
+  <tr><td rowspan="2">Printed receipt</td><td>Print dialog can open on an empty receipt</td><td><span class="tag no">Not a defect</span> the print button only renders after the receipt has loaded</td></tr>
+  <tr><td>Never tested on real hardware</td><td><span class="tag ops">Operations</span> device acceptance before launch</td></tr>
+</table>
+
+<h2>§12 What the system does when nobody is using it</h2>
+<p><span class="tag closed">Closed</span> Screens no longer ask every few seconds. Each staff screen holds one push connection and refreshes only when the database says something changed; a 30-second poll remains as a safety net, and a 15-second availability heartbeat keeps the agent marked present.</p>
+<table>
+  <tr><th>Per idle staff screen</th><th>Before</th><th>Now</th></tr>
+  <tr><td>Requests to the server per minute</td><td>14 (queue every 5 s, heartbeat every 30 s)</td><td>6 (queue every 30 s, heartbeat every 15 s)</td></tr>
+  <tr><td>Database queries per minute</td><td>74</td><td>16</td></tr>
+  <tr><td>Per 8-hour shift</td><td>35,500 queries</td><td>7,700 queries</td></tr>
+  <tr><td>Time for a change to reach the screen</td><td>up to 5 s</td><td>under 1 s</td></tr>
+  <tr><td>Reception TV</td><td>40 queries a minute</td><td>4 a minute plus the stream</td></tr>
+  <tr><td>Twenty staff and two TVs, idle day</td><td>about 750,000 queries</td><td>about 160,000 queries</td></tr>
+</table>
+<p class="small">The review's 690,000 assumed twenty televisions; the table uses two.</p>
+
+<h2>§13 Every Salesforce call, and everything recorded</h2>
+<table>
+  <tr><th>Claim</th><th>Status</th><th>Evidence</th></tr>
+  <tr><td>If Salesforce is unreachable nobody can check in, not even a walk-in</td><td><span class="tag closed">Closed</span></td><td>Staff can register a walk-in without Salesforce; the lookup event is marked <code>degraded</code> so the visit can be matched later. Guests still need the lookup, by design.</td></tr>
+  <tr><td>No protection against a struggling Salesforce</td><td><span class="tag closed">Closed</span></td><td>Circuit breaker: after three failures lookups pause for 30 s with a clear message, then resume; Settings shows the paused state.</td></tr>
+  <tr><td>The same customer is looked up from scratch every time</td><td><span class="tag closed">Closed</span></td><td>A registered lookup for the same identifier within two minutes is reused and audited as <code>reused</code>.</td></tr>
+  <tr><td>Sign-in renewed every 15 minutes regardless of what Salesforce says</td><td><span class="tag no">Not a defect</span></td><td>The client-credentials token response carries no expiry, so a conservative fixed cache is the correct choice. Four token calls an hour are negligible against the org's limits.</td></tr>
+  <tr><td>Signing in is never recorded</td><td><span class="tag closed">Closed</span></td><td><code>login</code>, <code>login_failed</code> (with reason) and <code>logout</code> are audited (test "records failed sign-ins, sign-ins and sign-outs").</td></tr>
+  <tr><td>Going online or offline is not recorded</td><td><span class="tag closed">Closed</span></td><td><code>presence_online</code> and <code>presence_offline</code> with the reason, including heartbeat expiry.</td></tr>
+  <tr><td>History shows 100 entries, no filter, no paging, no export</td><td><span class="tag closed">Closed</span> / <span class="tag today">Closed today</span></td><td>Cursor paging, date and action filters, and since today a CSV export of the filtered trail, itself recorded as <code>audit_export</code>.</td></tr>
+</table>
+
+<h2>Verification</h2>
+<table>
+  <tr><th>Check</th><th>Result</th></tr>
+  <tr><td>Type check and lint</td><td>clean</td></tr>
+  <tr><td>Automated tests (<code>npm test</code>)</td><td>147 passed across 12 files: domain rules, route table, API document, browser/server boundary, schema drift, database workflows, API, delivery, security, listener</td></tr>
+  <tr><td>Environments</td><td>Company PostgreSQL 18 server (development and test databases, restricted role), Neon (live data), Render (live site)</td></tr>
+  <tr><td>End-to-end smoke test on the local server</td><td>Health and alerts, sign-in, forced password change, presence, Salesforce sandbox probe, QR invite, guest session and lookup, ticket issue (idempotent), public status, call, TV board, stale version refused, start, offline-mid-service refused, close with note, history, receipt, reports JSON and CSV, audit, walk-in, live event delivered, paging validation, 404s, security headers, sign-out</td></tr>
+  <tr><td>Load measurement (<code>scripts/load-check.mjs</code>)</td><td>Run A (20 agents, 200 customers, 20 connections): check-in of all 200 in 1.3 s, median 959 ms and 95th percentile 1,282 ms under full contention; tick with nobody online 19 ms, with everyone online 96 ms, all 200 assigned; 600 agent actions at median 23 ms, 95th percentile 46 ms, maximum 60 ms. Run B (10 agents, 400 customers): check-in of all 400 in 1.8 s; tick 25 ms and 214 ms; 1,200 actions at median 11 ms, 95th percentile 20 ms, maximum 65 ms. Company PostgreSQL 18 server on a laptop; production hardware will be faster</td></tr>
+  <tr><td>Live site</td><td>health, scheduler heartbeat and alert endpoint healthy; security headers present; unknown paths 404</td></tr>
+</table>
+<p class="small">Reproduce: <code>npm run typecheck && npm run lint && npm test && npm run build && npm run build:worker</code>, then <code>node --env-file=.env.test scripts/load-check.mjs 20 200 20</code>.</p>
+
+<h2>What remains, and who decides</h2>
+<table>
+  <tr><th>Item</th><th>Type</th><th>Owner</th></tr>
+  <tr><td>Routing policy: cross-service fairness, new-member position, cap on uncalled assignments, owner-first threshold, priority flag</td><td><span class="tag decide">Decision</span></td><td>CRM and Collection managers, Product</td></tr>
+  <tr><td>Retention periods for ticket identifiers and audit events (the job exists, switched off)</td><td><span class="tag decide">Decision</span></td><td>Product, IT</td></tr>
+  <tr><td>SSO or MFA, and an HR-linked offboarding process</td><td><span class="tag decide">Decision</span></td><td>IT</td></tr>
+  <tr><td>Production PostgreSQL server; Render's database moved to it</td><td><span class="tag ops">Operations</span></td><td>IT</td></tr>
+  <tr><td>Salesforce production org, connected app and dedicated integration user</td><td><span class="tag ops">Operations</span></td><td>Salesforce team</td></tr>
+  <tr><td>Uptime monitor on <code>/api/health/alerts</code>; production secrets; custom domain</td><td><span class="tag ops">Operations</span></td><td>IT</td></tr>
+  <tr><td>Device acceptance: phones, printer, TV audio</td><td><span class="tag ops">Operations</span></td><td>CRM team</td></tr>
+  <tr><td>Consolidate the three CSS files; browser tests</td><td>Engineering, non-blocking</td><td>Developer</td></tr>
+</table>
+
+<h2>Change log since the review</h2>
+<table>
+  <tr><th>Commit</th><th>Scope</th></tr>
+  <tr><td class="n">3aac449</td><td>Audit of sign-in and presence, walk-in fallback, General Query for customers without units, TV expiry, password confirmation, real 404s, request ids and logging, migration checksums, retention purge, PBKDF2 600,000, unused UI removed</td></tr>
+  <tr><td class="n">b42b51b</td><td>Next.js 16 replaces the beta framework; declared route table with PUT, PATCH and DELETE; connection pool with transactions; server-sent events; shell split; schema snapshot; rate-limit windows</td></tr>
+  <tr><td class="n">9650936</td><td>Restricted <code>qms_app</code> role; alert endpoint; retention job; day rollover; paging validation; forged-address-proof rate limits; migration runner fix; OpenAPI document</td></tr>
+  <tr><td class="n">549854b</td><td>Standard PostgreSQL driver replaces Neon's; CI on a PostgreSQL container</td></tr>
+  <tr><td class="n">22 September 2026 (the commit following 8d19e99)</td><td>This response: 45-second presence window, worker in direct database mode, browser/server boundary test, error boundaries, identifier opt-in on exports, audit export, bootstrap-password alert, TV announcement at load, load measurement script</td></tr>
+</table>
+<p class="small">Design document: "Samana QMS – Demo Flow and Technical Design", sections 3, 7, 8, 9, 11, 12 and 14 track the same state. Checklist: <code>docs/review-checklist-2026-09-21.md</code>.</p>
+</body>
+</html>

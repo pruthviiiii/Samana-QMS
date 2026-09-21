@@ -208,6 +208,18 @@ describe('Day rollover, number reuse and retention', () => {
     IF (SELECT mobile FROM qms.tickets WHERE id=(t->>'id')::uuid) IS NULL THEN RAISE EXCEPTION 'Recent ticket anonymised';END IF;
     IF (SELECT customer ? 'mobile' FROM qms.lookups WHERE id=lookup) IS NOT TRUE THEN RAISE EXCEPTION 'Recent lookup redacted';END IF;
   `));
+  it('stops handing customers to an agent silent for more than 45 seconds', () =>
+    check(`
+    UPDATE qms.users SET online=false WHERE id=b;
+    UPDATE qms.users SET last_seen=now()-interval '50 seconds' WHERE id=a;
+    IF qms.choose_available('general') IS NOT NULL THEN RAISE EXCEPTION 'Silent agent still chosen';END IF;
+    UPDATE qms.users SET last_seen=now()-interval '40 seconds' WHERE id=a;
+    IF qms.choose_available('general') IS DISTINCT FROM a THEN RAISE EXCEPTION 'Recent heartbeat not accepted';END IF;
+    UPDATE qms.users SET last_seen=now()-interval '50 seconds' WHERE id=a;
+    PERFORM qms.route_due();
+    IF (SELECT online FROM qms.users WHERE id=a) THEN RAISE EXCEPTION 'Silent agent not marked offline by the tick';END IF;
+    IF NOT EXISTS(SELECT 1 FROM qms.events WHERE actor_id=a AND action='presence_offline' AND details->>'reason'='heartbeat_expired') THEN RAISE EXCEPTION 'Expiry not audited';END IF;
+  `));
   it('deletes audit events older than the event period only', () =>
     check(`
     INSERT INTO qms.events(action,created_at) VALUES('fixture_old_'||r,now()-interval '400 days');
