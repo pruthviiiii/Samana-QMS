@@ -16,6 +16,12 @@ export const SERVICES = [
     prefix: 'G',
   },
 ] as const;
+export type ServiceId = (typeof SERVICES)[number]['id'];
+// One source for every service enumeration in API schemas and screens.
+export const SERVICE_IDS = SERVICES.map((s) => s.id) as [
+  ServiceId,
+  ...ServiceId[],
+];
 export type Role =
   | 'admin'
   | 'hod'
@@ -24,6 +30,25 @@ export type Role =
   | 'reception'
   | 'customer'
   | 'display';
+// Roles an administrator may assign; `customer` exists only for QR guests.
+export const STAFF_ROLES = [
+  'admin',
+  'hod',
+  'manager',
+  'agent',
+  'reception',
+  'display',
+] as const;
+export const ROLE_LABELS: Record<Role, string> = {
+  admin: 'Administrator',
+  hod: 'Head of Department',
+  manager: 'Manager',
+  agent: 'Executive',
+  reception: 'Reception',
+  customer: 'Customer',
+  display: 'TV display',
+};
+export const roleLabel = (role: string) => ROLE_LABELS[role as Role] ?? role;
 export type IdentifierType = 'mobile' | 'emiratesId' | 'passportNumber';
 export type TicketStatus =
   | 'waiting'

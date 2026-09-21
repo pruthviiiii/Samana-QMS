@@ -103,10 +103,20 @@ export async function reports(url: URL) {
   const where =
     "day BETWEEN $1::date AND $2::date AND ($3='' OR service_id=$3)";
   const params = [from, to, service];
-  const [rows, summary, byService, total] = await Promise.all([
+  // Count first so an oversized export is refused before any rows are fetched.
+  const total = await query<{ total: number }>(
+    `SELECT count(*)::int total FROM qms.ticket_view WHERE ${where}`,
+    params,
+  );
+  if (csv && total[0].total > 10000)
+    throw new HttpError(
+      400,
+      'Export exceeds 10,000 tickets. Narrow the date range.',
+    );
+  const [rows, summary, byService] = await Promise.all([
     query(
       `SELECT *,CASE WHEN started_at IS NOT NULL AND closed_at IS NOT NULL THEN round(extract(epoch FROM closed_at-started_at)::numeric/60,2) ELSE NULL END service_minutes,round(extract(epoch FROM coalesce(called_at,closed_at,now())-created_at)::numeric/60,2) wait_minutes FROM qms.ticket_view WHERE ${where} ORDER BY created_at DESC LIMIT $4 OFFSET $5`,
-      [...params, csv ? 10001 : 100, csv ? 0 : offset],
+      [...params, csv ? 10000 : 100, csv ? 0 : offset],
     ),
     query(
       `SELECT count(*)::int tickets,count(*) FILTER(WHERE status='closed')::int completed,count(*) FILTER(WHERE status='no_show')::int no_show,coalesce(round(avg(extract(epoch FROM closed_at-started_at)/60) FILTER(WHERE status='closed' AND started_at IS NOT NULL)::numeric,2),0)::float average_service_minutes,coalesce(round(avg(extract(epoch FROM called_at-created_at)/60) FILTER(WHERE called_at IS NOT NULL)::numeric,2),0)::float average_wait_minutes FROM qms.ticket_view WHERE ${where}`,
@@ -116,17 +126,8 @@ export async function reports(url: URL) {
       `SELECT service_id,service_name,department,count(*)::int tickets,count(*) FILTER(WHERE status='closed')::int completed,coalesce(round(avg(extract(epoch FROM closed_at-started_at)/60) FILTER(WHERE status='closed' AND started_at IS NOT NULL)::numeric,2),0)::float average_service_minutes FROM qms.ticket_view WHERE ${where} GROUP BY service_id,service_name,department ORDER BY tickets DESC`,
       params,
     ),
-    query<{ total: number }>(
-      `SELECT count(*)::int total FROM qms.ticket_view WHERE ${where}`,
-      params,
-    ),
   ]);
   if (csv) {
-    if (rows.length > 10000)
-      throw new HttpError(
-        400,
-        'Export exceeds 10,000 tickets. Narrow the date range.',
-      );
     const columns = [
       'number',
       'customer_name',
@@ -168,5 +169,34 @@ export async function reports(url: URL) {
     total: total[0].total,
     from,
     to,
+  };
+}
+const day = /^\d{4}-\d{2}-\d{2}$/;
+// Audit trail with a cursor (`before` = last id seen), an action filter and a
+// Dubai-day date range, so any dispute can be traced however old it is.
+export async function auditEvents(url: URL) {
+  const limit = Math.min(
+    200,
+    Math.max(1, Number(url.searchParams.get('limit')) || 100),
+  );
+  const before = url.searchParams.get('before') || '';
+  const action = (url.searchParams.get('action') || '').slice(0, 40);
+  const from = url.searchParams.get('from') || '';
+  const to = url.searchParams.get('to') || '';
+  if ((from && !day.test(from)) || (to && !day.test(to)))
+    throw new HttpError(400, 'Choose valid dates.');
+  const events = await query<{ id: string }>(
+    `SELECT e.id,e.action,e.details,e.created_at,t.number,u.name actor_name FROM qms.events e LEFT JOIN qms.users u ON u.id=e.actor_id LEFT JOIN qms.tickets t ON t.id=e.ticket_id WHERE ($1::bigint IS NULL OR e.id<$1) AND ($2='' OR e.action=$2) AND ($3::date IS NULL OR e.created_at>=($3::date::timestamp AT TIME ZONE 'Asia/Dubai')) AND ($4::date IS NULL OR e.created_at<(($4::date+1)::timestamp AT TIME ZONE 'Asia/Dubai')) ORDER BY e.id DESC LIMIT $5`,
+    [
+      /^\d{1,18}$/.test(before) ? before : null,
+      action,
+      from || null,
+      to || null,
+      limit,
+    ],
+  );
+  return {
+    events,
+    nextBefore: events.length === limit ? events[events.length - 1].id : null,
   };
 }

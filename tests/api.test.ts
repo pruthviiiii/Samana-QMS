@@ -126,6 +126,8 @@ afterAll(async () => {
   ]);
   for (const fixture of loginFixtures) {
     await query('DELETE FROM qms.sessions WHERE user_id=$1', [fixture.id]);
+    // Sign-in attempts are audited; synthetic fixtures take their rows with them.
+    await query('DELETE FROM qms.events WHERE actor_id=$1', [fixture.id]);
     await query('DELETE FROM qms.users WHERE id=$1', [fixture.id]);
     await query('DELETE FROM qms.rate_limits WHERE key=ANY($1::text[])', [
       [
@@ -600,4 +602,98 @@ describe('App-managed queues', () => {
       ).response.status,
     ).toBe(403);
   });
+});
+
+describe('Audit trail, walk-ins and error messages', () => {
+  it('records failed sign-ins, sign-ins and sign-outs', async () => {
+    const failed = await send(
+      'auth/login',
+      'POST',
+      { username: prefix + '-agent', password: 'Wrong-synthetic-password-1' },
+      '',
+    );
+    expect(failed.response.status).toBe(401);
+    const login = await send(
+      'auth/login',
+      'POST',
+      { username: prefix + '-agent', password },
+      '',
+    );
+    expect(login.response.status).toBe(200);
+    expect(
+      (await send('auth/logout', 'POST', {}, cookie(login.response))).response
+        .status,
+    ).toBe(200);
+    const actions = (
+      await query<{ action: string }>(
+        "SELECT action FROM qms.events WHERE actor_id=$1 AND action IN ('login','login_failed','logout') ORDER BY id",
+        [agentId],
+      )
+    ).map((e) => e.action);
+    expect(actions.slice(-3)).toEqual(['login_failed', 'login', 'logout']);
+  });
+  it('lets staff register a walk-in without Salesforce; guests cannot', async () => {
+    lookup.mockClear();
+    const walk = await send('customers/lookup', 'POST', {
+      type: 'mobile',
+      value: '9715' + Date.now().toString().slice(-8),
+      walkIn: true,
+    });
+    expect(walk.response.status).toBe(200);
+    expect((walk.result.customer as Customer).registered).toBe(false);
+    expect(lookup).not.toHaveBeenCalled();
+    const issue = await send('tickets', 'POST', {
+      lookupId: walk.result.lookupId,
+      serviceId: 'general',
+      unitId: null,
+      requestId: crypto.randomUUID(),
+    });
+    expect(issue.response.status).toBe(201);
+    const [event] = await query<{ details: { degraded?: boolean } }>(
+      "SELECT details FROM qms.events WHERE actor_id=$1 AND action='customer_lookup' ORDER BY id DESC LIMIT 1",
+      [adminId],
+    );
+    expect(event.details.degraded).toBe(true);
+    const denied = await send(
+      'customers/lookup',
+      'POST',
+      { type: 'mobile', value: '971500000009', walkIn: true },
+      guestCookie,
+    );
+    expect(denied.response.status).toBe(403);
+  });
+  it('explains a version conflict in plain words and keeps the code', async () => {
+    const [t] = await query<{ id: string; version: number }>(
+      "SELECT id,version FROM qms.tickets WHERE created_by=$1 AND status='waiting' ORDER BY created_at DESC LIMIT 1",
+      [adminId],
+    );
+    const stale = await send('tickets/' + t.id + '/action', 'POST', {
+      action: 'call',
+      version: t.version + 5,
+    });
+    expect(stale.response.status).toBe(409);
+    expect(stale.result.code).toBe('VERSION_CONFLICT');
+    expect(String(stale.result.error)).toMatch(/updated by someone else/);
+    expect(stale.response.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
+  });
+  it('pages the audit trail with a cursor and filters by action', async () => {
+    const first = await send('audit?limit=2');
+    expect(first.response.status).toBe(200);
+    const events = first.result.events as { id: string; action: string }[];
+    expect(events).toHaveLength(2);
+    expect(first.result.nextBefore).toBe(events[1].id);
+    const next = await send('audit?limit=2&before=' + first.result.nextBefore);
+    const older = next.result.events as { id: string }[];
+    expect(older.length).toBeGreaterThan(0);
+    expect(older.every((e) => Number(e.id) < Number(events[1].id))).toBe(true);
+    const logins = await send('audit?action=login&limit=5');
+    const rows = logins.result.events as { action: string }[];
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((e) => e.action === 'login')).toBe(true);
+  });
+  it('refuses notification changes from a guest session', async () =>
+    expect(
+      (await send('notifications/read', 'POST', { ids: [1] }, guestCookie))
+        .response.status,
+    ).toBe(403));
 });

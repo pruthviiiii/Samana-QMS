@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Plus, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api, post } from '@/lib/client';
-import { SERVICES } from '@/lib/domain';
+import { SERVICES, roleLabel } from '@/lib/domain';
 type Member = {
   id: string;
   name: string;
@@ -43,6 +43,19 @@ export default function Queues() {
     void load();
   }, []);
   async function change(serviceId: string, userId: string, member: boolean) {
+    if (!member) {
+      const remaining =
+        members.filter((m) => m.service_id === serviceId).length - 1;
+      const service =
+        SERVICES.find((s) => s.id === serviceId)?.name ?? serviceId;
+      if (
+        remaining <= 0 &&
+        !window.confirm(
+          `This is the last member of ${service}. New tickets for it will wait unassigned until someone is added. Remove anyway?`,
+        )
+      )
+        return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -103,7 +116,7 @@ export default function Queues() {
                         {m.name}
                         <small className="ticket-meta">
                           {' '}
-                          {m.role}
+                          {roleLabel(m.role)}
                           {m.counter ? ' · ' + m.counter : ''}
                           {m.enabled ? '' : ' · disabled'}
                         </small>
@@ -120,8 +133,10 @@ export default function Queues() {
                     </li>
                   ))}
                   {!list.length && (
-                    <li className="muted">
-                      {loading ? 'Loading…' : 'No members yet.'}
+                    <li className={loading ? 'muted' : 'error'}>
+                      {loading
+                        ? 'Loading…'
+                        : 'No members: tickets for this service will wait unassigned.'}
                     </li>
                   )}
                 </ul>
@@ -137,7 +152,7 @@ export default function Queues() {
                     <option value="">Add a member…</option>
                     {candidates.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} ({c.role})
+                        {c.name} ({roleLabel(c.role)})
                       </option>
                     ))}
                   </select>

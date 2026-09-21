@@ -14,16 +14,24 @@ import {
 import {
   hashPassword,
   verifyPassword,
+  needsRehash,
   randomToken,
   sha256,
 } from '@/lib/security';
 import {
   normalizeIdentifier,
   SERVICES,
+  SERVICE_IDS,
+  STAFF_ROLES,
   type User,
   type Customer,
 } from '@/lib/domain';
-import { queue, ticketDetail, reports } from '@/lib/operations';
+import {
+  queue,
+  ticketDetail,
+  reports,
+  auditEvents,
+} from '@/lib/operations';
 import {
   lookupCustomer,
   integrationHealth,
@@ -43,8 +51,26 @@ const passwordSchema = z
   .string()
   .min(14, 'Use at least 14 characters.')
   .max(128);
+const salesforceUserId = z
+  .string()
+  .regex(/^005[a-zA-Z0-9]{12,15}$/, 'Enter a Salesforce user ID (005…).')
+  .nullable()
+  .optional();
+// Verified for unknown accounts so a wrong username costs the same time as a
+// wrong password; the work factor matches real hashes.
+const dummyHash =
+  'pbkdf2$600000$0123456789abcdef$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const audit = (
+  actor: string | null,
+  action: string,
+  details?: Record<string, unknown>,
+) =>
+  query(
+    'INSERT INTO qms.events(actor_id,action,details) VALUES($1,$2,$3::jsonb)',
+    [actor, action, JSON.stringify(details ?? {})],
+  );
 async function handler(request: Request) {
-  return endpoint(async () => {
+  return endpoint(request, async () => {
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/api\//, '').replace(/\/$/, '');
     const method = request.method;
@@ -118,11 +144,16 @@ async function handler(request: Request) {
       // Hash even unknown accounts to avoid fast username enumeration.
       const valid = await verifyPassword(
         input.password,
-        u?.password_hash ||
-          'pbkdf2$100000$0123456789abcdef$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        u?.password_hash || dummyHash,
       );
-      if (!u || !valid)
+      if (!u || !valid) {
+        // Failed attempts are audited without the typed identifier, which may
+        // be a password entered in the wrong field.
+        await audit(u?.id ?? null, 'login_failed', {
+          reason: u ? 'password' : candidates.length ? 'ambiguous' : 'unknown',
+        });
         throw new HttpError(401, 'Incorrect username or password.');
+      }
       const token = randomToken();
       const [session] = await query<{ issued: boolean }>(
         'SELECT qms.issue_session($1,$2,$3) issued',
@@ -130,6 +161,13 @@ async function handler(request: Request) {
       );
       if (!session.issued)
         throw new HttpError(401, 'Your account changed. Please sign in again.');
+      // Transparently upgrade hashes created with an older work factor.
+      if (needsRehash(u.password_hash))
+        await query(
+          'UPDATE qms.users SET password_hash=$2 WHERE id=$1 AND password_hash=$3',
+          [u.id, await hashPassword(input.password), u.password_hash],
+        );
+      await audit(u.id, 'login');
       const [user] = await query(
         `SELECT ${userColumns} FROM qms.users WHERE id=$1`,
         [u.id],
@@ -147,6 +185,7 @@ async function handler(request: Request) {
         await query('DELETE FROM qms.sessions WHERE token_hash=$1', [
           await sha256(token),
         ]);
+      if (user.role !== 'customer') await audit(user.id, 'logout');
       // Ending authentication is always allowed. Keep active service ownership
       // intact; the separate presence action still guards against abandonment.
       try {
@@ -231,6 +270,8 @@ async function handler(request: Request) {
         .object({
           type: z.enum(['mobile', 'emiratesId', 'passportNumber']),
           value: z.string().max(100),
+          // Staff may register a walk-in without Salesforce when it is down.
+          walkIn: z.boolean().optional(),
         })
         .parse(await body(request));
       let value: string;
@@ -239,20 +280,33 @@ async function handler(request: Request) {
       } catch (e) {
         throw new HttpError(400, (e as Error).message);
       }
-      const customer: Customer = await lookupCustomer(input.type, value);
+      if (input.walkIn && user.role === 'customer')
+        throw new HttpError(403, 'Please ask reception for help.');
+      const customer: Customer = input.walkIn
+        ? {
+            registered: false,
+            salesforceId: null,
+            firstName: '',
+            middleName: '',
+            lastName: '',
+            name: 'Walk-in customer',
+            mobile: null,
+            emiratesId: null,
+            passportNumber: null,
+            units: [],
+          }
+        : await lookupCustomer(input.type, value);
       if (input.type === 'emiratesId') customer.emiratesId = value;
       if (input.type === 'passportNumber') customer.passportNumber = value;
       const [lookup] = await query<{ id: string; expires_at: string }>(
         'INSERT INTO qms.lookups(actor_id,identifier_type,identifier_value,customer) VALUES($1,$2,$3,$4::jsonb) RETURNING id,expires_at',
         [user.id, input.type, value, JSON.stringify(customer)],
       );
-      await query(
-        "INSERT INTO qms.events(actor_id,action,details) VALUES($1,'customer_lookup',$2::jsonb)",
-        [
-          user.id,
-          JSON.stringify({ type: input.type, registered: customer.registered }),
-        ],
-      );
+      await audit(user.id, 'customer_lookup', {
+        type: input.type,
+        registered: customer.registered,
+        ...(input.walkIn ? { degraded: true } : {}),
+      });
       return json({
         lookupId: lookup.id,
         expiresAt: lookup.expires_at,
@@ -265,14 +319,7 @@ async function handler(request: Request) {
       const input = z
         .object({
           lookupId: uuid,
-          serviceId: z.enum([
-            'crm-general',
-            'crm-noc',
-            'crm-refund',
-            'crm-handover',
-            'collection',
-            'general',
-          ]),
+          serviceId: z.enum(SERVICE_IDS),
           unitId: z.string().max(100).nullable(),
           requestId: uuid,
         })
@@ -337,6 +384,7 @@ async function handler(request: Request) {
       }
     }
     if (path === 'notifications/read' && method === 'POST') {
+      allow(['admin', 'hod', 'manager', 'agent', 'reception']);
       const input = z
         .object({ ids: z.array(z.coerce.number().int().positive()).max(100) })
         .parse(await body(request));
@@ -363,14 +411,7 @@ async function handler(request: Request) {
       allow(['admin', 'hod', 'manager']);
       const input = z
         .object({
-          serviceId: z.enum([
-            'crm-general',
-            'crm-noc',
-            'crm-refund',
-            'crm-handover',
-            'collection',
-            'general',
-          ]),
+          serviceId: z.enum(SERVICE_IDS),
           userId: uuid,
           member: z.boolean(),
         })
@@ -401,28 +442,10 @@ async function handler(request: Request) {
             .regex(/^[a-zA-Z0-9@._+-]+$/),
           name: z.string().trim().min(2).max(100),
           email: z.email().max(254).nullable().optional(),
-          role: z.enum([
-            'admin',
-            'hod',
-            'manager',
-            'agent',
-            'reception',
-            'display',
-          ]),
-          sfId: z.string().max(18).nullable().optional(),
-          managerSfId: z.string().max(18).nullable().optional(),
-          services: z
-            .array(
-              z.enum([
-                'crm-general',
-                'crm-noc',
-                'crm-refund',
-                'crm-handover',
-                'collection',
-                'general',
-              ]),
-            )
-            .max(6),
+          role: z.enum(STAFF_ROLES),
+          sfId: salesforceUserId,
+          managerSfId: salesforceUserId,
+          services: z.array(z.enum(SERVICE_IDS)).max(SERVICE_IDS.length),
           counter: z.string().max(40),
           enabled: z.boolean(),
           password: passwordSchema.optional(),
@@ -484,11 +507,7 @@ async function handler(request: Request) {
     }
     if (path === 'audit' && method === 'GET') {
       allow(['admin', 'hod', 'manager']);
-      return json({
-        events: await query(
-          'SELECT e.id,e.action,e.details,e.created_at,t.number,u.name actor_name FROM qms.events e LEFT JOIN qms.users u ON u.id=e.actor_id LEFT JOIN qms.tickets t ON t.id=e.ticket_id ORDER BY e.id DESC LIMIT 100',
-        ),
-      });
+      return json(await auditEvents(url));
     }
     throw new HttpError(404, 'Endpoint not found.');
   });

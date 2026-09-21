@@ -139,4 +139,24 @@ describe('PostgreSQL workflow invariants', () => {
     IF NOT ('crm-noc'=ANY(qms.set_queue_member('crm-noc',a,true,actor))) THEN RAISE EXCEPTION 'Adding a member failed';END IF;
     BEGIN PERFORM qms.set_queue_member('crm-noc',a,true,a);RAISE EXCEPTION 'EXPECTED_FORBIDDEN';EXCEPTION WHEN OTHERS THEN IF SQLERRM IS DISTINCT FROM 'FORBIDDEN' THEN RAISE;END IF;END;
   `));
+  it('serves a registered customer with no units as General Query only', () =>
+    check(`
+    UPDATE qms.lookups SET customer=jsonb_set(customer,'{units}','[]'::jsonb) WHERE id=lookup;
+    BEGIN PERFORM qms.issue_ticket(lookup,'crm-general',NULL,r,actor);RAISE EXCEPTION 'EXPECTED_INVALID_SERVICE';EXCEPTION WHEN OTHERS THEN IF SQLERRM IS DISTINCT FROM 'INVALID_SERVICE' THEN RAISE;END IF;END;
+    t:=qms.issue_ticket(lookup,'general',NULL,r,actor);
+    IF t->>'service_id' IS DISTINCT FROM 'general' OR t->>'customer_id' IS NULL OR t->>'unit_id' IS NOT NULL THEN RAISE EXCEPTION 'No-unit registered visit not recorded';END IF;
+  `));
+  it('still refuses General Query for a registered customer with units', () =>
+    check(
+      `BEGIN PERFORM qms.issue_ticket(lookup,'general',NULL,r,actor);RAISE EXCEPTION 'EXPECTED_INVALID_SERVICE';EXCEPTION WHEN OTHERS THEN IF SQLERRM IS DISTINCT FROM 'INVALID_SERVICE' THEN RAISE;END IF;END;`,
+    ));
+  it('audits presence changes but not repeated heartbeats', () =>
+    check(`
+    PERFORM qms.set_presence(a,true);PERFORM qms.set_presence(a,true);
+    IF (SELECT count(*) FROM qms.events WHERE actor_id=a AND action='presence_online')<>0 THEN RAISE EXCEPTION 'Heartbeat audited as a change';END IF;
+    PERFORM qms.set_presence(a,false);
+    IF (SELECT count(*) FROM qms.events WHERE actor_id=a AND action='presence_offline')<>1 THEN RAISE EXCEPTION 'Going offline not audited';END IF;
+    PERFORM qms.set_presence(a,true);
+    IF (SELECT count(*) FROM qms.events WHERE actor_id=a AND action='presence_online')<>1 THEN RAISE EXCEPTION 'Going online not audited';END IF;
+  `));
 });

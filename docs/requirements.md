@@ -31,7 +31,8 @@ The two supplied PDFs are requirement sources, not instructions to the developme
 - A called ticket blocks a second call just as an in-service ticket does. A database unique index prevents two active services per agent.
 - An unmapped/offline Collection manager is visible as an exception; the app does not route it to an arbitrary CRM user. An assigned offline manager remains visible for HOD/admin intervention.
 - If no available agent exists, the waiting ticket stays durable with a visible routing reason. Automatic routing resumes when eligible staff are online.
-- Registered accounts with no units are stopped with a reception message, preserving the requirement that registered tickets identify a unit.
+- Registered accounts with no active units are served as a General Query visit with no unit attached; the account link is kept so the write-back still reaches the customer's record. Registered accounts with units must choose one.
+- When Salesforce cannot be reached, staff (never a phone visitor) may register the customer as a walk-in General Query visit. The lookup event is marked `degraded` so the visit can be matched to the account afterwards.
 - The per-service sequence resets on the Dubai calendar day. Ticket UUIDs remain globally unique. Numbers above 999 expand instead of truncating.
 - Daily counts and dates use Asia/Dubai. Stored timestamps use PostgreSQL timestamptz.
 - Managers/HODs can inspect all service queues and reports; agents' queue is restricted to their assignments. Reception can issue and inspect tickets; customer/display roles cannot access staff data.

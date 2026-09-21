@@ -62,6 +62,13 @@ const translations = {
     passportHint: 'Enter passport number',
     headquarters: 'Samana Headquarters',
     assistance: 'General assistance',
+    crmTitle: 'CRM',
+    collectionTitle: 'Collection',
+    noUnitsGeneral:
+      'No active units are linked to this account yet. We will register a General Query visit and our team will help you at the desk.',
+    walkInPrompt:
+      'Salesforce cannot be reached right now. You can still register this customer as a walk-in General Query visit; their details are matched later.',
+    walkInButton: 'Register walk-in visit',
     services: {
       'crm-general': 'General Query',
       'crm-noc': 'NOC / Resale',
@@ -106,6 +113,13 @@ const translations = {
     passportHint: 'أدخل رقم جواز السفر',
     headquarters: 'المقر الرئيسي لسمانا',
     assistance: 'المساعدة العامة',
+    crmTitle: 'علاقات العملاء',
+    collectionTitle: 'التحصيل',
+    noUnitsGeneral:
+      'لا توجد وحدات نشطة مرتبطة بهذا الحساب حالياً. سنسجل زيارة استفسار عام وسيساعدك فريقنا في المكتب.',
+    walkInPrompt:
+      'تعذر الوصول إلى سيلزفورس حالياً. يمكن تسجيل العميل كزيارة استفسار عام وسيتم التحقق من بياناته لاحقاً.',
+    walkInButton: 'تسجيل زيارة بدون حساب',
     services: {
       'crm-general': 'استفسار عام',
       'crm-noc': 'شهادة عدم ممانعة / إعادة بيع',
@@ -114,20 +128,46 @@ const translations = {
     },
   },
 };
+type Lookup = { lookupId: string; customer: Customer; expiresAt: string };
 export default function CheckIn({
   onIssued,
+  allowWalkIn = false,
+  fullPage = false,
 }: {
   onIssued?: (ticket: Ticket) => void;
+  // Staff consoles may register a walk-in when Salesforce is unreachable.
+  allowWalkIn?: boolean;
+  // On the customer's phone the whole page follows the chosen language.
+  fullPage?: boolean;
 }) {
   const [language, setLanguage] = useState<'en' | 'ar'>('en');
   const t = translations[language];
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('qms-lang') === 'ar') setLanguage('ar');
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem('qms-lang', language);
+    } catch {
+      /* storage unavailable */
+    }
+    if (!fullPage) return;
+    const root = document.documentElement;
+    root.lang = language;
+    root.dir = language === 'ar' ? 'rtl' : 'ltr';
+    return () => {
+      root.lang = 'en';
+      root.dir = 'ltr';
+    };
+  }, [language, fullPage]);
+  const [offline, setOffline] = useState(false);
   const [type, setType] = useState<IdentifierType>('mobile');
   const [value, setValue] = useState('');
-  const [lookup, setLookup] = useState<{
-    lookupId: string;
-    customer: Customer;
-    expiresAt: string;
-  } | null>(null);
+  const [lookup, setLookup] = useState<Lookup | null>(null);
   const [department, setDepartment] = useState('CRM');
   const [service, setService] = useState('crm-general');
   const [unit, setUnit] = useState('');
@@ -147,24 +187,42 @@ export default function CheckIn({
     setTicket(null);
     setError('');
     setRequestId('');
+    setOffline(false);
   };
+  function apply(data: Lookup) {
+    setLookup(data);
+    setRequestId(crypto.randomUUID());
+    setOffline(false);
+    // A registered account with no active units is served as General Query.
+    const withUnits =
+      data.customer.registered && data.customer.units.length > 0;
+    setUnit(data.customer.units.length === 1 ? data.customer.units[0].id : '');
+    setDepartment(withUnits ? 'CRM' : 'General Query');
+    setService(withUnits ? 'crm-general' : 'general');
+  }
   async function find(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError('');
+    setOffline(false);
     try {
-      const data = await post<{
-        lookupId: string;
-        customer: Customer;
-        expiresAt: string;
-      }>('customers/lookup', { type, value });
-      setLookup(data);
-      setRequestId(crypto.randomUUID());
-      setUnit(
-        data.customer.units.length === 1 ? data.customer.units[0].id : '',
+      apply(await post<Lookup>('customers/lookup', { type, value }));
+    } catch (e) {
+      setError((e as Error).message);
+      const status = (e as Error & { status?: number }).status;
+      // Salesforce down: reception can still register a walk-in visit.
+      if (allowWalkIn && (status === 502 || status === 503)) setOffline(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function walkIn() {
+    setBusy(true);
+    setError('');
+    try {
+      apply(
+        await post<Lookup>('customers/lookup', { type, value, walkIn: true }),
       );
-      setDepartment(data.customer.registered ? 'CRM' : 'General Query');
-      setService(data.customer.registered ? 'crm-general' : 'general');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -347,6 +405,19 @@ export default function CheckIn({
             )}{' '}
             {busy ? t.finding : t.lookup}
           </Button>
+          {offline && (
+            <div className="notice">
+              <p>{t.walkInPrompt}</p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={walkIn}
+                disabled={busy}
+              >
+                {t.walkInButton}
+              </Button>
+            </div>
+          )}
           <p className="privacy-note">{t.privacy}</p>
         </form>
       ) : (
@@ -371,7 +442,10 @@ export default function CheckIn({
               </span>
             )}
           </div>
-          {lookup.customer.registered && (
+          {lookup.customer.registered && lookup.customer.units.length === 0 && (
+            <p className="notice">{t.noUnitsGeneral}</p>
+          )}
+          {lookup.customer.registered && lookup.customer.units.length > 0 && (
             <>
               <div>
                 <label>{t.department}</label>
@@ -386,7 +460,7 @@ export default function CheckIn({
                     }}
                   >
                     <UserRound size={22} />
-                    <strong>CRM</strong>
+                    <strong>{t.crmTitle}</strong>
                     <small>{t.crm}</small>
                   </button>
                   <button
@@ -399,9 +473,7 @@ export default function CheckIn({
                     }}
                   >
                     <Building2 size={22} />
-                    <strong>
-                      {language === 'ar' ? 'التحصيل' : 'Collection'}
-                    </strong>
+                    <strong>{t.collectionTitle}</strong>
                     <small>{t.collection}</small>
                   </button>
                 </div>
@@ -475,7 +547,7 @@ export default function CheckIn({
             <Button
               className="primary-action"
               onClick={issue}
-              disabled={busy || (lookup.customer.registered && !unit)}
+              disabled={busy || (service !== 'general' && !unit)}
             >
               {busy ? (
                 <Loader2 size={16} className="spin" />

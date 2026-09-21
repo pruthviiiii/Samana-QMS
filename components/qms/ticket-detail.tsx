@@ -83,6 +83,19 @@ export default function TicketDetail({
       alive = false;
     };
   }, [id, user.role]);
+  // Keep an open drawer current, so the version sent with an action is the
+  // live one and routing changes made meanwhile are visible.
+  useEffect(() => {
+    if (!id || busy || mode) return;
+    const timer = setInterval(() => {
+      api<Details>('tickets/' + id)
+        .then((d) => setData(d))
+        .catch(() => {
+          /* the next poll or action reports the failure */
+        });
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [id, busy, mode]);
   async function action(action: string) {
     if (!data) return;
     setBusy(true);

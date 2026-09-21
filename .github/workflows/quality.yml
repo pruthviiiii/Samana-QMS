@@ -15,7 +15,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npx vitest run tests/domain.test.ts tests/groups.test.ts tests/scheduler.test.ts
+      - run: npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts
       - run: npm audit --audit-level=high
       - run: npm run build
       - run: npm run build:node

@@ -4,7 +4,7 @@
 
 App data is isolated in the `qms` schema of `samana_qms` on the connected Neon project. Tests use `samana_qms_test`. The current local connection is the supplied Neon owner role. Before production rollout, create a dedicated runtime role with only the app schema permissions required by the functions and tables; keep migrations under a separate owner credential. Do not publish connection strings or add `.env`, `.dev.vars`, `.analysis`, `.sf`, or generated artifacts to source control.
 
-`db/001_...sql` through later migrations define schema and transactional operations. Applied filenames are recorded in `qms.migrations`. Add a new migration instead of editing an applied migration. Database functions serialize routing/user-presence changes with a transaction advisory lock, which favors predictable consistency for one reception deployment. Load-test the expected branch/agent count before wider rollout; this is not a measured throughput guarantee.
+`db/001_...sql` through later migrations define schema and transactional operations. Applied filenames and a checksum of their content are recorded in `qms.migrations`; `scripts/migrate.mjs` refuses to start when an applied file has been edited, so always add a new migration. The live version of each database function is the last `CREATE OR REPLACE` in filename order. Database functions serialize routing/user-presence changes with a transaction advisory lock, which favors predictable consistency for one reception deployment. Load-test the expected branch/agent count before wider rollout; this is not a measured throughput guarantee.
 
 ## Monitoring and failure handling
 
@@ -19,7 +19,9 @@ App data is isolated in the `qms` schema of `samana_qms` on the connected Neon p
 
 Use the Neon project's backup/PITR controls and choose a recovery window according to the organization's retention policy. Backup and restore have not been exercised in this workstation. Before launch, restore into a separate database/branch and verify migrations, queue state, session expiry, and audit history. Do not restore over an active production database as a first recovery step.
 
-Sessions and rate-limit buckets expire and are cleaned by routing ticks. Customer lookup snapshots, tickets, notes, audit events, and guest user rows are retained by default; no retention duration was supplied, so no customer history is automatically deleted. Establish an approved retention/anonymization policy and scheduled maintenance before production scale. Restrict backup/report access because reports include personal identifiers.
+Sessions and rate-limit buckets expire and are cleaned by routing ticks. The same tick removes lookup snapshots that expired more than a day ago and are not attached to a ticket, and QR guest accounts older than a day that never issued a ticket. Tickets, their identifiers, notes and audit events are retained; no retention duration was supplied for them, so establish an approved retention/anonymization policy before production scale. Restrict backup/report access because reports include personal identifiers.
+
+The audit trail records sign-ins, failed sign-ins, sign-outs and every change of staff availability (including heartbeat expiry) alongside ticket, team, queue and reporting events. The Activity log screen filters by date and action and pages through history; every API response also carries an `X-Request-Id` that appears in the server log line for that request.
 
 ## Release and rollback
 

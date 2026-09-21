@@ -17,6 +17,11 @@ export default function MobileVisit({ statusToken }: { statusToken?: string }) {
   useEffect(() => {
     let active = true;
     if (statusToken) {
+      let timer: ReturnType<typeof setInterval> | undefined;
+      const stop = () => {
+        if (timer) clearInterval(timer);
+        timer = undefined;
+      };
       const load = () =>
         api<{
           number: string;
@@ -26,19 +31,23 @@ export default function MobileVisit({ statusToken }: { statusToken?: string }) {
           waiting_ahead: number;
         }>('public/status/' + statusToken)
           .then((result) => {
-            if (active) {
-              setTicket(result);
-              setError('');
-            }
+            if (!active) return;
+            setTicket(result);
+            setError('');
+            // A finished visit needs no further updates.
+            if (['closed', 'no_show'].includes(result.status)) stop();
           })
           .catch((e) => {
-            if (active) setError(e.message);
+            if (!active) return;
+            setError(e.message);
+            // A dead link stays dead; stop asking.
+            if ((e as Error & { status?: number }).status === 404) stop();
           });
       void load();
-      const timer = setInterval(load, 5000);
+      timer = setInterval(load, 5000);
       return () => {
         active = false;
-        clearInterval(timer);
+        stop();
       };
     }
     const invite = new URLSearchParams(window.location.search).get('invite');
@@ -134,7 +143,7 @@ export default function MobileVisit({ statusToken }: { statusToken?: string }) {
             </section>
           )
         ) : ready ? (
-          <CheckIn onIssued={issued} />
+          <CheckIn onIssued={issued} fullPage />
         ) : (
           !error && <div className="empty-state">Preparing your check-in…</div>
         )}

@@ -78,52 +78,95 @@ export function sessionCookie(token: string, maxAge = 28800) {
   const secure = process.env.SESSION_COOKIE_SECURE !== 'false';
   return `qms_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
 }
-export async function endpoint(run: () => Promise<Response>) {
+// Database exception codes and the message a person at the desk should read.
+const known: Record<string, [number, string]> = {
+  TICKET_NOT_FOUND: [404, 'That ticket no longer exists.'],
+  LOOKUP_EXPIRED: [
+    409,
+    'The customer lookup has expired. Look the customer up again.',
+  ],
+  UNIT_REQUIRED: [400, 'Choose the unit this visit is about.'],
+  INVALID_SERVICE: [400, 'That service is not available for this customer.'],
+  VERSION_CONFLICT: [
+    409,
+    'This ticket was just updated by someone else. It has been refreshed; please try again.',
+  ],
+  INVALID_TRANSITION: [
+    409,
+    "That action is not possible in the ticket's current state.",
+  ],
+  AGENT_BUSY: [409, 'That team member is already with a customer.'],
+  FORBIDDEN: [403, 'You do not have permission for this action.'],
+  AGENT_UNAVAILABLE: [409, 'Go online before calling a customer.'],
+  INVALID_ASSIGNEE: [
+    400,
+    'Choose a team member who is online and covers this service.',
+  ],
+  DUPLICATE_VISIT: [
+    409,
+    'This customer already has an open ticket for this service.',
+  ],
+  DATABASE_NOT_CONFIGURED: [503, 'The database is not configured.'],
+  IDEMPOTENCY_CONFLICT: [
+    409,
+    'This request was already used for a different ticket. Start again.',
+  ],
+  UNIT_NOT_ALLOWED: [400, 'A unit cannot be attached to this visit.'],
+  USER_NOT_FOUND: [404, 'That team member was not found.'],
+  PASSWORD_REQUIRED: [400, 'Set a temporary password for a new member.'],
+};
+function failure(error: unknown, requestId: string) {
+  if (error instanceof HttpError)
+    return json({ error: error.message }, error.status);
+  if (error instanceof ZodError)
+    return json({ error: error.issues.map((x) => x.message).join(' ') }, 400);
+  const message = error instanceof Error ? error.message : '';
+  for (const [code, [status, text]] of Object.entries(known))
+    if (message.includes(code)) return json({ error: text, code }, status);
+  console.error(
+    JSON.stringify({
+      event: 'request_failed',
+      requestId,
+      errorType: error instanceof Error ? error.name : 'Unknown',
+    }),
+  );
+  return json(
+    { error: 'The request could not be completed. Please retry.', requestId },
+    503,
+  );
+}
+// Every API response carries X-Request-Id and writes one JSON log line with the
+// method, a masked path, the status and the duration. Ids and tokens in the
+// path are replaced so private status links never reach the logs.
+export async function endpoint(
+  request: Request,
+  run: () => Promise<Response>,
+) {
+  const started = Date.now();
+  const requestId = crypto.randomUUID();
+  let response: Response;
   try {
-    return await run();
+    response = await run();
   } catch (error) {
-    if (error instanceof HttpError)
-      return json({ error: error.message }, error.status);
-    if (error instanceof ZodError)
-      return json({ error: error.issues.map((x) => x.message).join(' ') }, 400);
-    const message = error instanceof Error ? error.message : '';
-    const known: Record<string, number> = {
-      TICKET_NOT_FOUND: 404,
-      LOOKUP_EXPIRED: 409,
-      UNIT_REQUIRED: 400,
-      INVALID_SERVICE: 400,
-      VERSION_CONFLICT: 409,
-      INVALID_TRANSITION: 409,
-      AGENT_BUSY: 409,
-      FORBIDDEN: 403,
-      AGENT_UNAVAILABLE: 409,
-      INVALID_ASSIGNEE: 400,
-      DUPLICATE_VISIT: 409,
-      DATABASE_NOT_CONFIGURED: 503,
-      IDEMPOTENCY_CONFLICT: 409,
-      UNIT_NOT_ALLOWED: 400,
-      USER_NOT_FOUND: 404,
-      PASSWORD_REQUIRED: 400,
-    };
-    for (const [key, status] of Object.entries(known))
-      if (message.includes(key))
-        return json(
-          { error: key.replaceAll('_', ' ').toLowerCase(), code: key },
-          status,
-        );
-    const requestId = crypto.randomUUID();
-    console.error(
-      JSON.stringify({
-        event: 'request_failed',
-        requestId,
-        errorType: error instanceof Error ? error.name : 'Unknown',
-      }),
-    );
-    return json(
-      { error: 'The request could not be completed. Please retry.', requestId },
-      503,
-    );
+    response = failure(error, requestId);
   }
+  const headers = new Headers(response.headers);
+  headers.set('X-Request-Id', requestId);
+  const path = new URL(request.url).pathname.replace(
+    /[0-9a-f]{8}-[0-9a-f-]{27}/g,
+    ':id',
+  );
+  console.log(
+    JSON.stringify({
+      event: 'request',
+      method: request.method,
+      path,
+      status: response.status,
+      ms: Date.now() - started,
+      requestId,
+    }),
+  );
+  return new Response(response.body, { status: response.status, headers });
 }
 export async function rateLimit(key: string, limit = 10, windowSeconds = 300) {
   const [r] = await query<{ count: number }>(

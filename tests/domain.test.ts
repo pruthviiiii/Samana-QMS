@@ -5,9 +5,19 @@ import {
   canTransition,
   csvCell,
 } from '../lib/domain';
-import { hashPassword, verifyPassword } from '../lib/security';
+import { hashPassword, verifyPassword, needsRehash } from '../lib/security';
 import { normalizeLookup } from '../lib/salesforce';
 import { splitStatements } from '../scripts/sql.mjs';
+describe('Password work factor', () => {
+  it('hashes at the current work factor and flags older hashes', async () => {
+    const current = await hashPassword('A-strong-test-password');
+    expect(current.startsWith('pbkdf2$600000$')).toBe(true);
+    expect(needsRehash(current)).toBe(false);
+    const legacy = await hashPassword('A-strong-test-password', 'salt', 100000);
+    expect(needsRehash(legacy)).toBe(true);
+    expect(await verifyPassword('A-strong-test-password', legacy)).toBe(true);
+  });
+});
 describe('Customer identifiers', () => {
   it('normalizes international mobile formatting', () =>
     expect(normalizeIdentifier('mobile', '+971 (50) 123-4567')).toBe(

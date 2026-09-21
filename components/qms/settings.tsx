@@ -38,6 +38,7 @@ export default function Settings({
   const [busy, setBusy] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   async function load() {
     setBusy(true);
     try {
@@ -54,6 +55,11 @@ export default function Settings({
   }, [user.role]);
   async function password(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Saving signs out every other session, so a typo must be caught here.
+    if (newPassword !== confirmPassword) {
+      setError('The new password and its confirmation do not match.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -63,6 +69,7 @@ export default function Settings({
       });
       setOldPassword('');
       setNewPassword('');
+      setConfirmPassword('');
       setMessage('Password changed. Other sessions have been signed out.');
       onPasswordChanged();
     } catch (e) {
@@ -165,7 +172,10 @@ export default function Settings({
                 >
                   {data.worker.healthy ? 'Running' : 'Needs attention'}
                 </span>
-                <p>Five-minute routing and delivery retries.</p>
+                <p>
+                  Checks every 15 seconds: five-minute reassignment, presence
+                  expiry and delivery retries.
+                </p>
                 <small>
                   Last run:{' '}
                   {data.worker.lastRun
@@ -220,7 +230,23 @@ export default function Settings({
               At least 14 characters. Other sessions will be signed out.
             </small>
           </div>
-          <Button type="submit" disabled={busy}>
+          <div>
+            <label htmlFor="confirm-password">Confirm new password</label>
+            <Input
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={14}
+              maxLength={128}
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={busy || !newPassword || newPassword !== confirmPassword}
+          >
             Change password
           </Button>
         </form>
@@ -228,8 +254,11 @@ export default function Settings({
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Queue policies</h2>
-            <p>Configured from the Samana business requirements.</p>
+            <h2>Routing rules</h2>
+            <p>
+              Fixed by the Samana business requirements. These are not
+              settings; changing them is a development change.
+            </p>
           </div>
         </div>
         <div className="policy-list">

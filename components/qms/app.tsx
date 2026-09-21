@@ -55,6 +55,7 @@ import {
   type Ticket,
   isManager,
   minutesBetween,
+  roleLabel,
 } from '@/lib/domain';
 import CheckIn from './check-in';
 import TicketDetail from './ticket-detail';
@@ -221,15 +222,25 @@ export default function QmsApp({
           }),
         );
         const newest = result.notifications[0];
+        // Ids arrive as strings (bigint); compare as numbers.
+        const newestId = newest ? Number(newest.id) : null;
         if (
           newest &&
+          newestId !== null &&
           lastNotice.current !== null &&
-          newest.id > lastNotice.current
-        )
-          setToast(
-            `${newest.number} assigned · ${newest.customer_name} · ${newest.project_name || 'Walk-in'} ${newest.unit_name || ''}`,
-          );
-        if (newest) lastNotice.current = newest.id;
+          newestId > lastNotice.current
+        ) {
+          const text = `${newest.number} assigned · ${newest.customer_name} · ${newest.project_name || 'Walk-in'} ${newest.unit_name || ''}`;
+          setToast(text);
+          // Reach an agent whose tab is in the background.
+          if (
+            document.hidden &&
+            typeof Notification !== 'undefined' &&
+            Notification.permission === 'granted'
+          )
+            new Notification('Samana QMS', { body: text, tag: 'qms-assignment' });
+        }
+        if (newestId !== null) lastNotice.current = newestId;
         else if (lastNotice.current === null) lastNotice.current = 0;
       } catch (e) {
         if ((e as Error & { status?: number }).status === 401) {
@@ -293,6 +304,13 @@ export default function QmsApp({
   }, []);
   async function presence() {
     if (!user) return;
+    // Going online is the natural moment to ask for desktop notifications.
+    if (
+      !user.online &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'default'
+    )
+      void Notification.requestPermission();
     try {
       await post('presence', { online: !user.online });
       setUser({ ...user, online: !user.online });
@@ -436,13 +454,7 @@ export default function QmsApp({
             </span>
             <div>
               {user.name}
-              <small>
-                {user.role === 'hod'
-                  ? 'Head of Department'
-                  : user.role === 'agent'
-                    ? 'Executive'
-                    : user.role}
-              </small>
+              <small>{roleLabel(user.role)}</small>
             </div>
             <button
               className="logout-button"
@@ -1119,7 +1131,7 @@ export default function QmsApp({
             )}
             <p>
               {user.name}
-              <small>{user.role}</small>
+              <small>{roleLabel(user.role)}</small>
             </p>
             <Button variant="ghost" onClick={logout}>
               <LogOut size={16} />
@@ -1194,7 +1206,7 @@ export default function QmsApp({
           <DialogDescription className="visually-hidden">
             Look up a customer and issue a service ticket.
           </DialogDescription>
-          <CheckIn onIssued={() => refresh(true)} />
+          <CheckIn onIssued={() => refresh(true)} allowWalkIn />
         </DialogContent>
       </Dialog>
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
@@ -1395,31 +1407,131 @@ function Login({
     </main>
   );
 }
+type AuditEvent = {
+  id: string;
+  action: string;
+  created_at: string;
+  actor_name: string | null;
+  number: string | null;
+  details: Record<string, unknown> | null;
+};
+const auditActions = [
+  'login',
+  'login_failed',
+  'logout',
+  'presence_online',
+  'presence_offline',
+  'customer_lookup',
+  'issued',
+  'assigned',
+  'call',
+  'start',
+  'close',
+  'no_show',
+  'reassign',
+  'team_updated',
+  'queue_updated',
+  'password_changed',
+  'report_view',
+  'report_export',
+];
+function auditSummary(details: Record<string, unknown> | null) {
+  if (!details) return '';
+  return Object.entries(details)
+    .filter(([key, value]) => value !== null && value !== '' && key !== 'user')
+    .map(
+      ([key, value]) =>
+        `${key.replaceAll('_', ' ')}: ${String(value).replaceAll('_', ' ')}`,
+    )
+    .join(' · ')
+    .slice(0, 160);
+}
 function Audit() {
-  const [events, setEvents] = useState<
-    {
-      id: number;
-      action: string;
-      created_at: string;
-      actor_name: string;
-      number: string;
-    }[]
-  >([]);
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [nextBefore, setNextBefore] = useState<string | null>(null);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [action, setAction] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(
+    async (before?: string | null) => {
+      setBusy(true);
+      try {
+        const params = new URLSearchParams({ from, to, action, limit: '100' });
+        if (before) params.set('before', before);
+        const result = await api<{
+          events: AuditEvent[];
+          nextBefore: string | null;
+        }>('audit?' + params);
+        setEvents((current) =>
+          before ? [...current, ...result.events] : result.events,
+        );
+        setNextBefore(result.nextBefore);
+        setError('');
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [from, to, action],
+  );
   useEffect(() => {
-    api<{ events: typeof events }>('audit')
-      .then((x) => setEvents(x.events))
-      .catch((e) => setError(e.message));
-  }, []);
+    void load();
+  }, [load]);
   return (
     <section className="panel">
       <div className="panel-heading">
         <div>
           <h2>Operations audit trail</h2>
-          <p>The latest 100 ticket, team, and reporting events.</p>
+          <p>
+            Sign-ins, availability, ticket, team and reporting events. Filter
+            by date and action; load older pages as needed.
+          </p>
         </div>
       </div>
-      {error && <p className="error">{error}</p>}
+      <div className="report-filters">
+        <div>
+          <label htmlFor="audit-from">From (Dubai)</label>
+          <Input
+            id="audit-from"
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="audit-to">To (Dubai)</label>
+          <Input
+            id="audit-to"
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="audit-action">Action</label>
+          <select
+            id="audit-action"
+            className="form-control"
+            value={action}
+            onChange={(e) => setAction(e.target.value)}
+          >
+            <option value="">All actions</option>
+            {auditActions.map((a) => (
+              <option key={a} value={a}>
+                {a.replaceAll('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
       <div className="table-scroll">
         <table>
           <thead>
@@ -1428,6 +1540,7 @@ function Audit() {
               <th>ACTION</th>
               <th>TICKET</th>
               <th>ACTOR</th>
+              <th>DETAILS</th>
             </tr>
           </thead>
           <tbody>
@@ -1436,11 +1549,36 @@ function Audit() {
                 <td>{formatDate(e.created_at)}</td>
                 <td>{e.action.replaceAll('_', ' ')}</td>
                 <td>{e.number || '—'}</td>
-                <td>{e.actor_name || 'Queue routing'}</td>
+                <td>{e.actor_name || 'System'}</td>
+                <td className="ticket-meta">{auditSummary(e.details)}</td>
               </tr>
             ))}
+            {!events.length && (
+              <tr>
+                <td colSpan={5}>
+                  <div className="empty-state">
+                    {busy ? 'Loading…' : 'No events match these filters.'}
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
+      </div>
+      <div className="pagination">
+        <span>
+          {events.length} event{events.length === 1 ? '' : 's'} shown
+        </span>
+        <div className="section-actions">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy || !nextBefore}
+            onClick={() => load(nextBefore)}
+          >
+            Load older
+          </Button>
+        </div>
       </div>
     </section>
   );

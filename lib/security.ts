@@ -13,10 +13,17 @@ export function randomToken() {
     .map((x) => x.toString(16).padStart(2, '0'))
     .join('');
 }
+// Current work factor. Older hashes carry their own count and are re-hashed at
+// the next successful sign-in (see needsRehash), so raising this is transparent.
+export const PBKDF2_ITERATIONS = 600000;
+export function needsRehash(hash: string) {
+  const iterations = Number(hash.split('$')[1]);
+  return !Number.isInteger(iterations) || iterations < PBKDF2_ITERATIONS;
+}
 export async function hashPassword(
   password: string,
   salt = randomToken(),
-  iterations = 100000,
+  iterations = PBKDF2_ITERATIONS,
 ) {
   const key = await crypto.subtle.importKey(
     'raw',

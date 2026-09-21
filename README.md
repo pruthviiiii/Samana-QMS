@@ -90,7 +90,7 @@ npm test
 npm audit --audit-level=high
 ```
 
-Full tests require a Neon database named exactly `samana_qms_test`. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/groups.test.ts`.
+Full tests require a Neon database named exactly `samana_qms_test`. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts`. Applied migrations are checksummed; editing one after it has run is refused by `scripts/migrate.mjs`, so always add a new file.
 
 CI checks types, lint, unit tests, dependency audit and both builds. The database job requires the `qms-test` environment secret `QMS_TEST_DATABASE_URL`; it deliberately fails when that secret is absent. Browser/device acceptance remains pending because no controllable browser was connected during implementation. Test real mobile QR scanning, Arabic layout, desktop notifications, printing, TV fullscreen/audio, and reconnect behavior before launch.
 

@@ -47,7 +47,7 @@ All responses containing application data use `Cache-Control: no-store`. State-c
 | `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/password`, `POST /api/auth/logout` | Staff authentication and session lifecycle |
 | `GET /api/checkin-link` | Reception/manager/display rotating QR invite |
 | `POST /api/public/session` | Valid invite creates short-lived customer session |
-| `POST /api/customers/lookup` | Authorized staff or customer lookup; customer response is redacted |
+| `POST /api/customers/lookup` | Authorized staff or customer lookup; customer response is redacted. Staff may send `walkIn: true` when Salesforce is unreachable to register a General Query visit without a lookup (audited as `degraded`) |
 | `POST /api/tickets` | Valid lookup + service/unit + unique requestId; atomic idempotent issue |
 | `GET /api/queue` | Paginated staff queue; agents see their assigned tickets |
 | `GET /api/tickets/:id`, `/print` | Authorized ticket detail or minimal receipt |

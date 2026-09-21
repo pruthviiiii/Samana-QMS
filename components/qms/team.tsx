@@ -17,7 +17,22 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { api, post } from '@/lib/client';
-import { SERVICES, type User, type Role } from '@/lib/domain';
+import {
+  SERVICES,
+  STAFF_ROLES,
+  roleLabel,
+  type User,
+  type Role,
+} from '@/lib/domain';
+// Temporary passwords are generated here, never invented and typed by hand.
+function temporaryPassword() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const out: string[] = [];
+  while (out.length < 20)
+    for (const b of crypto.getRandomValues(new Uint8Array(32)))
+      if (b < 216 && out.length < 20) out.push(alphabet[b % alphabet.length]);
+  return out.join('');
+}
 type TeamUser = User & { active_tickets: number };
 type SalesforceUser = {
   id: string;
@@ -63,6 +78,12 @@ export default function Team({ user }: { user: User }) {
   const [sfQuery, setSfQuery] = useState('');
   const [sfResults, setSfResults] = useState<SalesforceUser[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  useEffect(() => {
+    if (!message) return;
+    const timer = setTimeout(() => setMessage(''), 6000);
+    return () => clearTimeout(timer);
+  }, [message]);
   async function load() {
     setLoading(true);
     try {
@@ -80,6 +101,15 @@ export default function Team({ user }: { user: User }) {
   async function save(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!edit) return;
+    const original = edit.id ? users.find((u) => u.id === edit.id) : undefined;
+    if (
+      original?.enabled &&
+      !edit.enabled &&
+      !window.confirm(
+        `Disable ${edit.name}? Their session ends immediately and they stop receiving tickets.`,
+      )
+    )
+      return;
     setBusy(true);
     setError('');
     try {
@@ -238,7 +268,7 @@ export default function Team({ user }: { user: User }) {
                       </div>
                     </td>
                     <td>
-                      <span className="role-badge">{u.role}</span>
+                      <span className="role-badge">{roleLabel(u.role)}</span>
                     </td>
                     <td>
                       <div className="tags">
@@ -436,15 +466,10 @@ export default function Team({ user }: { user: User }) {
                       setEdit({ ...edit, role: e.target.value as Role })
                     }
                   >
-                    {[
-                      'agent',
-                      'manager',
-                      'hod',
-                      'admin',
-                      'reception',
-                      'display',
-                    ].map((r) => (
-                      <option key={r}>{r}</option>
+                    {STAFF_ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {roleLabel(r)}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -467,6 +492,8 @@ export default function Team({ user }: { user: User }) {
                     onChange={(e) => setEdit({ ...edit, sfId: e.target.value })}
                     placeholder="005…"
                     maxLength={18}
+                    pattern="005[A-Za-z0-9]{12,15}"
+                    title="A Salesforce user ID starts with 005 and has 15 or 18 characters"
                   />
                 </div>
                 <div>
@@ -479,6 +506,8 @@ export default function Team({ user }: { user: User }) {
                     }
                     placeholder="005…"
                     maxLength={18}
+                    pattern="005[A-Za-z0-9]{12,15}"
+                    title="A Salesforce user ID starts with 005 and has 15 or 18 characters"
                   />
                 </div>
               </div>
@@ -512,21 +541,43 @@ export default function Team({ user }: { user: User }) {
                     ? 'Reset temporary password (leave blank to keep current)'
                     : 'Temporary password'}
                 </label>
-                <Input
-                  id="team-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={edit.password}
-                  onChange={(e) =>
-                    setEdit({ ...edit, password: e.target.value })
-                  }
-                  required={!edit.id}
-                  minLength={14}
-                  maxLength={128}
-                />
+                <div className="row">
+                  <Input
+                    id="team-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={edit.password}
+                    onChange={(e) =>
+                      setEdit({ ...edit, password: e.target.value })
+                    }
+                    required={!edit.id}
+                    minLength={14}
+                    maxLength={128}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEdit({ ...edit, password: temporaryPassword() });
+                      setShowPassword(true);
+                    }}
+                  >
+                    Generate
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </Button>
+                </div>
                 <small className="field-hint">
-                  At least 14 characters. The member must change it at first
-                  sign-in.
+                  At least 14 characters. Generate one, hand it over in person,
+                  and the member must change it at first sign-in.
                 </small>
               </div>
               <label className="row">

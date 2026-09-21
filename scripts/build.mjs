@@ -11,7 +11,6 @@ const staging = await mkdtemp(join(tmpdir(), 'samana-qms-build-'));
 const entries = [
   'app',
   'components',
-  'hooks',
   'lib',
   'public',
   'db',

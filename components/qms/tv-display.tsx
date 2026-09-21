@@ -20,12 +20,32 @@ export default function TVDisplay() {
   const [qr, setQr] = useState('');
   const [error, setError] = useState('');
   const [clock, setClock] = useState('');
-  const [sound, setSound] = useState(false);
+  const [sound, setSoundState] = useState(false);
+  const [expired, setExpired] = useState(false);
   const lastCall = useRef('');
   const lastSuccess = useRef(0);
+  const stopped = useRef(false);
+  // The sound preference survives reloads and power cuts. Browsers still need
+  // one interaction on the page before speech is allowed, so the icon stays.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('qms-tv-sound') === 'on') setSoundState(true);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const setSound = (value: boolean) => {
+    setSoundState(value);
+    try {
+      localStorage.setItem('qms-tv-sound', value ? 'on' : 'off');
+    } catch {
+      /* storage unavailable */
+    }
+  };
   useEffect(() => {
     let alive = true;
     async function load() {
+      if (stopped.current) return;
       try {
         const result = await api<{ tickets: DisplayTicket[]; waiting: number }>(
           'display',
@@ -34,11 +54,19 @@ export default function TVDisplay() {
         setData(result);
         lastSuccess.current = Date.now();
         setError('');
-      } catch {
-        if (alive) setError('Connection interrupted. Reconnecting…');
+      } catch (e) {
+        if (!alive) return;
+        // An expired sign-in cannot heal itself: say so instead of blaming the
+        // network, and stop asking.
+        if ((e as Error & { status?: number }).status === 401) {
+          stopped.current = true;
+          setExpired(true);
+          setError('');
+        } else setError('Connection interrupted. Reconnecting…');
       }
     }
     async function link() {
+      if (stopped.current) return;
       try {
         const result = await api<{ url: string }>('checkin-link');
         if (alive) setQr(result.url);
@@ -85,7 +113,8 @@ export default function TVDisplay() {
     }
   }, [data, sound]);
   const current = data.tickets[0];
-  const stale = !!error && Date.now() - lastSuccess.current > 30000;
+  const stale =
+    expired || (!!error && Date.now() - lastSuccess.current > 30000);
   return (
     <main className="tv-screen">
       <header className="tv-header">
@@ -121,6 +150,12 @@ export default function TVDisplay() {
             <span className="status-dot green" /> NOW SERVING{' '}
             <span>يرجى التوجه إلى مكتب الخدمة</span>
           </div>
+          {expired && (
+            <div className="tv-error" role="alert">
+              This display&apos;s sign-in has expired.{' '}
+              <a href="/">Sign in again on this screen</a> to resume the board.
+            </div>
+          )}
           {error && (
             <div className="tv-error" role="alert">
               {error}
