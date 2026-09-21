@@ -19,7 +19,7 @@ export function listening() {
 export function listenUrl(url: string) {
   try {
     const parsed = new URL(url);
-    parsed.hostname = parsed.hostname.replace(/^([^.]*)-pooler./, '$1.');
+    parsed.hostname = parsed.hostname.replace(/^([^.]*)-pooler\./, '$1.');
     return parsed.toString();
   } catch {
     return url;
