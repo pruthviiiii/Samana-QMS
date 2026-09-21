@@ -1,9 +1,10 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Maximize, Volume2, VolumeX, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/client';
+import { useLive } from './use-live';
 type DisplayTicket = {
   number: string;
   service_name: string;
@@ -42,29 +43,37 @@ export default function TVDisplay() {
       /* storage unavailable */
     }
   };
+  const load = useCallback(async () => {
+    if (stopped.current) return;
+    try {
+      const result = await api<{ tickets: DisplayTicket[]; waiting: number }>(
+        'display',
+      );
+      if (stopped.current) return;
+      setData(result);
+      lastSuccess.current = Date.now();
+      setError('');
+    } catch (e) {
+      if (stopped.current) return;
+      // An expired sign-in cannot heal itself: say so instead of blaming the
+      // network, and stop asking.
+      if ((e as Error & { status?: number }).status === 401) {
+        stopped.current = true;
+        setExpired(true);
+        setError('');
+      } else setError('Connection interrupted. Reconnecting…');
+    }
+  }, []);
+  // Live updates when the server pushes them; a slow poll as the safety net.
+  const live = useLive(!expired, () => void load());
+  useEffect(() => {
+    if (expired) return;
+    void load();
+    const timer = setInterval(() => void load(), live ? 30000 : 3000);
+    return () => clearInterval(timer);
+  }, [load, live, expired]);
   useEffect(() => {
     let alive = true;
-    async function load() {
-      if (stopped.current) return;
-      try {
-        const result = await api<{ tickets: DisplayTicket[]; waiting: number }>(
-          'display',
-        );
-        if (!alive) return;
-        setData(result);
-        lastSuccess.current = Date.now();
-        setError('');
-      } catch (e) {
-        if (!alive) return;
-        // An expired sign-in cannot heal itself: say so instead of blaming the
-        // network, and stop asking.
-        if ((e as Error & { status?: number }).status === 401) {
-          stopped.current = true;
-          setExpired(true);
-          setError('');
-        } else setError('Connection interrupted. Reconnecting…');
-      }
-    }
     async function link() {
       if (stopped.current) return;
       try {
@@ -74,9 +83,7 @@ export default function TVDisplay() {
         if (alive) setQr('');
       }
     }
-    void load();
     void link();
-    const timer = setInterval(load, 3000);
     const qrTimer = setInterval(link, 120000);
     const clockTimer = setInterval(
       () =>
@@ -92,7 +99,7 @@ export default function TVDisplay() {
     );
     return () => {
       alive = false;
-      clearInterval(timer);
+      stopped.current = true;
       clearInterval(qrTimer);
       clearInterval(clockTimer);
     };

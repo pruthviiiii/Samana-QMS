@@ -58,7 +58,7 @@ const translations = {
     linkedUnits: 'linked units',
     saved: 'Your ticket is saved. Printing again will not create a duplicate.',
     privacy:
-      'Your details are used to find your account and manage this visit.',
+      'Your details are used to find your account and are kept with the record of this visit.',
     passportHint: 'Enter passport number',
     headquarters: 'Samana Headquarters',
     assistance: 'General assistance',
@@ -109,7 +109,7 @@ const translations = {
     autoSelected: 'تم الاختيار',
     linkedUnits: 'وحدات مرتبطة',
     saved: 'تم حفظ تذكرتك. لن تؤدي إعادة الطباعة إلى إصدار تذكرة جديدة.',
-    privacy: 'تُستخدم بياناتك للعثور على حسابك وتنظيم هذه الزيارة.',
+    privacy: 'تُستخدم بياناتك للعثور على حسابك وتُحفظ مع سجل هذه الزيارة.',
     passportHint: 'أدخل رقم جواز السفر',
     headquarters: 'المقر الرئيسي لسمانا',
     assistance: 'المساعدة العامة',

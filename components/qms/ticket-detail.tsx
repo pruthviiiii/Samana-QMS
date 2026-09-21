@@ -73,16 +73,25 @@ export default function TicketDetail({
       .catch((e) => {
         if (alive) setError(e.message);
       });
-    if (isManager(user.role))
-      api<{ users: User[] }>('team')
-        .then((d) => {
-          if (alive) setTeam(d.users);
-        })
-        .catch(() => {});
     return () => {
       alive = false;
     };
   }, [id, user.role]);
+  // The staff list is only needed once the reassignment picker opens.
+  useEffect(() => {
+    if (mode !== 'reassign') return;
+    let alive = true;
+    api<{ users: User[] }>('team')
+      .then((d) => {
+        if (alive) setTeam(d.users);
+      })
+      .catch(() => {
+        /* the picker shows no candidates; the error surfaces on submit */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [mode]);
   // Keep an open drawer current, so the version sent with an action is the
   // live one and routing changes made meanwhile are visible.
   useEffect(() => {

@@ -1,4 +1,5 @@
 import { randomToken, sha256 } from './security';
+import { transaction } from './db';
 import type { Customer } from './domain';
 import {
   HttpError,
@@ -65,18 +66,17 @@ export async function startGuest(request: Request, invite: string) {
   await rateLimit('invite:' + match[2].slice(0, 20), 150, 300);
   const id = crypto.randomUUID();
   const token = randomToken();
-  const { db } = await import('./db');
-  const sql = db();
-  await sql.transaction([
-    sql.query(
+  const tokenHash = await sha256(token);
+  await transaction(async (q) => {
+    await q(
       "INSERT INTO qms.users(id,username,name,role,enabled,must_change_password) VALUES($1,$2,'Customer visit','customer',true,false)",
       [id, 'visit-' + id],
-    ),
-    sql.query(
+    );
+    await q(
       "INSERT INTO qms.sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '45 minutes')",
-      [await sha256(token), id],
-    ),
-  ]);
+      [tokenHash, id],
+    );
+  });
   return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(token, 2700) });
 }
 export function publicCustomer(customer: Customer) {

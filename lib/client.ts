@@ -25,8 +25,16 @@ export async function api<T>(
   }
   return result as T;
 }
+export type WriteMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+// State changes use the verb that describes them, so logs and proxies can
+// tell a create from an update or a removal.
+export const send = <T>(method: WriteMethod, path: string, data?: unknown) =>
+  api<T>(path, {
+    method,
+    ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+  });
 export const post = <T>(path: string, data: unknown) =>
-  api<T>(path, { method: 'POST', body: JSON.stringify(data) });
+  send<T>('POST', path, data);
 export function formatDate(value: string) {
   return new Intl.DateTimeFormat('en-AE', {
     timeZone: 'Asia/Dubai',

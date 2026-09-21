@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
-
-export function middleware(request: NextRequest) {
+// Runs before every request (Next.js "proxy", formerly middleware): refuses
+// hidden paths and sets the browser security headers on every response.
+export function proxy(request: NextRequest) {
   let pathname: string;
   try {
     pathname = decodeURIComponent(request.nextUrl.pathname).replaceAll(
@@ -32,7 +33,7 @@ export function middleware(request: NextRequest) {
       "object-src 'none'",
       "frame-ancestors 'none'",
       "form-action 'self'",
-      // Vinext streams inline hydration scripts; eval is restricted to development.
+      // Next.js streams inline hydration scripts; eval is restricted to development.
       `script-src 'self' 'unsafe-inline'${production ? '' : " 'unsafe-eval'"}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
@@ -50,7 +51,6 @@ export function middleware(request: NextRequest) {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000');
   return response;
 }
-
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

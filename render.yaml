@@ -1,5 +1,5 @@
 # Render Blueprint for Samana QMS.
-#   samana-qms            web app (standalone Node build of the vinext app)
+#   samana-qms            web app (standalone Node build of the Next.js app)
 #   samana-qms-scheduler  background worker that ticks routing and outbox delivery every 15 s
 # Spec: https://render.com/docs/blueprint-spec
 #

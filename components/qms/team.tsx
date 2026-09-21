@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { api, post } from '@/lib/client';
+import { api, send } from '@/lib/client';
 import {
   SERVICES,
   STAFF_ROLES,
@@ -113,7 +113,8 @@ export default function Team({ user }: { user: User }) {
     setBusy(true);
     setError('');
     try {
-      await post('team', {
+      // A new member is created with POST; an existing one is replaced with PUT.
+      await send(edit.id ? 'PUT' : 'POST', edit.id ? 'team/' + edit.id : 'team', {
         ...edit,
         email: edit.email.trim() || null,
         sfId: edit.sfId || null,

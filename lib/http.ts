@@ -169,8 +169,12 @@ export async function endpoint(
   return new Response(response.body, { status: response.status, headers });
 }
 export async function rateLimit(key: string, limit = 10, windowSeconds = 300) {
+  // The window starts at the first attempt and lasts windowSeconds. Windows
+  // aligned to the clock let a burst straddle a boundary and get double the
+  // budget; anchoring on the first attempt bounds every key to limit hits per
+  // windowSeconds from that attempt.
   const [r] = await query<{ count: number }>(
-    `INSERT INTO qms.rate_limits(key,window_start,count) VALUES($1,to_timestamp(floor(extract(epoch from now())/$2)*$2),1) ON CONFLICT(key,window_start) DO UPDATE SET count=qms.rate_limits.count+1 RETURNING count`,
+    `INSERT INTO qms.rate_limits(key,window_start,count) VALUES($1,COALESCE((SELECT window_start FROM qms.rate_limits WHERE key=$1 AND window_start>now()-make_interval(secs=>$2) ORDER BY window_start DESC LIMIT 1),now()),1) ON CONFLICT(key,window_start) DO UPDATE SET count=qms.rate_limits.count+1 RETURNING count`,
     [key, windowSeconds],
   );
   if (r.count > limit)

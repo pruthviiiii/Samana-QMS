@@ -27,18 +27,14 @@ import {
   RefreshCw,
   Bell,
   LogOut,
-  ArrowRight,
   ShieldCheck,
   Loader2,
   QrCode,
   Check,
   History,
-  ChevronRight,
   Menu,
   PanelsTopLeft,
   List,
-  Eye,
-  EyeOff,
   CalendarDays,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,21 +45,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { api, post, formatDate } from '@/lib/client';
-import {
-  type User,
-  type Ticket,
-  isManager,
-  minutesBetween,
-  roleLabel,
-} from '@/lib/domain';
+import { api, post, send } from '@/lib/client';
+import { type User, isManager, roleLabel } from '@/lib/domain';
 import CheckIn from './check-in';
 import TicketDetail from './ticket-detail';
-import Team from './team';
-import Queues from './queues';
-const Reports = lazy(() => import('./reports'));
-import Settings from './settings';
-import TVDisplay from './tv-display';
+import Login from './login';
+import QueueTable from './queue-table';
+import { useQueue } from './use-queue';
 import { ServicePulse, QueueBoard, QueueSkeleton } from './experience';
 import {
   Command,
@@ -73,36 +61,13 @@ import {
   CommandGroup,
   CommandItem,
 } from '@/components/ui/command';
-type Notice = {
-  id: number;
-  ticket_id: string;
-  number: string;
-  customer_name: string;
-  project_name: string;
-  unit_name: string;
-};
-type QueueData = {
-  tickets: Ticket[];
-  total: number;
-  page: number;
-  limit: number;
-  statistics: {
-    waiting: number;
-    serving: number;
-    completed: number;
-    avg_wait: number;
-    unassigned: number;
-  };
-  services: {
-    id: string;
-    name: string;
-    department: string;
-    waiting: number;
-    serving: number;
-  }[];
-  notifications: Notice[];
-  workerLastRun: string | null;
-};
+// Each workspace view is its own bundle, loaded when the role first opens it.
+const Team = lazy(() => import('./team'));
+const Queues = lazy(() => import('./queues'));
+const Reports = lazy(() => import('./reports'));
+const Settings = lazy(() => import('./settings'));
+const TVDisplay = lazy(() => import('./tv-display'));
+const Audit = lazy(() => import('./audit'));
 const viewNames: Record<string, string> = {
   overview: 'Overview',
   queue: 'Live queue',
@@ -114,6 +79,7 @@ const viewNames: Record<string, string> = {
   checkin: 'Customer check-in',
   audit: 'Activity log',
 };
+const STAFF = ['admin', 'hod', 'manager', 'agent', 'reception'];
 export default function QmsApp({
   initialView = 'overview',
 }: {
@@ -122,8 +88,6 @@ export default function QmsApp({
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
   const [view, setView] = useState(initialView);
-  const [data, setData] = useState<QueueData | null>(null);
-  const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
@@ -131,7 +95,6 @@ export default function QmsApp({
   const [status, setStatus] = useState('active');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [issueOpen, setIssueOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qr, setQr] = useState('');
@@ -162,17 +125,36 @@ export default function QmsApp({
       document.removeEventListener('pointerdown', outside);
     };
   }, []);
-  const lastNotice = useRef<number | null>(null);
-  const [updated, setUpdated] = useState('');
   const manager = user ? isManager(user.role) : false;
   const canShowQr =
     !!user &&
     ['admin', 'hod', 'manager', 'reception', 'display'].includes(user.role);
   const serviceStaff =
     !!user && ['admin', 'hod', 'manager', 'agent'].includes(user.role);
-  const canIssue =
-    !!user &&
-    ['admin', 'hod', 'manager', 'agent', 'reception'].includes(user.role);
+  const canIssue = !!user && STAFF.includes(user.role);
+  const queueEnabled =
+    !!user && !user.must_change_password && STAFF.includes(user.role);
+  const { data, error, loading, updated, live, refresh, setError } = useQueue({
+    enabled: queueEnabled,
+    params: {
+      search: deferredSearch,
+      department,
+      status,
+      page,
+      mine: view === 'agent',
+    },
+    onAssigned: (_notice, text) => {
+      setToast(text);
+      // Reach an agent whose tab is in the background.
+      if (
+        document.hidden &&
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted'
+      )
+        new Notification('Samana QMS', { body: text, tag: 'qms-assignment' });
+    },
+    onSignedOut: () => setUser(null),
+  });
   const refreshIdentity = useCallback(async () => {
     try {
       const result = await api<{ user: User }>('auth/me');
@@ -189,85 +171,20 @@ export default function QmsApp({
     } finally {
       setChecking(false);
     }
-  }, []);
+  }, [setError]);
   useEffect(() => {
     void refreshIdentity();
   }, [refreshIdentity]);
-  const refresh = useCallback(
-    async (silent = false) => {
-      if (
-        !user ||
-        user.must_change_password ||
-        !['admin', 'hod', 'manager', 'agent', 'reception'].includes(user.role)
-      )
-        return;
-      if (!silent) setLoading(true);
-      try {
-        const result = await api<QueueData>(
-          'queue?' +
-            new URLSearchParams({
-              search: deferredSearch,
-              department,
-              status,
-              page: String(page),
-              mine: String(view === 'agent'),
-            }),
-        );
-        setData(result);
-        setError('');
-        setUpdated(
-          new Date().toLocaleTimeString('en-AE', {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        );
-        const newest = result.notifications[0];
-        // Ids arrive as strings (bigint); compare as numbers.
-        const newestId = newest ? Number(newest.id) : null;
-        if (
-          newest &&
-          newestId !== null &&
-          lastNotice.current !== null &&
-          newestId > lastNotice.current
-        ) {
-          const text = `${newest.number} assigned · ${newest.customer_name} · ${newest.project_name || 'Walk-in'} ${newest.unit_name || ''}`;
-          setToast(text);
-          // Reach an agent whose tab is in the background.
-          if (
-            document.hidden &&
-            typeof Notification !== 'undefined' &&
-            Notification.permission === 'granted'
-          )
-            new Notification('Samana QMS', { body: text, tag: 'qms-assignment' });
-        }
-        if (newestId !== null) lastNotice.current = newestId;
-        else if (lastNotice.current === null) lastNotice.current = 0;
-      } catch (e) {
-        if ((e as Error & { status?: number }).status === 401) {
-          setUser(null);
-          setData(null);
-        } else setError((e as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [user, deferredSearch, department, status, page, view],
-  );
-  useEffect(() => {
-    void refresh();
-    const id = setInterval(() => void refresh(true), 5000);
-    return () => clearInterval(id);
-  }, [refresh]);
   useEffect(() => {
     if (!user?.online || !serviceStaff || user.must_change_password) return;
     const heartbeat = () =>
-      post('presence', { online: true }).catch(() =>
+      send('PUT', 'presence', { online: true }).catch(() =>
         setError('Unable to update your availability. Check your connection.'),
       );
     void heartbeat();
     const id = setInterval(heartbeat, 30000);
     return () => clearInterval(id);
-  }, [user?.online, user?.must_change_password, serviceStaff]);
+  }, [user?.online, user?.must_change_password, serviceStaff, setError]);
   useEffect(() => {
     if (!toast) return;
     const id = setTimeout(() => setToast(''), 7000);
@@ -288,7 +205,7 @@ export default function QmsApp({
       active = false;
       clearInterval(timer);
     };
-  }, [qrOpen]);
+  }, [qrOpen, setError]);
   function navigate(next: string) {
     setView(next);
     setMenuOpen(false);
@@ -312,7 +229,7 @@ export default function QmsApp({
     )
       void Notification.requestPermission();
     try {
-      await post('presence', { online: !user.online });
+      await send('PUT', 'presence', { online: !user.online });
       setUser({ ...user, online: !user.online });
       setToast(
         user.online
@@ -327,7 +244,6 @@ export default function QmsApp({
     try {
       await post('auth/logout', {});
       setUser(null);
-      setData(null);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -335,7 +251,7 @@ export default function QmsApp({
   async function clearNotices() {
     if (!data) return;
     try {
-      await post('notifications/read', {
+      await send('PATCH', 'notifications', {
         ids: data.notifications.map((n) => n.id),
       });
       setNotificationsOpen(false);
@@ -363,13 +279,20 @@ export default function QmsApp({
           <h1>Make your account yours</h1>
           <p>Change your temporary password before entering the workspace.</p>
         </div>
-        <Settings user={user} onPasswordChanged={refreshIdentity} />
+        <Suspense fallback={<QueueSkeleton />}>
+          <Settings user={user} onPasswordChanged={refreshIdentity} />
+        </Suspense>
         <Button variant="ghost" onClick={logout}>
           Sign out
         </Button>
       </div>
     );
-  if (view === 'display' || user.role === 'display') return <TVDisplay />;
+  if (view === 'display' || user.role === 'display')
+    return (
+      <Suspense fallback={<div className="app-loading">Loading display…</div>}>
+        <TVDisplay />
+      </Suspense>
+    );
   const navigation = [
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
     { id: 'queue', name: 'Live queue', icon: ListOrdered },
@@ -739,9 +662,11 @@ export default function QmsApp({
                         />
                         {error
                           ? 'Reconnecting'
-                          : data
+                          : live
                             ? 'Live updates'
-                            : 'Connecting'}
+                            : data
+                              ? 'Auto-refresh'
+                              : 'Connecting'}
                       </span>
                       <Button
                         variant="ghost"
@@ -870,155 +795,15 @@ export default function QmsApp({
                       onTicket={setSelected}
                     />
                   ) : (
-                    <div className="table-scroll">
-                      <table>
-                        <thead>
-                          <tr>
-                            {[
-                              'TICKET',
-                              'CUSTOMER / UNIT',
-                              'SERVICE',
-                              'ASSIGNED TO',
-                              'TOTAL WAIT',
-                              'STATUS',
-                              '',
-                            ].map((h, i) => (
-                              <th key={i}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {visibleTickets.map((ticket) => (
-                            <tr key={ticket.id}>
-                              <td>
-                                <button
-                                  className="ticket-number btn-link"
-                                  onClick={() => setSelected(ticket.id)}
-                                >
-                                  {ticket.number}
-                                </button>
-                                <span className="ticket-meta">
-                                  {new Date(
-                                    ticket.created_at,
-                                  ).toLocaleTimeString('en-AE', {
-                                    timeZone: 'Asia/Dubai',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                </span>
-                              </td>
-                              <td>
-                                <strong className="customer-cell">
-                                  {ticket.customer_name}
-                                </strong>
-                                <span className="ticket-meta">
-                                  {ticket.project_name || 'Walk-in customer'}
-                                  {ticket.unit_name
-                                    ? ' · ' + ticket.unit_name
-                                    : ''}
-                                </span>
-                              </td>
-                              <td>
-                                {ticket.service_name}
-                                <span className="ticket-meta">
-                                  {ticket.department}
-                                </span>
-                              </td>
-                              <td>
-                                {ticket.assigned_name ? (
-                                  <div className="agent-cell">
-                                    <span className="avatar small">
-                                      {ticket.assigned_name
-                                        .split(' ')
-                                        .map((x) => x[0])
-                                        .slice(0, 2)
-                                        .join('')}
-                                    </span>
-                                    <span>{ticket.assigned_name}</span>
-                                  </div>
-                                ) : (
-                                  <span className="unassigned">Unassigned</span>
-                                )}
-                              </td>
-                              <td>
-                                <span
-                                  className={
-                                    ticket.status === 'waiting' &&
-                                    minutesBetween(ticket.created_at) > 5
-                                      ? 'wait-warning'
-                                      : 'wait-time'
-                                  }
-                                >
-                                  <Clock3 size={12} />
-                                  {minutesBetween(
-                                    ticket.created_at,
-                                    ticket.called_at || ticket.closed_at,
-                                  ).toFixed(0)}{' '}
-                                  min
-                                </span>
-                              </td>
-                              <td>
-                                <span className={'badge ' + ticket.status}>
-                                  {ticket.status === 'serving'
-                                    ? 'In service'
-                                    : ticket.status === 'closed'
-                                      ? 'Completed'
-                                      : ticket.status === 'no_show'
-                                        ? 'No-show'
-                                        : ticket.status[0].toUpperCase() +
-                                          ticket.status.slice(1)}
-                                </span>
-                              </td>
-                              <td>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label={'View ' + ticket.number}
-                                  onClick={() => setSelected(ticket.id)}
-                                >
-                                  <ChevronRight size={16} />
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                          {!visibleTickets.length && (
-                            <tr>
-                              <td colSpan={7}>
-                                <div className="empty-state">
-                                  <ListOrdered size={30} />
-                                  <h3>
-                                    {loading
-                                      ? 'Loading your service floor…'
-                                      : search
-                                        ? 'No matching tickets'
-                                        : view === 'agent'
-                                          ? 'You’re ready for your next customer'
-                                          : 'A clear queue. A fresh start.'}
-                                  </h3>
-                                  <p>
-                                    {search
-                                      ? 'Try another ticket number, customer, or unit.'
-                                      : view === 'agent'
-                                        ? 'Go available to receive assignments for your service queues.'
-                                        : 'New visits will appear here as customers check in.'}
-                                  </p>
-                                  {canIssue && !loading && !search && (
-                                    <Button
-                                      className="empty-cta"
-                                      variant="outline"
-                                      onClick={() => setIssueOpen(true)}
-                                    >
-                                      <Plus size={14} />
-                                      Issue the first ticket
-                                    </Button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                    <QueueTable
+                      tickets={visibleTickets}
+                      loading={loading}
+                      search={search}
+                      agentView={view === 'agent'}
+                      canIssue={canIssue}
+                      onTicket={setSelected}
+                      onIssue={() => setIssueOpen(true)}
+                    />
                   )}
                   <div className="pagination">
                     <span>
@@ -1067,17 +852,17 @@ export default function QmsApp({
               </div>
             </>
           )}
-          {view === 'team' && manager && <Team user={user} />}{' '}
-          {view === 'queues' && manager && <Queues />}{' '}
-          {view === 'reports' && manager && (
-            <Suspense fallback={<QueueSkeleton />}>
+          <Suspense fallback={<QueueSkeleton />}>
+            {view === 'team' && manager && <Team user={user} />}
+            {view === 'queues' && manager && <Queues />}
+            {view === 'reports' && manager && (
               <Reports onTicket={setSelected} />
-            </Suspense>
-          )}{' '}
-          {view === 'settings' && (
-            <Settings user={user} onPasswordChanged={refreshIdentity} />
-          )}{' '}
-          {view === 'audit' && manager && <Audit />}
+            )}
+            {view === 'settings' && (
+              <Settings user={user} onPasswordChanged={refreshIdentity} />
+            )}
+            {view === 'audit' && manager && <Audit />}
+          </Suspense>
           {!viewNames[view] && (
             <div className="empty-state">
               <h3>Page not found</h3>
@@ -1260,326 +1045,5 @@ export default function QmsApp({
         </output>
       )}
     </div>
-  );
-}
-function Login({
-  onLogin,
-  initialError,
-}: {
-  onLogin: () => void;
-  initialError: string;
-}) {
-  const [username, setUsername] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [capsLock, setCapsLock] = useState(false);
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState(initialError);
-  const [busy, setBusy] = useState(false);
-  async function submit(e: React.SyntheticEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      await post('auth/login', { username, password });
-      onLogin();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <main className="login-screen">
-      <section className="login-visual">
-        <img
-          src="/images/samana-ocean-bay-sunset.jpg"
-          alt="Sunset over the pool at SAMANA Ocean Bay"
-        />
-        <div className="login-shade" />
-        <a className="brand" href="/">
-          SAMANA<span>DEVELOPERS</span>
-        </a>
-        <div className="login-copy">
-          <p className="eyebrow">WHERE DREAMS TAKE SHAPE</p>
-          <h1>
-            Extraordinary places.
-            <br />
-            <em>Exceptional care.</em>
-          </h1>
-          <p>One connected workspace for every customer journey.</p>
-          <div>
-            <span>CRM</span>
-            <i />
-            <span>Collection</span>
-            <i />
-            <span>Customer Experience</span>
-          </div>
-        </div>
-        <small>
-          SAMANA OCEAN BAY · DUBAI ISLANDS <span>01 / CUSTOMER EXPERIENCE</span>
-        </small>
-      </section>
-      <section className="login-form-panel">
-        <div className="login-form-content">
-          <span className="workspace-pill">
-            <Building2 size={15} /> THE SAMANA WORKSPACE
-          </span>
-          <h2>
-            Welcome back<span>.</span>
-          </h2>
-          <p>
-            Great experiences start with you.
-            <br />
-            Sign in to your customer experience workspace.
-          </p>
-          <form onSubmit={submit}>
-            {error && (
-              <div className="error" role="alert">
-                {error}
-              </div>
-            )}
-            <div>
-              <label htmlFor="username">Username / email</label>
-              <Input
-                className="form-control"
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                required
-                placeholder="Your work account"
-              />
-            </div>
-            <div>
-              <label htmlFor="password">Password</label>
-              <div className="password-field">
-                <Input
-                  className="form-control"
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  onKeyUp={(event) =>
-                    setCapsLock(event.getModifierState('CapsLock'))
-                  }
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                  maxLength={128}
-                  placeholder="Enter your password"
-                />
-                <button
-                  type="button"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  aria-pressed={showPassword}
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
-                </button>
-              </div>
-              {capsLock && (
-                <output className="caps-lock">Caps Lock is on</output>
-              )}
-            </div>
-            <Button type="submit" className="primary-action" disabled={busy}>
-              {busy ? (
-                <Loader2 size={16} className="spin" />
-              ) : (
-                <>
-                  Enter workspace
-                  <ArrowRight size={17} />
-                </>
-              )}
-            </Button>
-          </form>
-          <div className="login-help">
-            <ShieldCheck size={17} />
-            <p>
-              Access is managed by your QMS administrator.
-              <br />
-              Contact them if you need an account or password reset.
-            </p>
-          </div>
-        </div>
-        <footer>
-          Samana Developers <span>Dubai, United Arab Emirates</span>
-        </footer>
-      </section>
-    </main>
-  );
-}
-type AuditEvent = {
-  id: string;
-  action: string;
-  created_at: string;
-  actor_name: string | null;
-  number: string | null;
-  details: Record<string, unknown> | null;
-};
-const auditActions = [
-  'login',
-  'login_failed',
-  'logout',
-  'presence_online',
-  'presence_offline',
-  'customer_lookup',
-  'issued',
-  'assigned',
-  'call',
-  'start',
-  'close',
-  'no_show',
-  'reassign',
-  'team_updated',
-  'queue_updated',
-  'password_changed',
-  'report_view',
-  'report_export',
-];
-function auditSummary(details: Record<string, unknown> | null) {
-  if (!details) return '';
-  return Object.entries(details)
-    .filter(([key, value]) => value !== null && value !== '' && key !== 'user')
-    .map(
-      ([key, value]) =>
-        `${key.replaceAll('_', ' ')}: ${String(value).replaceAll('_', ' ')}`,
-    )
-    .join(' · ')
-    .slice(0, 160);
-}
-function Audit() {
-  const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [nextBefore, setNextBefore] = useState<string | null>(null);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [action, setAction] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const load = useCallback(
-    async (before?: string | null) => {
-      setBusy(true);
-      try {
-        const params = new URLSearchParams({ from, to, action, limit: '100' });
-        if (before) params.set('before', before);
-        const result = await api<{
-          events: AuditEvent[];
-          nextBefore: string | null;
-        }>('audit?' + params);
-        setEvents((current) =>
-          before ? [...current, ...result.events] : result.events,
-        );
-        setNextBefore(result.nextBefore);
-        setError('');
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [from, to, action],
-  );
-  useEffect(() => {
-    void load();
-  }, [load]);
-  return (
-    <section className="panel">
-      <div className="panel-heading">
-        <div>
-          <h2>Operations audit trail</h2>
-          <p>
-            Sign-ins, availability, ticket, team and reporting events. Filter
-            by date and action; load older pages as needed.
-          </p>
-        </div>
-      </div>
-      <div className="report-filters">
-        <div>
-          <label htmlFor="audit-from">From (Dubai)</label>
-          <Input
-            id="audit-from"
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-        </div>
-        <div>
-          <label htmlFor="audit-to">To (Dubai)</label>
-          <Input
-            id="audit-to"
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-          />
-        </div>
-        <div>
-          <label htmlFor="audit-action">Action</label>
-          <select
-            id="audit-action"
-            className="form-control"
-            value={action}
-            onChange={(e) => setAction(e.target.value)}
-          >
-            <option value="">All actions</option>
-            {auditActions.map((a) => (
-              <option key={a} value={a}>
-                {a.replaceAll('_', ' ')}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>TIME</th>
-              <th>ACTION</th>
-              <th>TICKET</th>
-              <th>ACTOR</th>
-              <th>DETAILS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.map((e) => (
-              <tr key={e.id}>
-                <td>{formatDate(e.created_at)}</td>
-                <td>{e.action.replaceAll('_', ' ')}</td>
-                <td>{e.number || '—'}</td>
-                <td>{e.actor_name || 'System'}</td>
-                <td className="ticket-meta">{auditSummary(e.details)}</td>
-              </tr>
-            ))}
-            {!events.length && (
-              <tr>
-                <td colSpan={5}>
-                  <div className="empty-state">
-                    {busy ? 'Loading…' : 'No events match these filters.'}
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="pagination">
-        <span>
-          {events.length} event{events.length === 1 ? '' : 's'} shown
-        </span>
-        <div className="section-actions">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy || !nextBefore}
-            onClick={() => load(nextBefore)}
-          >
-            Load older
-          </Button>
-        </div>
-      </div>
-    </section>
   );
 }

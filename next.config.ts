@@ -1,9 +1,10 @@
 import type { NextConfig } from 'next';
-
+// Production is the standalone Node server (dist-node/standalone/server.js on
+// Render and in Docker). Browser security headers are set in proxy.ts; the
+// static ones are repeated here so assets served without the proxy carry them.
 const nextConfig: NextConfig = {
-  ...(process.env.QMS_TARGET === 'node'
-    ? { output: 'standalone' as const }
-    : {}),
+  output: 'standalone',
+  poweredByHeader: false,
   async headers() {
     return [
       {
@@ -21,5 +22,4 @@ const nextConfig: NextConfig = {
     ];
   },
 };
-
 export default nextConfig;

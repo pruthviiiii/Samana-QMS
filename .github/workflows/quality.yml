@@ -15,13 +15,13 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts
+      - run: npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts
       - run: npm audit --audit-level=high
       - run: npm run build
-      - run: npm run build:node
       - run: npm run build:worker
   database-tests:
-    if: github.event_name == 'push'
+    # Runs for pull requests as well as pushes, so the full suite gates a change
+    # before it lands; the qms-test environment must hold QMS_TEST_DATABASE_URL.
     runs-on: ubuntu-latest
     environment: qms-test
     steps:

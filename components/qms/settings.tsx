@@ -10,13 +10,15 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { api, post, formatDate } from '@/lib/client';
+import { api, send, formatDate } from '@/lib/client';
 import { type User, isManager } from '@/lib/domain';
 type Integration = {
   database: { connected: boolean };
+  bootstrapPasswordPresent?: boolean;
   salesforce: {
     configured: boolean;
     connected: boolean;
+    paused?: boolean;
     instance: string;
     authMode: string;
     error?: string;
@@ -63,7 +65,7 @@ export default function Settings({
     setBusy(true);
     setError('');
     try {
-      await post('auth/password', {
+      await send('PUT', 'auth/password', {
         currentPassword: oldPassword,
         newPassword,
       });
@@ -98,6 +100,19 @@ export default function Settings({
               connections
             </Button>
           </div>
+          {data?.bootstrapPasswordPresent && (
+            <p className="error" role="alert">
+              BOOTSTRAP_PASSWORD is still set on this host. Remove it from the
+              environment now that the administrator account exists.
+            </p>
+          )}
+          {data?.salesforce.paused && (
+            <p className="error" role="alert">
+              Salesforce calls are paused after repeated failures and retry
+              automatically within 30 seconds. Reception can register walk-in
+              visits meanwhile.
+            </p>
+          )}
           {data ? (
             <div className="integrations-grid">
               <article>

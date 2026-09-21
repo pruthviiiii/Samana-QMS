@@ -9,7 +9,8 @@ vi.mock('../lib/salesforce', async (original) => ({
   lookupCustomer: lookup,
   searchUsers: search,
 }));
-import { GET, POST } from '../app/api/[...path]/route';
+import { GET, POST, PUT, PATCH, DELETE } from '../app/api/[...path]/route';
+const handlers: Record<string, typeof GET> = { GET, POST, PUT, PATCH, DELETE };
 const prefix = 'api-test-' + crypto.randomUUID().slice(0, 8);
 const password = 'Synthetic-API-Test-Password-24';
 let adminCookie = '';
@@ -45,9 +46,7 @@ async function send(
   data?: unknown,
   cookie = adminCookie,
 ) {
-  const response = await (method === 'GET' ? GET : POST)(
-    request(path, method, data, cookie),
-  );
+  const response = await handlers[method](request(path, method, data, cookie));
   const result = (await response.json()) as Record<string, unknown>;
   return { response, result };
 }
@@ -218,10 +217,10 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
   it('rejects cross-origin state changes', async () =>
     expect(
       (
-        await POST(
+        await PUT(
           request(
             'presence',
-            'POST',
+            'PUT',
             { online: true },
             adminCookie,
             'https://evil.example',
@@ -230,9 +229,9 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
       ).status,
     ).toBe(403));
   it('rejects invalid JSON', async () => {
-    const r = await POST(
+    const r = await PUT(
       new Request('http://qms.test/api/presence', {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           Origin: 'http://qms.test',
           'Content-Type': 'application/json',
@@ -244,8 +243,8 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
     expect(r.status).toBe(400);
   });
   it('rejects oversized request bodies', async () => {
-    const r = await POST(
-      request('presence', 'POST', { padding: 'x'.repeat(33000) }, adminCookie),
+    const r = await PUT(
+      request('presence', 'PUT', { padding: 'x'.repeat(33000) }, adminCookie),
     );
     expect(r.status).toBe(413);
   });
@@ -363,7 +362,7 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
   });
   it('prevents an agent going offline during a called ticket', async () =>
     expect(
-      (await send('presence', 'POST', { online: false }, agentCookie)).response
+      (await send('presence', 'PUT', { online: false }, agentCookie)).response
         .status,
     ).toBe(409));
   it('revokes logout sessions even while a called ticket stays assigned', async () => {
@@ -516,7 +515,7 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
       (
         await send(
           'auth/password',
-          'POST',
+          'PUT',
           { currentPassword: 'anything', newPassword: password },
           guestCookie,
         )
@@ -568,22 +567,14 @@ describe('App-managed queues', () => {
   it('lets an administrator add and remove members; nothing goes to Salesforce', async () => {
     search.mockClear();
     lookup.mockClear();
-    const added = await send('queues/members', 'POST', {
-      serviceId: 'crm-noc',
-      userId: agentId,
-      member: true,
-    });
+    const added = await send('queues/crm-noc/members/' + agentId, 'PUT');
     expect(added.response.status).toBe(200);
     expect(added.result.services as string[]).toContain('crm-noc');
     const list = await send('queues');
     expect(list.response.status).toBe(200);
     const members = list.result.members as { id: string; service_id: string }[];
     expect(members.some((m) => m.id === agentId && m.service_id === 'crm-noc')).toBe(true);
-    const removed = await send('queues/members', 'POST', {
-      serviceId: 'crm-noc',
-      userId: agentId,
-      member: false,
-    });
+    const removed = await send('queues/crm-noc/members/' + agentId, 'DELETE');
     expect(removed.response.status).toBe(200);
     expect(removed.result.services as string[]).not.toContain('crm-noc');
     expect(search).not.toHaveBeenCalled();
@@ -594,9 +585,9 @@ describe('App-managed queues', () => {
     expect(
       (
         await send(
-          'queues/members',
-          'POST',
-          { serviceId: 'crm-noc', userId: agentId, member: true },
+          'queues/crm-noc/members/' + agentId,
+          'PUT',
+          undefined,
           agentCookie,
         )
       ).response.status,
@@ -693,7 +684,7 @@ describe('Audit trail, walk-ins and error messages', () => {
   });
   it('refuses notification changes from a guest session', async () =>
     expect(
-      (await send('notifications/read', 'POST', { ids: [1] }, guestCookie))
+      (await send('notifications', 'PATCH', { ids: [1] }, guestCookie))
         .response.status,
     ).toBe(403));
 });

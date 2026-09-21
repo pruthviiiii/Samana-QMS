@@ -1,7 +1,7 @@
 import { query } from './db';
 import { HttpError } from './http';
 import { csvCell, type User, type Ticket, isManager } from './domain';
-const ticketColumns =
+export const ticketColumns =
   'id,number,service_id,department,service_name,status,customer_name,customer_id,unit_id,unit_name,project_name,booking_number,assigned_to,assigned_name,counter,created_at,assigned_at,called_at,started_at,closed_at,routing_reason,comments,version,identifier_type';
 export async function queue(user: User, url: URL) {
   const page = Math.max(

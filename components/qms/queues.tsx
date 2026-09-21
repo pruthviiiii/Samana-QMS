@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { api, post } from '@/lib/client';
+import { api, send } from '@/lib/client';
 import { SERVICES, roleLabel } from '@/lib/domain';
 type Member = {
   id: string;
@@ -59,7 +59,10 @@ export default function Queues() {
     setBusy(true);
     setError('');
     try {
-      await post('queues/members', { serviceId, userId, member });
+      await send(
+        member ? 'PUT' : 'DELETE',
+        `queues/${serviceId}/members/${userId}`,
+      );
       await load();
     } catch (e) {
       setError((e as Error).message);

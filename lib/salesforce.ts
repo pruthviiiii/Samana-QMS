@@ -51,11 +51,13 @@ async function accessToken(force = false) {
       redirect: 'manual',
       signal: AbortSignal.timeout(15000),
     });
-    if (!response.ok)
+    if (!response.ok) {
+      noteFailure();
       throw new HttpError(
         502,
         'Salesforce authentication failed. Please contact your administrator.',
       );
+    }
     const result = (await response.json()) as { access_token?: string };
     if (!result.access_token)
       throw new HttpError(
@@ -78,7 +80,28 @@ function assertApexPath(path: string) {
   if (!path.startsWith(APEX_PREFIX) || path.includes('://'))
     throw new Error('Invalid Salesforce path.');
 }
+// Circuit breaker: after three consecutive transport or server failures,
+// calls fail fast for 30 seconds instead of each waiting out a timeout, so
+// reception is offered the walk-in path at once while Salesforce recovers.
+let consecutiveFailures = 0;
+let pausedUntil = 0;
+function noteFailure() {
+  consecutiveFailures++;
+  if (consecutiveFailures >= 3) pausedUntil = Date.now() + 30000;
+}
+function noteSuccess() {
+  consecutiveFailures = 0;
+  pausedUntil = 0;
+}
+export function salesforcePaused() {
+  return Date.now() < pausedUntil;
+}
 async function apexFetch(path: string, init: RequestInit, retry: boolean) {
+  if (salesforcePaused())
+    throw new HttpError(
+      503,
+      'Salesforce is paused after repeated failures and will be retried shortly.',
+    );
   const token = await accessToken();
   const headers = new Headers(init.headers);
   headers.set('Authorization', 'Bearer ' + token);
@@ -93,10 +116,13 @@ async function apexFetch(path: string, init: RequestInit, retry: boolean) {
     await accessToken(true);
     return apexFetch(path, init, false);
   }
+  if (response.status >= 500) noteFailure();
+  else noteSuccess();
   return response;
 }
 function transportFailure(error: unknown): never {
   if (error instanceof HttpError) throw error;
+  noteFailure();
   const cause =
     error instanceof Error && 'cause' in error ? error.cause : undefined;
   const code =
@@ -352,11 +378,14 @@ export async function integrationHealth() {
   );
   return {
     database: { connected: true },
+    // The first administrator's password must not stay on a running host.
+    bootstrapPasswordPresent: !!process.env.BOOTSTRAP_PASSWORD,
     salesforce: {
       configured:
         !!process.env.SALESFORCE_CLIENT_ID &&
         !!process.env.SALESFORCE_CLIENT_SECRET,
       connected,
+      paused: salesforcePaused(),
       userSearchAvailable,
       instance: process.env.SALESFORCE_INSTANCE_URL || '',
       authMode: 'OAuth client credentials (Apex REST only)',

@@ -1,6 +1,6 @@
 # SAMANA QMS
 
-React application for customer QR check-in, staff-issued tickets, executive workstations, HOD/manager operations, and reception TVs. Built with TypeScript, Vinext, Vite, PostgreSQL on Neon, and server-side Salesforce APIs. Official SAMANA Ocean Pearl, Ocean Bay, and Rome imagery and logos are bundled locally; provenance is in `public/images/sources.json` and `public/images/redesign-sources.json`. Manrope and Cormorant Garamond fonts are self-hosted with their OFL licenses.
+React application for customer QR check-in, staff-issued tickets, executive workstations, HOD/manager operations, and reception TVs. Built with TypeScript, Next.js, PostgreSQL on Neon, and server-side Salesforce APIs. Official SAMANA Ocean Pearl, Ocean Bay, and Rome imagery and logos are bundled locally; provenance is in `public/images/sources.json` and `public/images/redesign-sources.json`. Manrope and Cormorant Garamond fonts are self-hosted with their OFL licenses.
 
 ## Current delivery
 
@@ -38,7 +38,7 @@ Sign in using `BOOTSTRAP_USERNAME` (currently `admin`) and `BOOTSTRAP_PASSWORD` 
 4. Create a dedicated `display` account for each TV. Sign in, open TV Display, enter fullscreen, and enable speech announcements if desired. Browser audio requires a user gesture. Display accounts cannot retrieve customer records or reports. Sessions last eight hours; re-authenticate at shift start.
 5. Show the rotating QR on the TV or reception's Check-in QR dialog. Invite links expire after five minutes; the display refreshes them every two minutes. Customer sessions last 45 minutes. Customers must scan a fresh QR for a new session.
 
-Localhost QR codes work only on the same computer. Customers' phones require an approved, reachable HTTPS domain. The private Sites review link is owner-only and does not yet permit public customer check-in.
+Localhost QR codes work only on the same computer. Customers' phones require an approved, reachable HTTPS domain such as the Render deployment.
 
 ## Features
 
@@ -54,13 +54,12 @@ Localhost QR codes work only on the same computer. Customers' phones require an 
 ## Production build and self-hosting
 
 ```sh
-npm run build             # Cloudflare/Sites worker
-npm run build:node        # Standalone Node server in dist-node/standalone
+npm run build             # Standalone Node server in dist-node/standalone (build:node is an alias)
 npm run build:worker      # Independent 15-second scheduler
 node --env-file=.env dist-node/standalone/server.js
 ```
 
-Windows builds stage a secret-free copy outside OneDrive to avoid its file locks. The build script validates the destination before replacing only the generated output directory. Keep the source workspace on a normal local disk if frequent sync locking affects development.
+The build runs in place and writes `.next`; the script validates the destination before replacing only the generated `dist-node` directory. Next.js keeps `next dev` output separately under `.next/dev`, so a running development server is unaffected. Keep the source workspace on a normal local disk if OneDrive sync locking affects development.
 
 Docker Compose defines separate unprivileged web and scheduler services. Docker was not installed in this workstation, so the Node artifacts were built and exercised here but the container build still needs execution on the deployment host.
 
@@ -73,7 +72,7 @@ docker compose up -d
 
 Configure `.env` on the server with an HTTPS `APP_ORIGIN`, `SESSION_COOKIE_SECURE=true`, strong independent `QR_SIGNING_SECRET` and `WORKER_SECRET`, and the Neon connection string. Put a TLS reverse proxy in front of web's loopback port 3000. Do not expose the database credentials or scheduler bearer secret to clients. Secrets are omitted from the image context.
 
-For Sites, runtime secrets are managed in Sites and source metadata lives in `.openai/hosting.json`. Sites hosts the web app; run the independent scheduler on a persistent Node/Docker host with the same database. Alternatively, an authenticated external scheduler may call `POST /api/jobs/run` every 15 seconds on a reachable deployment using `Authorization: Bearer WORKER_SECRET`. An owner-private Sites gate blocks ordinary external HTTP schedulers, so use the direct database worker for private review.
+The web app is a standard Next.js standalone server, so any Node host works; Render is the reference deployment in `render.yaml`. The scheduler either runs as a direct database worker (Docker, `npm run worker`) or, as on Render, calls `POST /api/jobs/run` every 15 seconds with `Authorization: Bearer WORKER_SECRET`. Live screen updates use server-sent events fed by PostgreSQL `NOTIFY`; a host that buffers streaming responses degrades gracefully to polling. The listener connects to Neon's direct endpoint even when `DATABASE_URL` is the pooled one, because the pooler accepts `LISTEN` but never forwards notifications.
 
 ## SMS and Salesforce write-back
 
@@ -90,7 +89,7 @@ npm test
 npm audit --audit-level=high
 ```
 
-Full tests require a Neon database named exactly `samana_qms_test`. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts`. Applied migrations are checksummed; editing one after it has run is refused by `scripts/migrate.mjs`, so always add a new file.
+Full tests require a Neon database named exactly `samana_qms_test`. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts`. Applied migrations are checksummed; editing one after it has run is refused by `scripts/migrate.mjs`, so always add a new file.
 
 CI checks types, lint, unit tests, dependency audit and both builds. The database job requires the `qms-test` environment secret `QMS_TEST_DATABASE_URL`; it deliberately fails when that secret is absent. Browser/device acceptance remains pending because no controllable browser was connected during implementation. Test real mobile QR scanning, Arabic layout, desktop notifications, printing, TV fullscreen/audio, and reconnect behavior before launch.
 

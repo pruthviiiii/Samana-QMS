@@ -8,12 +8,11 @@ COPY lib ./lib
 COPY public ./public
 COPY db ./db
 COPY scripts ./scripts
-COPY .openai ./.openai
-COPY vite.config.ts next.config.ts middleware.ts tsconfig.json components.json ./
+COPY next.config.ts postcss.config.mjs proxy.ts tsconfig.json next-env.d.ts components.json ./
 RUN npm run build:node && npm run build:worker
 
 FROM node:22-bookworm-slim AS web
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
+ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000 NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 COPY --from=build --chown=node:node /app/dist-node/standalone/ ./
 USER node
