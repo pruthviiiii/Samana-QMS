@@ -1,8 +1,11 @@
 import { neon } from '@neondatabase/serverless';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
-import { splitStatements } from './sql.mjs';
-const sql = neon(process.env.DATABASE_URL);
+import { migrationFile, splitStatements } from './sql.mjs';
+// Migrations run as the schema owner. When the app connects as the restricted
+// qms_app role (scripts/create-app-role.mjs), keep the owner connection string
+// in MIGRATE_DATABASE_URL; otherwise DATABASE_URL is used for both.
+const sql = neon(process.env.MIGRATE_DATABASE_URL || process.env.DATABASE_URL);
 await sql.query('CREATE SCHEMA IF NOT EXISTS qms');
 await sql.query(
   'CREATE TABLE IF NOT EXISTS qms.migrations(name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now())',
@@ -15,7 +18,7 @@ await sql.query(
 const checksumOf = (content) =>
   createHash('sha256').update(content.replace(/\r\n/g, '\n')).digest('hex');
 for (const name of (await readdir(new URL('../db/', import.meta.url)))
-  .filter((n) => n.endsWith('.sql'))
+  .filter((n) => migrationFile.test(n))
   .sort()) {
   const content = await readFile(
     new URL(`../db/${name}`, import.meta.url),

@@ -5,50 +5,75 @@ import { queue } from '../operations';
 import { checkinLink } from '../public-access';
 import { define, roles } from '../router';
 import { MANAGERS, SERVING, STAFF } from './shared';
+const presenceSchema = z.object({
+  online: z.boolean(),
+  counter: z.string().trim().max(40).optional(),
+});
+const notificationsSchema = z.object({
+  ids: z.array(z.coerce.number().int().positive()).max(100),
+});
 export const queueRoutes = [
-  define('GET', 'queue', roles(...STAFF), async ({ url, user }) =>
-    json(await queue(user, url)),
+  define(
+    'GET',
+    'queue',
+    roles(...STAFF),
+    'Live queue page with counts, statistics and notifications',
+    async ({ url, user }) => json(await queue(user, url)),
   ),
   // Availability is a state the agent sets, hence PUT.
-  define('PUT', 'presence', roles(...SERVING), async ({ request, user }) => {
-    const input = z
-      .object({
-        online: z.boolean(),
-        counter: z.string().trim().max(40).optional(),
-      })
-      .parse(await body(request));
-    await query('SELECT qms.set_presence($1,$2,$3)', [
-      user.id,
-      input.online,
-      input.counter ?? null,
-    ]);
-    return json({ ok: true });
-  }),
+  define(
+    'PUT',
+    'presence',
+    roles(...SERVING),
+    'Go online or offline and set the counter',
+    async ({ request, user }) => {
+      const input = presenceSchema.parse(await body(request));
+      await query('SELECT qms.set_presence($1,$2,$3)', [
+        user.id,
+        input.online,
+        input.counter ?? null,
+      ]);
+      return json({ ok: true });
+    },
+    presenceSchema,
+  ),
   define(
     'GET',
     'checkin-link',
     roles(...MANAGERS, 'reception', 'display'),
+    'Rotating QR invite for the check-in page',
     async () => json(await checkinLink()),
   ),
   // Marking notifications read changes part of a resource, hence PATCH.
-  define('PATCH', 'notifications', roles(...STAFF), async ({ request, user }) => {
-    const input = z
-      .object({ ids: z.array(z.coerce.number().int().positive()).max(100) })
-      .parse(await body(request));
-    await query(
-      'UPDATE qms.notifications SET read_at=now() WHERE user_id=$1 AND id=ANY($2::bigint[])',
-      [user.id, input.ids],
-    );
-    return json({ ok: true });
-  }),
-  define('GET', 'display', roles(...MANAGERS, 'display'), async () => {
-    // The board shows one featured ticket and six more; fetch exactly that.
-    const tickets = await query(
-      "SELECT number,service_name,department,status,counter,called_at FROM qms.ticket_view WHERE status IN ('called','serving') ORDER BY called_at DESC LIMIT 7",
-    );
-    const [waiting] = await query(
-      "SELECT count(*)::int total FROM qms.tickets WHERE status='waiting'",
-    );
-    return json({ tickets, waiting: waiting.total });
-  }),
+  define(
+    'PATCH',
+    'notifications',
+    roles(...STAFF),
+    'Mark notifications as read',
+    async ({ request, user }) => {
+      const input = notificationsSchema.parse(await body(request));
+      await query(
+        'UPDATE qms.notifications SET read_at=now() WHERE user_id=$1 AND id=ANY($2::bigint[])',
+        [user.id, input.ids],
+      );
+      return json({ ok: true });
+    },
+    notificationsSchema,
+  ),
+  define(
+    'GET',
+    'display',
+    roles(...MANAGERS, 'display'),
+    'TV board data: called and serving tickets and the waiting count',
+    async () => {
+      // The board shows one featured ticket and six more; fetch exactly that.
+      const tickets = await query(
+        "SELECT number,service_name,department,status,counter,called_at FROM qms.ticket_view WHERE status IN ('called','serving') ORDER BY called_at DESC LIMIT 7",
+      );
+      const [waiting] = await query(
+        "SELECT count(*)::int total FROM qms.tickets WHERE status='waiting'",
+      );
+      return json({ tickets, waiting: waiting.total });
+    },
+  ),
 ];

@@ -2,7 +2,7 @@
 
 Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by the internal architecture review and by the production-path note, with its current state. A ticked box means the change is in the repository and covered by the checks in "Verification" below. An open box names who has to decide or act.
 
-**Ticked: 32 of 51.** Of the 19 open boxes, 13 need a business, IT or Salesforce decision and 6 are further engineering work that was not started.
+**Ticked: 42 of 59.** Of the 17 open boxes, 14 need a business decision or an operator outside the code, and 3 are frontend work not started. Every backend item that did not need a decision is done and applied to the local `samana_qms` database as well as the test database.
 
 ## A. Security and access
 
@@ -18,7 +18,9 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [ ] SSO or MFA for staff sign-in. Needs an IT decision on the identity provider.
 - [ ] Offboarding lifecycle beyond disabling the account. Needs an HR/IT process definition.
 - [ ] OTP on mobile check-in, which closes identifier probing. Needs the SMS gateway first.
-- [ ] Restricted `qms_app` database role, Neon IP allow list, longer point-in-time recovery window, and a Neon project separate from Samana Living. IT and the account owner.
+- [x] Restricted `qms_app` database role: `scripts/create-app-role.mjs` creates it with data and function access only; applied to the local and test databases, and the full suite runs as that role. Migrations use `MIGRATE_DATABASE_URL`. For production, run the script once and set both strings on Render.
+- [x] Per-address rate limits key on the address the proxy appended, not a forged prefix; the Render blueprint sets `TRUSTED_CLIENT_IP_HEADER`. `lib/http.ts`, `render.yaml`.
+- [ ] Neon IP allow list, longer point-in-time recovery window, and a Neon project separate from Samana Living. IT and the account owner.
 
 ## B. Reliability and operations
 
@@ -29,9 +31,15 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [x] Database access uses a connection pool with real `BEGIN`/`COMMIT` transactions and statement timeouts instead of one HTTP client per query. `lib/db.ts`, `lib/public-access.ts`.
 - [x] Database error codes map to human messages (for example "This ticket was just updated by someone else"). `lib/http.ts`.
 - [x] Registered customers with no units can take a General Query ticket instead of being refused. Migration 012, `components/qms/check-in.tsx`.
-- [ ] Alerts on a stale scheduler heartbeat or failed outbox rows. The health endpoint and JSON logs exist; the alert has to be configured in Render or the monitoring tool.
-- [ ] A rehearsed backup restore into a Neon branch. Operational, not yet exercised.
-- [ ] Retention period for audit events and customer identifiers on tickets. Nothing is deleted today; needs a data-governance decision.
+- [x] One alert endpoint, `GET /api/health/alerts`, returns 503 while the scheduler is stale, a delivery has given up or Salesforce is paused. `lib/api/public.ts`.
+- [x] Retention job: `qms.apply_retention` anonymises the name and identifiers on closed tickets and deletes old audit events, driven by `RETENTION_IDENTIFIER_DAYS` and `RETENTION_EVENT_DAYS`, at most hourly from the scheduler tick. Migration 014, `lib/retention.ts`.
+- [x] Tickets left waiting or called from a previous day are marked no-show two hours after issue, and a number an earlier day's ticket still shows is skipped. Migration 014.
+- [x] Malformed paging parameters (`page=Infinity`) return 400 instead of a database error. `lib/http.ts`, `lib/operations.ts`.
+- [x] The migration runner applies only numbered files. It had been picking up `db/schema.sql` and would have failed the Render pre-deploy step. `scripts/migrate.mjs`, `scripts/sql.mjs`.
+- [x] Migrations 012 to 014 applied to the local `samana_qms` database as well as `samana_qms_test`.
+- [ ] Point an uptime monitor at `/api/health/alerts`. Render or the monitoring tool, IT.
+- [ ] A rehearsed backup restore into a Neon branch, following the steps in `docs/operations.md`. Operational, not yet exercised.
+- [ ] Choose the two retention periods. Off (keep everything) until set. Product and IT.
 
 ## C. Live updates and performance
 
@@ -53,7 +61,7 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [x] Migrations are checksummed; editing an applied migration is refused. `scripts/migrate.mjs`.
 - [ ] React error boundaries around the lazy views. Not started.
 - [ ] One styling system. About 6,300 lines of CSS remain across three files. Not started.
-- [ ] Published OpenAPI document. Not started; the route table in `lib/api/` is the current source of truth.
+- [x] OpenAPI document generated from the route table with each route's access and request schema; `npm run api:docs` writes it and a test fails when it is stale. `lib/openapi.ts`, `docs/openapi.json`.
 - [ ] Browser tests (Playwright) for check-in, queue and TV flows. Not started.
 - [ ] ORM or typed data layer (the review suggested Prisma). Decision: keep parameterized SQL and PL/pgSQL functions; the router and schema snapshot address the maintainability concern.
 
@@ -63,8 +71,8 @@ Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by 
 - [x] The database test suite runs on pull requests as well as pushes to main. `.github/workflows/quality.yml`.
 - [x] The misleading `start:cloudflare` script is gone; `npm start` runs the standalone server that Render and Docker start. `package.json`.
 - [x] The build runs in place and produces the same standalone output locally, in Docker and on Render. `scripts/build.mjs`, `Dockerfile`.
-- [x] Test suite grown to 129 tests: route table, schema drift, audit trail, walk-ins, no-unit visits, presence audit, work factor, listener endpoint.
-- [ ] Ephemeral Neon branch per pull request for database tests. Uses the fixed `samana_qms_test` database today.
+- [x] Test suite grown to 141 tests: route table, schema drift, API document, audit trail, walk-ins, no-unit visits, presence audit, work factor, listener endpoint, day rollover, number reuse, retention, alerts, paging, forged client addresses, migration file filter.
+- [x] Pull requests run the database suite on a throwaway Neon branch that is deleted afterwards; pushes to `main` use the fixed test database. Needs `NEON_API_KEY` and `NEON_PROJECT_ID` in the `qms-test` environment. `.github/workflows/quality.yml`.
 
 ## F. Queue behaviour raised by the review, kept by design
 
@@ -99,9 +107,11 @@ No box, because nothing needed changing:
 | --- | --- |
 | `npm run typecheck` | clean |
 | `npm run lint` | clean |
-| `npm test` (needs `samana_qms_test`) | 129 passed |
+| `npm test` (needs `samana_qms_test`) | 141 passed, run as the restricted `qms_app` role |
 | `npm run build` (Next.js standalone) | passed, 34 MB output |
 | `npm run build:worker` | passed |
+| `node scripts/migrate.mjs` on `samana_qms` and `samana_qms_test` | 012, 013, 014 applied; re-run reports all applied and exits 0 |
+| `qms_app` role on both databases | reads and function calls work, `CREATE TABLE` denied |
 | Standalone server against the test database | health 200 with request id, unknown view 404, hidden path 404, CSP and frame headers present, unauthenticated API 401, POST without Origin 403, sign-in 200, event stream forbidden until the temporary password is changed, then `listening: true` and a `users` change delivered |
 
-The push to `main` deploys to Render and applies migrations 012 and 013 to production during the pre-deploy step.
+The push to `main` deploys to Render and applies migrations 012, 013 and 014 to production during the pre-deploy step. Before that push, set `MIGRATE_DATABASE_URL` on the Render web service (the same owner string as `DATABASE_URL` is fine until the `qms_app` role exists in production).

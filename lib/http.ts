@@ -200,11 +200,32 @@ export async function clientRateLimit(
     ].includes(header)
   )
     return;
-  const value = request.headers.get(header)?.split(',')[0].trim();
+  // A proxy appends the address it saw to the end of the list, so the last
+  // entry is the one it vouches for; earlier entries are whatever the client
+  // sent and can be forged.
+  const parts = request.headers.get(header)?.split(',') ?? [];
+  const value = parts[parts.length - 1]?.trim();
   if (!value || !/^[a-fA-F0-9:.]{3,64}$/.test(value)) return;
   await rateLimit(
     scope + ':client:' + (await sha256(value)),
     limit,
     windowSeconds,
   );
+}
+// Integer query parameters: absent means the fallback; anything that is not a
+// plain integer in range is a 400 with a message, never a database error.
+export function intParam(
+  url: URL,
+  name: string,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  const raw = url.searchParams.get(name);
+  if (raw === null || raw === '') return fallback;
+  if (!/^\d{1,9}$/.test(raw)) throw new HttpError(400, `Invalid ${name}.`);
+  const value = Number(raw);
+  if (value < min || value > max)
+    throw new HttpError(400, `${name} must be between ${min} and ${max}.`);
+  return value;
 }

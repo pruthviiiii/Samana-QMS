@@ -26,6 +26,7 @@ describe('API route table', () => {
       .sort();
     expect(open).toEqual([
       'GET health',
+      'GET health/alerts',
       'GET health/scheduler',
       'GET public/status/:token',
       'POST auth/login',

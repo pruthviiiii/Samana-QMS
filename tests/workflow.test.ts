@@ -160,3 +160,62 @@ describe('PostgreSQL workflow invariants', () => {
     IF (SELECT count(*) FROM qms.events WHERE actor_id=a AND action='presence_online')<>1 THEN RAISE EXCEPTION 'Going online not audited';END IF;
   `));
 });
+describe('Day rollover, number reuse and retention', () => {
+  it('marks a ticket left waiting from a previous day as no-show once it is two hours old', () =>
+    check(`
+    t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
+    UPDATE qms.tickets SET day=(now() AT TIME ZONE 'Asia/Dubai')::date-1,sequence=990000+(random()*9999)::int,created_at=now()-interval '1 hour' WHERE id=(t->>'id')::uuid;
+    PERFORM qms.route_due();
+    IF (SELECT status FROM qms.tickets WHERE id=(t->>'id')::uuid) IS DISTINCT FROM 'waiting' THEN RAISE EXCEPTION 'Recent ticket expired too early';END IF;
+    UPDATE qms.tickets SET created_at=now()-interval '3 hours' WHERE id=(t->>'id')::uuid;
+    PERFORM qms.route_due();
+    IF (SELECT status FROM qms.tickets WHERE id=(t->>'id')::uuid) IS DISTINCT FROM 'no_show' THEN RAISE EXCEPTION 'Overnight ticket not expired';END IF;
+    IF NOT EXISTS(SELECT 1 FROM qms.events WHERE ticket_id=(t->>'id')::uuid AND action='no_show' AND details->>'reason'='day_rollover') THEN RAISE EXCEPTION 'Rollover not audited';END IF;
+  `));
+  it('skips a number still shown by an active ticket from a previous day', () =>
+    check(`
+    t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
+    UPDATE qms.tickets SET day=(now() AT TIME ZONE 'Asia/Dubai')::date-1,sequence=990000+(random()*9999)::int,status='serving',started_at=now() WHERE id=(t->>'id')::uuid;
+    UPDATE qms.counters SET value=value-1 WHERE day=(now() AT TIME ZONE 'Asia/Dubai')::date AND service_id='crm-general';
+    snapshot:=jsonb_set(snapshot,'{salesforceId}',to_jsonb('second-'||r));
+    INSERT INTO qms.lookups(actor_id,identifier_type,identifier_value,customer) VALUES(actor,'mobile','second-'||r,snapshot) RETURNING id INTO lookup2;
+    t2:=qms.issue_ticket(lookup2,'crm-general','unit-1',gen_random_uuid(),actor);
+    IF t2->>'number' IS NOT DISTINCT FROM t->>'number' THEN RAISE EXCEPTION 'Number reused while still active';END IF;
+    IF (t2->>'sequence')::int<>(t->>'sequence')::int+1 THEN RAISE EXCEPTION 'Number not advanced by exactly one';END IF;
+  `));
+  it('anonymises identifiers on tickets closed beyond the period and redacts their lookup', () =>
+    check(`
+    t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
+    UPDATE qms.tickets SET status='closed',closed_at=now()-interval '40 days' WHERE id=(t->>'id')::uuid;
+    UPDATE qms.outbox SET status='sent' WHERE ticket_id=(t->>'id')::uuid;
+    DELETE FROM qms.system_state WHERE key='retention';
+    snapshot:=qms.apply_retention(30,NULL);
+    IF (snapshot->>'anonymised')::int<1 THEN RAISE EXCEPTION 'Nothing anonymised';END IF;
+    IF (SELECT mobile IS NOT NULL OR customer_name<>'Customer' FROM qms.tickets WHERE id=(t->>'id')::uuid) THEN RAISE EXCEPTION 'Identifiers kept';END IF;
+    IF (SELECT customer ? 'mobile' OR customer ? 'name' OR identifier_value<>'' FROM qms.lookups WHERE id=lookup) THEN RAISE EXCEPTION 'Lookup not redacted';END IF;
+    IF (SELECT unit_name FROM qms.tickets WHERE id=(t->>'id')::uuid) IS DISTINCT FROM '101' THEN RAISE EXCEPTION 'Business data lost';END IF;
+    IF NOT EXISTS(SELECT 1 FROM qms.events WHERE action='retention') THEN RAISE EXCEPTION 'Retention not audited';END IF;
+    snapshot:=qms.apply_retention(30,NULL);
+    IF NOT (snapshot->>'skipped')::boolean THEN RAISE EXCEPTION 'Second run within the hour not throttled';END IF;
+  `));
+  it('keeps identifiers of tickets closed within the period and of open tickets', () =>
+    check(`
+    t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
+    UPDATE qms.tickets SET status='closed',closed_at=now()-interval '5 days' WHERE id=(t->>'id')::uuid;
+    UPDATE qms.outbox SET status='sent' WHERE ticket_id=(t->>'id')::uuid;
+    DELETE FROM qms.system_state WHERE key='retention';
+    PERFORM qms.apply_retention(30,NULL);
+    IF (SELECT mobile FROM qms.tickets WHERE id=(t->>'id')::uuid) IS NULL THEN RAISE EXCEPTION 'Recent ticket anonymised';END IF;
+    IF (SELECT customer ? 'mobile' FROM qms.lookups WHERE id=lookup) IS NOT TRUE THEN RAISE EXCEPTION 'Recent lookup redacted';END IF;
+  `));
+  it('deletes audit events older than the event period only', () =>
+    check(`
+    INSERT INTO qms.events(action,created_at) VALUES('fixture_old_'||r,now()-interval '400 days');
+    INSERT INTO qms.events(action,created_at) VALUES('fixture_new_'||r,now()-interval '10 days');
+    DELETE FROM qms.system_state WHERE key='retention';
+    snapshot:=qms.apply_retention(NULL,365);
+    IF EXISTS(SELECT 1 FROM qms.events WHERE action='fixture_old_'||r) THEN RAISE EXCEPTION 'Old event kept';END IF;
+    IF NOT EXISTS(SELECT 1 FROM qms.events WHERE action='fixture_new_'||r) THEN RAISE EXCEPTION 'Recent event deleted';END IF;
+    IF (snapshot->>'deletedEvents')::int<1 THEN RAISE EXCEPTION 'Deletion not counted';END IF;
+  `));
+});

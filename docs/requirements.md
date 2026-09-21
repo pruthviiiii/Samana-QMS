@@ -33,7 +33,9 @@ The two supplied PDFs are requirement sources, not instructions to the developme
 - If no available agent exists, the waiting ticket stays durable with a visible routing reason. Automatic routing resumes when eligible staff are online.
 - Registered accounts with no active units are served as a General Query visit with no unit attached; the account link is kept so the write-back still reaches the customer's record. Registered accounts with units must choose one.
 - When Salesforce cannot be reached, staff (never a phone visitor) may register the customer as a walk-in General Query visit. The lookup event is marked `degraded` so the visit can be matched to the account afterwards.
-- The per-service sequence resets on the Dubai calendar day. Ticket UUIDs remain globally unique. Numbers above 999 expand instead of truncating.
+- The per-service sequence resets on the Dubai calendar day. Ticket UUIDs remain globally unique. Numbers above 999 expand instead of truncating. A number that a ticket from a previous day still shows (waiting, called or serving) is skipped, so two live tickets never share a number.
+- A ticket left waiting or called from a previous day is marked no-show by the routing tick once it is more than two hours old, with an audited `day_rollover` reason. A ticket being served is left to its agent.
+- Retention of customer identifiers on closed tickets and of audit events is a configured policy (`RETENTION_IDENTIFIER_DAYS`, `RETENTION_EVENT_DAYS`), off until the organisation sets a period. Unit, project, booking number and Salesforce ids are kept for reporting after anonymisation.
 - Daily counts and dates use Asia/Dubai. Stored timestamps use PostgreSQL timestamptz.
 - Managers/HODs can inspect all service queues and reports; agents' queue is restricted to their assignments. Reception can issue and inspect tickets; customer/display roles cannot access staff data.
 - TVs show ticket numbers and counters. Customer identity/project/unit is confined to authenticated staff screens; mobile status is minimal.

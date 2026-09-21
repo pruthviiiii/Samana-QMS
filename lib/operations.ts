@@ -1,13 +1,10 @@
 import { query } from './db';
-import { HttpError } from './http';
+import { HttpError, intParam } from './http';
 import { csvCell, type User, type Ticket, isManager } from './domain';
 export const ticketColumns =
   'id,number,service_id,department,service_name,status,customer_name,customer_id,unit_id,unit_name,project_name,booking_number,assigned_to,assigned_name,counter,created_at,assigned_at,called_at,started_at,closed_at,routing_reason,comments,version,identifier_type';
 export async function queue(user: User, url: URL) {
-  const page = Math.max(
-    1,
-    Math.min(10000, Number(url.searchParams.get('page')) || 1),
-  );
+  const page = intParam(url, 'page', 1, 1, 10000);
   const limit = 20;
   const search = (url.searchParams.get('search') || '').slice(0, 100);
   const department = url.searchParams.get('department') || '';
@@ -97,8 +94,7 @@ export async function reports(url: URL) {
   )
     throw new HttpError(400, 'Choose a valid date range of up to one year.');
   const service = url.searchParams.get('service') || '';
-  const offset =
-    Math.max(0, (Number(url.searchParams.get('page')) || 1) - 1) * 100;
+  const offset = (intParam(url, 'page', 1, 1, 100000) - 1) * 100;
   const csv = url.searchParams.get('format') === 'csv';
   const where =
     "day BETWEEN $1::date AND $2::date AND ($3='' OR service_id=$3)";
@@ -175,10 +171,7 @@ const day = /^\d{4}-\d{2}-\d{2}$/;
 // Audit trail with a cursor (`before` = last id seen), an action filter and a
 // Dubai-day date range, so any dispute can be traced however old it is.
 export async function auditEvents(url: URL) {
-  const limit = Math.min(
-    200,
-    Math.max(1, Number(url.searchParams.get('limit')) || 100),
-  );
+  const limit = intParam(url, 'limit', 100, 1, 200);
   const before = url.searchParams.get('before') || '';
   const action = (url.searchParams.get('action') || '').slice(0, 40);
   const from = url.searchParams.get('from') || '';

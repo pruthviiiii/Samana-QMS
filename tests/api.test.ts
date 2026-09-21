@@ -687,4 +687,48 @@ describe('Audit trail, walk-ins and error messages', () => {
       (await send('notifications', 'PATCH', { ids: [1] }, guestCookie))
         .response.status,
     ).toBe(403));
+  it('rejects malformed paging instead of failing in the database', async () => {
+    expect((await send('reports?page=Infinity')).response.status).toBe(400);
+    expect((await send('queue?page=abc')).response.status).toBe(400);
+    expect((await send('audit?limit=0')).response.status).toBe(400);
+    expect((await send('queue?page=1')).response.status).toBe(200);
+  });
+  it('exposes one alert endpoint for uptime monitors', async () => {
+    await query(
+      "INSERT INTO qms.system_state(key,value) VALUES('worker','{}'::jsonb) ON CONFLICT(key) DO UPDATE SET updated_at=now()",
+    );
+    const [t] = await query<{ id: string }>(
+      'SELECT id FROM qms.tickets WHERE created_by=$1 ORDER BY created_at DESC LIMIT 1',
+      [adminId],
+    );
+    const [previous] = await query<{ status: string }>(
+      "SELECT status FROM qms.outbox WHERE ticket_id=$1 AND kind='sms'",
+      [t.id],
+    );
+    const [{ others }] = await query<{ others: number }>(
+      "SELECT count(*)::int others FROM qms.outbox WHERE status='failed' AND NOT (ticket_id=$1 AND kind='sms')",
+      [t.id],
+    );
+    await query(
+      "INSERT INTO qms.outbox(ticket_id,kind,status,attempts) VALUES($1,'sms','failed',5) ON CONFLICT(ticket_id,kind) DO UPDATE SET status='failed'",
+      [t.id],
+    );
+    const alert = await handlers.GET(request('health/alerts'));
+    expect(alert.status).toBe(503);
+    const body = (await alert.json()) as { status: string; problems: string[] };
+    expect(body.status).toBe('alert');
+    expect(body.problems.some((p) => p.startsWith('outbox_failed:'))).toBe(true);
+    expect(body.problems).not.toContain('scheduler_stale');
+    if (previous)
+      await query(
+        "UPDATE qms.outbox SET status=$2 WHERE ticket_id=$1 AND kind='sms'",
+        [t.id, previous.status],
+      );
+    else
+      await query("DELETE FROM qms.outbox WHERE ticket_id=$1 AND kind='sms'", [
+        t.id,
+      ]);
+    const after = await handlers.GET(request('health/alerts'));
+    expect(after.status).toBe(others === 0 ? 200 : 503);
+  });
 });

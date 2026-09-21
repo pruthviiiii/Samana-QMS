@@ -19,7 +19,10 @@ persistent scheduler.
 2. In Render: **New → Blueprint**, pick the repository, branch `main`. Render shows the two
    services from `render.yaml`.
 3. Enter the `sync: false` values for the web service when prompted:
-   - `DATABASE_URL` — the Neon connection string for `samana_qms`.
+   - `DATABASE_URL` — the connection string for `samana_qms` as the restricted `qms_app`
+     role, printed by `npm run db:app-role` (run once with the owner string).
+   - `MIGRATE_DATABASE_URL` — the owner connection string; the pre-deploy migration uses it.
+     The same owner string in both is accepted until the role exists.
    - `SALESFORCE_INSTANCE_URL`, `SALESFORCE_CLIENT_ID`, `SALESFORCE_CLIENT_SECRET` — the
      connected app credentials for the org in use.
      The scheduler copies `WORKER_SECRET` and `DATABASE_URL` from the web service automatically.
@@ -27,6 +30,10 @@ persistent scheduler.
    starts, and reports the web URL.
 5. If the assigned URL differs from `https://samana-qms.onrender.com`, update `APP_ORIGIN`
    on the web service and `WORKER_ORIGIN` on the scheduler, then redeploy.
+
+Other settings in the Blueprint: `TRUSTED_CLIENT_IP_HEADER=x-forwarded-for` turns on
+per-address rate limits using the address Render's proxy appends; `RETENTION_IDENTIFIER_DAYS`
+and `RETENTION_EVENT_DAYS` stay empty (keep everything) until a retention period is agreed.
 
 ## First run
 
@@ -42,6 +49,9 @@ Then sign in at the web URL as `admin` and change the password when prompted.
 ## Verifying
 
 - `https://<web-url>/api/health` returns `{"status":"ready"}`.
+- `https://<web-url>/api/health/alerts` returns 200 once the scheduler has ticked; point the
+  uptime monitor at this address so a stale scheduler, a failed delivery or a paused Salesforce
+  connection pages someone.
 - Settings → Connected systems shows Salesforce connected and the scheduler healthy
   within 30 seconds of the worker starting.
 - Issue one ticket from the overview page and confirm it appears in the live queue.

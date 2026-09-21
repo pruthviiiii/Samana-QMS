@@ -72,6 +72,8 @@ docker compose up -d
 
 Configure `.env` on the server with an HTTPS `APP_ORIGIN`, `SESSION_COOKIE_SECURE=true`, strong independent `QR_SIGNING_SECRET` and `WORKER_SECRET`, and the Neon connection string. Put a TLS reverse proxy in front of web's loopback port 3000. Do not expose the database credentials or scheduler bearer secret to clients. Secrets are omitted from the image context.
 
+Connect the app as the restricted `qms_app` role created by `npm run db:app-role`, and keep the owner connection string in `MIGRATE_DATABASE_URL` for migrations. `RETENTION_IDENTIFIER_DAYS` and `RETENTION_EVENT_DAYS` switch on anonymisation of closed tickets and purging of old audit events once a retention period is agreed. `GET /api/health/alerts` is the one address an uptime monitor should page on. Tickets left waiting from a previous day are marked no-show two hours after issue, and a number still on the floor from yesterday is never reissued today.
+
 The web app is a standard Next.js standalone server, so any Node host works; Render is the reference deployment in `render.yaml`. The scheduler either runs as a direct database worker (Docker, `npm run worker`) or, as on Render, calls `POST /api/jobs/run` every 15 seconds with `Authorization: Bearer WORKER_SECRET`. Live screen updates use server-sent events fed by PostgreSQL `NOTIFY`; a host that buffers streaming responses degrades gracefully to polling. The listener connects to Neon's direct endpoint even when `DATABASE_URL` is the pooled one, because the pooler accepts `LISTEN` but never forwards notifications.
 
 ## SMS and Salesforce write-back
@@ -89,9 +91,9 @@ npm test
 npm audit --audit-level=high
 ```
 
-Full tests require a Neon database named exactly `samana_qms_test`. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts`. Applied migrations are checksummed; editing one after it has run is refused by `scripts/migrate.mjs`, so always add a new file.
+Full tests require a Neon database named exactly `samana_qms_test`. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts tests/routes.test.ts tests/openapi.test.ts`. Applied migrations are checksummed; editing one after it has run is refused by `scripts/migrate.mjs`, so always add a new file. `npm run api:docs` regenerates `docs/openapi.json` from the route table; a test fails when it is stale.
 
-CI checks types, lint, unit tests, dependency audit and both builds. The database job requires the `qms-test` environment secret `QMS_TEST_DATABASE_URL`; it deliberately fails when that secret is absent. Browser/device acceptance remains pending because no controllable browser was connected during implementation. Test real mobile QR scanning, Arabic layout, desktop notifications, printing, TV fullscreen/audio, and reconnect behavior before launch.
+CI checks types, lint, unit tests, dependency audit and both builds. On pull requests the database job creates a throwaway Neon branch (secret `NEON_API_KEY`, variable `NEON_PROJECT_ID` in the `qms-test` environment), migrates and tests it, then deletes it; pushes to `main` use the environment secret `QMS_TEST_DATABASE_URL`. The job deliberately fails when those are absent. Browser/device acceptance remains pending because no controllable browser was connected during implementation. Test real mobile QR scanning, Arabic layout, desktop notifications, printing, TV fullscreen/audio, and reconnect behavior before launch.
 
 ## Operations
 

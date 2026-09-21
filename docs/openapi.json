@@ -1,0 +1,1550 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Samana QMS API",
+    "version": "1.0.0",
+    "description": "Generated from the route table in lib/api by scripts/openapi.mjs. Every state-changing call from a browser must send an Origin header equal to APP_ORIGIN; the scheduler proves itself with a bearer token instead. Errors are JSON with an \"error\" message and, for database rule violations, a stable \"code\"."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "qms_session"
+      },
+      "workerBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Database readiness for load balancers",
+        "description": "No credentials required.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/health/scheduler": {
+      "get": {
+        "summary": "Scheduler heartbeat; 503 when the routing tick is stale",
+        "description": "No credentials required.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/health/alerts": {
+      "get": {
+        "summary": "One signal for uptime monitors; 503 while anything needs a person",
+        "description": "No credentials required.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/jobs/run": {
+      "post": {
+        "summary": "Scheduler tick: routing, outbox delivery and retention",
+        "description": "Scheduler bearer token (WORKER_SECRET).",
+        "security": [
+          {
+            "workerBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/public/session": {
+      "post": {
+        "summary": "Start a customer session from a QR invite",
+        "description": "No credentials required.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "invite": {
+                    "type": "string",
+                    "maxLength": 150
+                  }
+                },
+                "required": [
+                  "invite"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/public/status/{token}": {
+      "get": {
+        "summary": "Minimal ticket status for the private link",
+        "description": "No credentials required.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Sign in with username or email",
+        "description": "No credentials required.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "summary": "Current session and the service catalogue",
+        "description": "Any signed-in session, including one that must still change its temporary password.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "Sign out and revoke the session",
+        "description": "Any signed-in session, including one that must still change its temporary password.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/auth/password": {
+      "put": {
+        "summary": "Change the password; other sessions are signed out",
+        "description": "Any signed-in session, including one that must still change its temporary password.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 14,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/customers/lookup": {
+      "post": {
+        "summary": "Identify a customer by mobile, Emirates ID or passport",
+        "description": "Signed-in session with role admin, hod, manager, agent, reception, customer.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "agent",
+          "reception",
+          "customer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "mobile",
+                      "emiratesId",
+                      "passportNumber"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "walkIn": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/tickets": {
+      "post": {
+        "summary": "Issue a ticket from a lookup; idempotent by requestId",
+        "description": "Signed-in session with role admin, hod, manager, agent, reception, customer.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "agent",
+          "reception",
+          "customer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "lookupId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "serviceId": {
+                    "type": "string",
+                    "enum": [
+                      "crm-general",
+                      "crm-noc",
+                      "crm-refund",
+                      "crm-handover",
+                      "collection",
+                      "general"
+                    ]
+                  },
+                  "unitId": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "lookupId",
+                  "serviceId",
+                  "unitId",
+                  "requestId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/tickets/{id}": {
+      "get": {
+        "summary": "Ticket detail with its events and delivery state",
+        "description": "Signed-in session with role admin, hod, manager, agent, reception, customer.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "agent",
+          "reception",
+          "customer"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/tickets/{id}/print": {
+      "get": {
+        "summary": "Printable receipt for a ticket",
+        "description": "Signed-in session with role admin, hod, manager, agent, reception, customer.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "agent",
+          "reception",
+          "customer"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/tickets/{id}/action": {
+      "post": {
+        "summary": "Call, start, close, no-show or reassign a ticket",
+        "description": "Signed-in session with role admin, hod, manager, agent.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "agent"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "call",
+                      "start",
+                      "close",
+                      "no_show",
+                      "reassign"
+                    ]
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "targetId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "action",
+                  "version"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/queue": {
+      "get": {
+        "summary": "Live queue page with counts, statistics and notifications",
+        "description": "Signed-in session with role admin, hod, manager, agent, reception.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "agent",
+          "reception"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/presence": {
+      "put": {
+        "summary": "Go online or offline and set the counter",
+        "description": "Signed-in session with role admin, hod, manager, agent.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "agent"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "online": {
+                    "type": "boolean"
+                  },
+                  "counter": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                },
+                "required": [
+                  "online"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/checkin-link": {
+      "get": {
+        "summary": "Rotating QR invite for the check-in page",
+        "description": "Signed-in session with role admin, hod, manager, reception, display.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "reception",
+          "display"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "patch": {
+        "summary": "Mark notifications as read",
+        "description": "Signed-in session with role admin, hod, manager, agent, reception.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "agent",
+          "reception"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    }
+                  }
+                },
+                "required": [
+                  "ids"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/display": {
+      "get": {
+        "summary": "TV board data: called and serving tickets and the waiting count",
+        "description": "Signed-in session with role admin, hod, manager, display.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "display"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/team": {
+      "get": {
+        "summary": "Staff directory with active ticket counts",
+        "description": "Signed-in session with role admin, hod, manager.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a staff member",
+        "description": "Signed-in session with role admin.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 120,
+                    "pattern": "^[a-zA-Z0-9@._+-]+$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 100
+                  },
+                  "email": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 254,
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "hod",
+                      "manager",
+                      "agent",
+                      "reception",
+                      "display"
+                    ]
+                  },
+                  "sfId": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^005[a-zA-Z0-9]{12,15}$"
+                  },
+                  "managerSfId": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^005[a-zA-Z0-9]{12,15}$"
+                  },
+                  "services": {
+                    "maxItems": 6,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "crm-general",
+                        "crm-noc",
+                        "crm-refund",
+                        "crm-handover",
+                        "collection",
+                        "general"
+                      ]
+                    }
+                  },
+                  "counter": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 14,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "username",
+                  "name",
+                  "role",
+                  "services",
+                  "counter",
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/team/{id}": {
+      "put": {
+        "summary": "Replace a staff member's details",
+        "description": "Signed-in session with role admin.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 120,
+                    "pattern": "^[a-zA-Z0-9@._+-]+$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 100
+                  },
+                  "email": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 254,
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "hod",
+                      "manager",
+                      "agent",
+                      "reception",
+                      "display"
+                    ]
+                  },
+                  "sfId": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^005[a-zA-Z0-9]{12,15}$"
+                  },
+                  "managerSfId": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^005[a-zA-Z0-9]{12,15}$"
+                  },
+                  "services": {
+                    "maxItems": 6,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "crm-general",
+                        "crm-noc",
+                        "crm-refund",
+                        "crm-handover",
+                        "collection",
+                        "general"
+                      ]
+                    }
+                  },
+                  "counter": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 14,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "username",
+                  "name",
+                  "role",
+                  "services",
+                  "counter",
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/queues": {
+      "get": {
+        "summary": "Queue membership per service and the eligible staff",
+        "description": "Signed-in session with role admin, hod, manager.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/queues/{service}/members/{user}": {
+      "put": {
+        "summary": "Add a member to a service queue",
+        "description": "Signed-in session with role admin, hod, manager.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager"
+        ],
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a member from a service queue",
+        "description": "Signed-in session with role admin, hod, manager.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager"
+        ],
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/integrations/salesforce/users": {
+      "get": {
+        "summary": "Search Salesforce users by name or email (q=, at least 3 characters)",
+        "description": "Signed-in session with role admin.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/reports": {
+      "get": {
+        "summary": "Ticket reports for a date range (from, to, service, page); format=csv exports",
+        "description": "Signed-in session with role admin, hod, manager.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/audit": {
+      "get": {
+        "summary": "Audit trail page (limit, before cursor, action, from, to)",
+        "description": "Signed-in session with role admin, hod, manager.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/integrations": {
+      "get": {
+        "summary": "Connected systems health: database, Salesforce, SMS, scheduler",
+        "description": "Signed-in session with role admin, hod, manager.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "summary": "Server-sent change stream for open screens",
+        "description": "Signed-in session with role admin, hod, manager, agent, reception, display.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager",
+          "agent",
+          "reception",
+          "display"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    }
+  }
+}

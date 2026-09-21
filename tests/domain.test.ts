@@ -7,7 +7,7 @@ import {
 } from '../lib/domain';
 import { hashPassword, verifyPassword, needsRehash } from '../lib/security';
 import { normalizeLookup } from '../lib/salesforce';
-import { splitStatements } from '../scripts/sql.mjs';
+import { migrationFile, splitStatements } from '../scripts/sql.mjs';
 describe('Password work factor', () => {
   it('hashes at the current work factor and flags older hashes', async () => {
     const current = await hashPassword('A-strong-test-password');
@@ -206,4 +206,10 @@ describe('Password security and SQL migration parsing', () => {
     ).toHaveLength(3));
   it('rejects broken migration literals', () =>
     expect(() => splitStatements("SELECT 'unterminated")).toThrow());
+  it('applies only numbered migration files, never the schema snapshot', () => {
+    expect(migrationFile.test('014_rollover_retention_and_numbers.sql')).toBe(true);
+    expect(migrationFile.test('schema.sql')).toBe(false);
+    expect(migrationFile.test('015_notes.sql.bak')).toBe(false);
+    expect(migrationFile.test('README.md')).toBe(false);
+  });
 });

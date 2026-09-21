@@ -68,3 +68,6 @@ export function splitStatements(text) {
   if (tail) output.push(tail);
   return output;
 }
+// Only numbered migration files are applied; db/schema.sql is the generated
+// snapshot that lives beside them and must never be run.
+export const migrationFile = /^[0-9]{3}_[a-z0-9_]+[.]sql$/;

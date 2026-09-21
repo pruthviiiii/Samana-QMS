@@ -130,5 +130,29 @@ describe('Distributed abuse limits', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].key).not.toContain('192.0.2.10');
+    expect(rows[0].key).not.toContain('192.0.2.1');
+  });
+  it('keys the client budget on the address the proxy appended, not a forged prefix', async () => {
+    vi.stubEnv('TRUSTED_CLIENT_IP_HEADER', 'x-forwarded-for');
+    // Two requests claiming different origins in the client-controlled part
+    // of the header still land in one bucket when the proxy saw the same address.
+    await clientRateLimit(
+      new Request('https://qms.test', {
+        headers: { 'x-forwarded-for': '198.51.100.7, 203.0.113.9' },
+      }),
+      scope + ':spoof',
+      1,
+      60,
+    );
+    await expect(
+      clientRateLimit(
+        new Request('https://qms.test', {
+          headers: { 'x-forwarded-for': '198.51.100.8, 203.0.113.9' },
+        }),
+        scope + ':spoof',
+        1,
+        60,
+      ),
+    ).rejects.toMatchObject({ status: 429 });
   });
 });

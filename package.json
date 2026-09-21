@@ -20,7 +20,9 @@
     "format": "oxfmt",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "db:bootstrap": "node --env-file=.env scripts/bootstrap.mjs",
-    "db:schema": "node --env-file=.env.test scripts/schema-snapshot.mjs"
+    "db:schema": "node --env-file=.env.test scripts/schema-snapshot.mjs",
+    "db:app-role": "node --env-file=.env scripts/create-app-role.mjs",
+    "api:docs": "node scripts/openapi.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

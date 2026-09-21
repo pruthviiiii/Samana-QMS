@@ -5,6 +5,8 @@
 #
 # Secrets (sync: false) are entered once in the Render dashboard and never live in git.
 # The scheduler copies the shared secret and database URL from the web service.
+# DATABASE_URL is the restricted qms_app role (scripts/create-app-role.mjs);
+# MIGRATE_DATABASE_URL is the owner string the pre-deploy migration runs with.
 
 services:
   - type: web
@@ -28,6 +30,8 @@ services:
         value: "true"
       - key: DATABASE_URL
         sync: false
+      - key: MIGRATE_DATABASE_URL
+        sync: false
       - key: SALESFORCE_INSTANCE_URL
         sync: false
       - key: SALESFORCE_CLIENT_ID
@@ -42,6 +46,15 @@ services:
         generateValue: true
       - key: QR_SIGNING_SECRET
         generateValue: true
+      # Render's proxy appends the client address to x-forwarded-for; the app
+      # keys per-address limits on that last entry.
+      - key: TRUSTED_CLIENT_IP_HEADER
+        value: x-forwarded-for
+      # Retention stays off (empty) until a period is agreed; see docs/operations.md.
+      - key: RETENTION_IDENTIFIER_DAYS
+        value: ""
+      - key: RETENTION_EVENT_DAYS
+        value: ""
       - key: SMS_ENABLED
         value: "false"
       - key: SMS_SENDER

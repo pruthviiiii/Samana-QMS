@@ -1,3 +1,4 @@
+import type { ZodType } from 'zod';
 import { HttpError, requireUser, sameOrigin } from './http';
 import { sha256 } from './security';
 import type { Role, User } from './domain';
@@ -20,7 +21,9 @@ export interface Route {
   method: Method;
   path: string; // e.g. 'tickets/:id/action'
   auth: Auth;
+  summary: string; // one line for the generated API document
   handler: (context: Context) => Promise<Response>;
+  body?: ZodType; // the JSON body schema the handler validates, when it takes one
 }
 export const publicRoute: Auth = { kind: 'public' };
 export const workerRoute: Auth = { kind: 'worker' };
@@ -30,8 +33,10 @@ export const define = (
   method: Method,
   path: string,
   auth: Auth,
+  summary: string,
   handler: Route['handler'],
-): Route => ({ method, path, auth, handler });
+  body?: ZodType,
+): Route => ({ method, path, auth, summary, handler, ...(body ? { body } : {}) });
 export function match(routes: Route[], method: string, path: string) {
   const parts = path.split('/');
   for (const route of routes) {

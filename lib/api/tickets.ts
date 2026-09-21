@@ -19,25 +19,37 @@ const walkInCustomer = (): Customer => ({
   passportNumber: null,
   units: [],
 });
+const lookupSchema = z.object({
+  type: z.enum(['mobile', 'emiratesId', 'passportNumber']),
+  value: z.string().max(100),
+  // Staff may register a walk-in without Salesforce when it is down.
+  walkIn: z.boolean().optional(),
+});
+const issueSchema = z.object({
+  lookupId: uuid,
+  serviceId: z.enum(SERVICE_IDS),
+  unitId: z.string().max(100).nullable(),
+  requestId: uuid,
+});
+const actionSchema = z.object({
+  action: z.enum(['call', 'start', 'close', 'no_show', 'reassign']),
+  version: z.number().int().positive(),
+  comment: z.string().trim().max(4000).optional(),
+  targetId: uuid.optional(),
+});
 export const ticketRoutes = [
   define(
     'POST',
     'customers/lookup',
     roles(...STAFF, 'customer'),
+    'Identify a customer by mobile, Emirates ID or passport',
     async ({ request, user }) => {
       await rateLimit(
         'lookup:' + user.id,
         user.role === 'customer' ? 5 : 30,
         user.role === 'customer' ? 2700 : 60,
       );
-      const input = z
-        .object({
-          type: z.enum(['mobile', 'emiratesId', 'passportNumber']),
-          value: z.string().max(100),
-          // Staff may register a walk-in without Salesforce when it is down.
-          walkIn: z.boolean().optional(),
-        })
-        .parse(await body(request));
+      const input = lookupSchema.parse(await body(request));
       let value: string;
       try {
         value = normalizeIdentifier(input.type, input.value);
@@ -81,20 +93,15 @@ export const ticketRoutes = [
           user.role === 'customer' ? publicCustomer(customer) : customer,
       });
     },
+    lookupSchema,
   ),
   define(
     'POST',
     'tickets',
     roles(...STAFF, 'customer'),
+    'Issue a ticket from a lookup; idempotent by requestId',
     async ({ request, user }) => {
-      const input = z
-        .object({
-          lookupId: uuid,
-          serviceId: z.enum(SERVICE_IDS),
-          unitId: z.string().max(100).nullable(),
-          requestId: uuid,
-        })
-        .parse(await body(request));
+      const input = issueSchema.parse(await body(request));
       const [result] = await query<{ ticket: unknown }>(
         'SELECT qms.issue_ticket($1,$2,$3,$4,$5) ticket',
         [
@@ -112,11 +119,13 @@ export const ticketRoutes = [
         201,
       );
     },
+    issueSchema,
   ),
   define(
     'GET',
     'tickets/:id',
     roles(...STAFF, 'customer'),
+    'Ticket detail with its events and delivery state',
     async ({ params, user }) => {
       const details = await ticketDetail(user, uuid.parse(params.id));
       return json(
@@ -134,6 +143,7 @@ export const ticketRoutes = [
     'GET',
     'tickets/:id/print',
     roles(...STAFF, 'customer'),
+    'Printable receipt for a ticket',
     async ({ params, user }) => {
       const details = await ticketDetail(user, uuid.parse(params.id));
       return json({
@@ -145,16 +155,10 @@ export const ticketRoutes = [
     'POST',
     'tickets/:id/action',
     roles(...SERVING),
+    'Call, start, close, no-show or reassign a ticket',
     async ({ request, params, user }) => {
       const id = uuid.parse(params.id);
-      const input = z
-        .object({
-          action: z.enum(['call', 'start', 'close', 'no_show', 'reassign']),
-          version: z.number().int().positive(),
-          comment: z.string().trim().max(4000).optional(),
-          targetId: uuid.optional(),
-        })
-        .parse(await body(request));
+      const input = actionSchema.parse(await body(request));
       const [result] = await query<{ ticket: unknown }>(
         'SELECT qms.ticket_action($1,$2,$3,$4,$5,$6) ticket',
         [
@@ -168,5 +172,6 @@ export const ticketRoutes = [
       );
       return json(result.ticket);
     },
+    actionSchema,
   ),
 ];
