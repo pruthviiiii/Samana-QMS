@@ -346,6 +346,41 @@ async function handler(request: Request) {
       );
       return json({ ok: true });
     }
+    if (path === 'queues' && method === 'GET') {
+      // Queue membership is app data only; nothing here touches Salesforce.
+      allow(['admin', 'hod', 'manager']);
+      const [members, eligible] = await Promise.all([
+        query(
+          "SELECT u.id,u.name,u.role,u.online,u.last_seen,u.enabled,u.counter,s.id service_id FROM qms.services s JOIN qms.users u ON s.id=ANY(u.services) WHERE u.role IN ('admin','hod','manager','agent') ORDER BY s.department,s.name,u.name",
+        ),
+        query(
+          "SELECT id,name,role,enabled FROM qms.users WHERE role IN ('admin','hod','manager','agent') ORDER BY name",
+        ),
+      ]);
+      return json({ services: SERVICES, members, eligible });
+    }
+    if (path === 'queues/members' && method === 'POST') {
+      allow(['admin', 'hod', 'manager']);
+      const input = z
+        .object({
+          serviceId: z.enum([
+            'crm-general',
+            'crm-noc',
+            'crm-refund',
+            'crm-handover',
+            'collection',
+            'general',
+          ]),
+          userId: uuid,
+          member: z.boolean(),
+        })
+        .parse(await body(request));
+      const [result] = await query<{ services: string[] }>(
+        'SELECT qms.set_queue_member($1,$2,$3,$4) services',
+        [input.serviceId, input.userId, input.member, user.id],
+      );
+      return json({ ok: true, services: result.services });
+    }
     if (path === 'team' && method === 'GET') {
       allow(['admin', 'hod', 'manager']);
       const users = await query(

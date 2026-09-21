@@ -11,6 +11,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import {
   LayoutDashboard,
+  Layers,
   ListOrdered,
   Users,
   BarChart3,
@@ -58,6 +59,7 @@ import {
 import CheckIn from './check-in';
 import TicketDetail from './ticket-detail';
 import Team from './team';
+import Queues from './queues';
 const Reports = lazy(() => import('./reports'));
 import Settings from './settings';
 import TVDisplay from './tv-display';
@@ -105,6 +107,7 @@ const viewNames: Record<string, string> = {
   queue: 'Live queue',
   agent: 'Agent console',
   team: 'Team',
+  queues: 'Queues',
   reports: 'Reports',
   settings: 'Settings',
   checkin: 'Customer check-in',
@@ -358,6 +361,7 @@ export default function QmsApp({
     ...(manager
       ? [
           { id: 'team', name: 'Team', icon: Users },
+          { id: 'queues', name: 'Queues', icon: Layers },
           { id: 'reports', name: 'Reports', icon: BarChart3 },
           { id: 'audit', name: 'Activity log', icon: History },
         ]
@@ -1052,6 +1056,7 @@ export default function QmsApp({
             </>
           )}
           {view === 'team' && manager && <Team user={user} />}{' '}
+          {view === 'queues' && manager && <Queues />}{' '}
           {view === 'reports' && manager && (
             <Suspense fallback={<QueueSkeleton />}>
               <Reports onTicket={setSelected} />

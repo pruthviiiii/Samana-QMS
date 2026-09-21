@@ -56,6 +56,7 @@ All responses containing application data use `Cache-Control: no-store`. State-c
 | `GET /api/public/status/:token` | Minimal ticket status via unguessable private link |
 | `GET /api/display` | Authenticated TV: ticket number/service/counter only |
 | `GET/POST /api/team` | Managers view; administrators edit |
+| `GET /api/queues`, `POST /api/queues/members` | Admin, HOD and manager queue membership; stored in PostgreSQL only, never sent to Salesforce |
 | `GET /api/reports`, `/audit`, `/integrations` | Manager/HOD/admin reports, audit, health |
 | `GET /api/integrations/salesforce/users?q=` | Administrator on-demand Salesforce user search (Apex `QMSUserAPI`) |
 | `POST /api/jobs/run` | Scheduler bearer credential; routing and outbox tick |

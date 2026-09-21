@@ -561,3 +561,43 @@ describe('On-demand Salesforce user search', () => {
     expect((await send('integrations/salesforce/groups')).response.status).toBe(404);
   });
 });
+
+describe('App-managed queues', () => {
+  it('lets an administrator add and remove members; nothing goes to Salesforce', async () => {
+    search.mockClear();
+    lookup.mockClear();
+    const added = await send('queues/members', 'POST', {
+      serviceId: 'crm-noc',
+      userId: agentId,
+      member: true,
+    });
+    expect(added.response.status).toBe(200);
+    expect(added.result.services as string[]).toContain('crm-noc');
+    const list = await send('queues');
+    expect(list.response.status).toBe(200);
+    const members = list.result.members as { id: string; service_id: string }[];
+    expect(members.some((m) => m.id === agentId && m.service_id === 'crm-noc')).toBe(true);
+    const removed = await send('queues/members', 'POST', {
+      serviceId: 'crm-noc',
+      userId: agentId,
+      member: false,
+    });
+    expect(removed.response.status).toBe(200);
+    expect(removed.result.services as string[]).not.toContain('crm-noc');
+    expect(search).not.toHaveBeenCalled();
+    expect(lookup).not.toHaveBeenCalled();
+  });
+  it('is closed to agents', async () => {
+    expect((await send('queues', 'GET', undefined, agentCookie)).response.status).toBe(403);
+    expect(
+      (
+        await send(
+          'queues/members',
+          'POST',
+          { serviceId: 'crm-noc', userId: agentId, member: true },
+          agentCookie,
+        )
+      ).response.status,
+    ).toBe(403);
+  });
+});

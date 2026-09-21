@@ -130,11 +130,13 @@ describe('PostgreSQL workflow invariants', () => {
     SELECT assigned_to INTO chosen FROM qms.tickets WHERE id=(t->>'id')::uuid;
     IF chosen IS DISTINCT FROM manager THEN RAISE EXCEPTION 'Collection timeout escalation failed';END IF;
   `));
-  it('prevents group sync revoking a service during an active call', () =>
+  it('prevents removing a queue member during an active call', () =>
     check(`
     t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
     t:=qms.ticket_action((t->>'id')::uuid,'call',a,(t->>'version')::int);
-    BEGIN PERFORM qms.sync_service_group('crm-general','group-test','Test Group',ARRAY['sf-b-'||r],actor);RAISE EXCEPTION 'EXPECTED_AGENT_BUSY';EXCEPTION WHEN OTHERS THEN IF SQLERRM IS DISTINCT FROM 'AGENT_BUSY' THEN RAISE;END IF;END;
-    IF NOT EXISTS(SELECT 1 FROM qms.users WHERE id=a AND 'crm-general'=ANY(services)) THEN RAISE EXCEPTION 'Sync partly applied';END IF;
+    BEGIN PERFORM qms.set_queue_member('crm-general',a,false,actor);RAISE EXCEPTION 'EXPECTED_AGENT_BUSY';EXCEPTION WHEN OTHERS THEN IF SQLERRM IS DISTINCT FROM 'AGENT_BUSY' THEN RAISE;END IF;END;
+    IF NOT EXISTS(SELECT 1 FROM qms.users WHERE id=a AND 'crm-general'=ANY(services)) THEN RAISE EXCEPTION 'Membership partly removed';END IF;
+    IF NOT ('crm-noc'=ANY(qms.set_queue_member('crm-noc',a,true,actor))) THEN RAISE EXCEPTION 'Adding a member failed';END IF;
+    BEGIN PERFORM qms.set_queue_member('crm-noc',a,true,a);RAISE EXCEPTION 'EXPECTED_FORBIDDEN';EXCEPTION WHEN OTHERS THEN IF SQLERRM IS DISTINCT FROM 'FORBIDDEN' THEN RAISE;END IF;END;
   `));
 });

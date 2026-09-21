@@ -785,3 +785,55 @@ form {
     display: none;
   }
 }
+
+/* Queues view */
+.queues-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding-top: 12px;
+}
+.queue-card {
+  border: 1px solid rgba(20, 40, 35, 0.12);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fff;
+}
+.queue-card h3 {
+  font-size: 0.95rem;
+  margin: 0 0 2px;
+}
+.queue-members {
+  list-style: none;
+  margin: 10px 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.queue-members li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.queue-members li > span:nth-child(2) {
+  flex: 1;
+}
+.sf-search {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.sf-results {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  overflow: auto;
+}
+.sf-results button {
+  display: grid;
+  text-align: left;
+  width: 100%;
+}
