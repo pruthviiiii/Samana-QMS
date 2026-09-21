@@ -46,11 +46,11 @@
 </head>
 <body>
 <h1>Samana QMS: response to the independent code review</h1>
-<div class="meta">Response dated 22 September 2026 · Review dated 21 September 2026 (reviewed commit d2f6a31) · Code as of commit 22 September 2026 (the commit following 8d19e99) · Written for management and engineering</div>
+<div class="meta">Response dated 22 September 2026 · Review dated 21 September 2026 (reviewed commit d2f6a31) · Code as of commit 500caae (22 September 2026) · Written for management and engineering</div>
 
 <div class="lead">
   <p><b>Verdict: the code is production-ready. Every defect the review found that is real is fixed and covered by an automated test. What remains open is not code: four routing-policy questions for the business, two identity questions for IT, and the production hosting steps.</b></p>
-  <p>The review was written against the code of 21 September, 11:04. Since then the codebase has changed substantially in direct response to it: eight commits, a real Next.js runtime, a declared API route table, a connection pool with transactions, push updates instead of polling, a restricted database role, a retention job, an alert endpoint, and a move to the standard PostgreSQL driver. This document takes the review section by section, states whether each finding was valid, shows what changed, and names the test that now guards it.</p>
+  <p>The review was written against the code of 21 September, 11:04. Since then the codebase has changed substantially in direct response to it: seven commits, a real Next.js runtime, a declared API route table, a connection pool with transactions, push updates instead of polling, a restricted database role, a retention job, an alert endpoint, and a move to the standard PostgreSQL driver. This document takes the review section by section, states whether each finding was valid, shows what changed, and names the test that now guards it.</p>
 </div>
 
 <div class="kpi">
@@ -288,7 +288,7 @@
   <tr><td class="n">b42b51b</td><td>Next.js 16 replaces the beta framework; declared route table with PUT, PATCH and DELETE; connection pool with transactions; server-sent events; shell split; schema snapshot; rate-limit windows</td></tr>
   <tr><td class="n">9650936</td><td>Restricted <code>qms_app</code> role; alert endpoint; retention job; day rollover; paging validation; forged-address-proof rate limits; migration runner fix; OpenAPI document</td></tr>
   <tr><td class="n">549854b</td><td>Standard PostgreSQL driver replaces Neon's; CI on a PostgreSQL container</td></tr>
-  <tr><td class="n">22 September 2026 (the commit following 8d19e99)</td><td>This response: 45-second presence window, worker in direct database mode, browser/server boundary test, error boundaries, identifier opt-in on exports, audit export, bootstrap-password alert, TV announcement at load, load measurement script</td></tr>
+  <tr><td class="n">500caae</td><td>This response: 45-second presence window, worker in direct database mode, browser/server boundary test, error boundaries, identifier opt-in on exports, audit export, bootstrap-password alert, TV announcement at load, load measurement script</td></tr>
 </table>
 <p class="small">Design document: "Samana QMS – Demo Flow and Technical Design", sections 3, 7, 8, 9, 11, 12 and 14 track the same state. Checklist: <code>docs/review-checklist-2026-09-21.md</code>.</p>
 </body>
