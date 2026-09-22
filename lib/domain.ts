@@ -68,6 +68,29 @@ export const QR_ROLES = [
   'reception',
   'display',
 ] as const satisfies readonly Role[];
+// How long an agent may go without a heartbeat before the system treats them
+// as gone. The database holds the same number in qms.presence_window() and
+// tests/schema.test.ts fails if the two drift apart, so a screen never shows
+// somebody as available after routing has stopped sending them customers.
+export const PRESENCE_WINDOW_MS = 45000;
+/** Whether a heartbeat is recent enough to count the person as at their desk. */
+export const isPresent = (online: boolean, lastSeen?: string | null) =>
+  online && !!lastSeen && Date.now() - Date.parse(lastSeen) < PRESENCE_WINDOW_MS;
+// The routing tick runs every 15 seconds (scripts/worker.mjs). Six missed
+// ticks means it needs a person: lib/data/system.ts decides the health
+// endpoint with this and the workspace banner reads the same number.
+export const SCHEDULER_STALE_MS = 90000;
+/** How urgently a service is routed: 0 is normal, 9 is most urgent. */
+export const MAX_PRIORITY = 9;
+export const PRIORITY_LABELS: Record<number, string> = {
+  0: 'Normal',
+  3: 'Elevated',
+  6: 'High',
+  9: 'Urgent',
+};
+export const priorityLabel = (priority: number) =>
+  PRIORITY_LABELS[priority] ??
+  (priority > 6 ? 'Urgent' : priority > 3 ? 'High' : priority > 0 ? 'Elevated' : 'Normal');
 const has = (list: readonly Role[], role: Role | undefined) =>
   !!role && list.includes(role);
 export const isWorkspaceRole = (role?: Role) => has(WORKSPACE_ROLES, role);

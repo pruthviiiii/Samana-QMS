@@ -61,8 +61,10 @@ Moving data from one server to another is one `pg_dump` of `samana_qms` and one 
 
 - Mobile, Emirates ID, and passport lookup; English/Arabic check-in; first matching Salesforce account; single-unit automatic selection.
 - Registered CRM services: General Query, NOC/Resale, Refund, Handover. Collection selects Collections. Unknown customers get General Query.
-- Atomic ticket numbering, idempotent issuance, duplicate active-visit prevention, preferred owner routing, service-specific round robin, strict greater-than-five-minute escalation, and visible unmapped/offline exceptions.
-- Call, start, complete with notes, no-show, manager reassignment, notifications, printable receipts, private mobile ticket status, and TV announcements.
+- Atomic ticket numbering, idempotent issuance, duplicate active-visit prevention, preferred owner routing, strict greater-than-five-minute escalation, and visible unmapped/offline exceptions.
+- Fair turns across counters: one rotation per person, so a customer taken in any service moves them to the back of every queue they cover. Nobody is given a second customer while they still hold one, and closing a visit offers them the next one immediately.
+- Per-service urgency (Queues screen, 0 normal to 9 urgent): a waiting customer in a higher-urgency service is routed before an older one elsewhere, while arrival order still decides inside a service.
+- Call, start, complete with notes, no-show, manager reassignment, notifications, printable receipts, and TV announcements. A customer's private link shows their service's board — the ten tickets ahead of them, their own and the four behind — with ticket numbers and states only, the same information the reception television already shows the waiting room.
 - Live queue filtering, pagination, operational metrics, team administration, connection health, audit history, reports, and spreadsheet-safe CSV exports.
 - Interactive table/board views, removable filter chips, live department summaries, keyboard quick actions (Ctrl/Cmd+K), mobile navigation, and a focused ticket drawer with visit progress and pinned actions. The board displays the current page of results; use pagination to see further tickets.
 - Service selection cards, English/Arabic check-in labels, report date presets, password visibility controls, reduced-motion support, and a consistent SAMANA visual system across staff, customer, and TV screens. Report charts load on demand.

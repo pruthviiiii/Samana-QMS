@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { config, resetConfigForTests, webConfig } from '../lib/config';
+import { assertConfig, config, resetConfigForTests, webConfig } from '../lib/config';
 // Configuration is the one place the environment is read, so its rules are
 // tested directly: what is required, what is refused, and which combinations
 // are contradictions that must stop a deployment rather than reach a customer.
@@ -14,6 +14,7 @@ const keys = [
   'API_URL',
   'API_PORT',
   'API_PROXY_TOKEN',
+  'API_TRUSTS_NETWORK',
   'PORT',
   'NODE_ENV',
   'SESSION_COOKIE_SECURE',
@@ -56,6 +57,30 @@ describe('API and scheduler configuration', () => {
     expect(value.SALESFORCE_WRITE_ENABLED).toBe(false);
     expect(value.RETENTION_IDENTIFIER_DAYS).toBeUndefined();
     expect(value.API_PORT).toBeUndefined();
+  });
+  // The API service is reachable on its own address on most hosts, so a
+  // missing gate is an open API and not a warning worth logging past.
+  it('refuses to start a production API with no gate in front of it', () => {
+    const production = {
+      APP_ORIGIN: 'https://qms.test',
+      SESSION_COOKIE_SECURE: 'true',
+      NODE_ENV: 'production',
+    };
+    stub({ ...base, ...production });
+    expect(() => assertConfig()).toThrow(/API_PROXY_TOKEN/);
+    stub({
+      ...base,
+      ...production,
+      API_PROXY_TOKEN: 'a-proxy-token-for-the-test-suite',
+    });
+    expect(assertConfig().API_PROXY_TOKEN).toBe('a-proxy-token-for-the-test-suite');
+    // A genuinely private address may waive it, but only by saying so.
+    stub({ ...base, ...production, API_TRUSTS_NETWORK: 'true' });
+    expect(assertConfig().API_TRUSTS_NETWORK).toBe(true);
+  });
+  it('does not demand the gate outside production', () => {
+    stub({ ...base });
+    expect(assertConfig().NODE_ENV).toBe('development');
   });
   it('names the missing variable instead of failing later', () => {
     expect(() => load({ DATABASE_URL: undefined })).toThrow(/DATABASE_URL/);

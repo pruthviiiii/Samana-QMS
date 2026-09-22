@@ -271,8 +271,10 @@ export default function Settings({
           <div>
             <h2>Routing rules</h2>
             <p>
-              Fixed by the Samana business requirements. These are not
-              settings; changing them is a development change.
+              How a waiting customer reaches a member of staff. Service urgency
+              and queue membership are set on the Queues screen; the rest
+              follows the Samana business requirements and changing it is a
+              development change.
             </p>
           </div>
         </div>
@@ -280,8 +282,32 @@ export default function Settings({
           <div>
             <strong>CRM routing</strong>
             <p>
-              Preferred unit owner → five-minute hold if busy → next available
-              agent in the same service.
+              Preferred unit owner → five-minute hold if they are mid-service →
+              next available agent in the same service. An owner holds one
+              waiting customer at a time; a second goes to the rotation.
+            </p>
+          </div>
+          <div>
+            <strong>Service urgency</strong>
+            <p>
+              A waiting customer in a higher-urgency service is routed before an
+              older one elsewhere. Inside one service, arrival order always
+              decides. Set urgency per service on the Queues screen.
+            </p>
+          </div>
+          <div>
+            <strong>One customer at a time</strong>
+            <p>
+              Nobody is given a second customer while they still hold one,
+              whether or not they have called them yet. Closing a visit offers
+              the next customer immediately.
+            </p>
+          </div>
+          <div>
+            <strong>Fair turns</strong>
+            <p>
+              One rotation per person, not per counter: a customer taken at any
+              service moves that person to the back of every queue they cover.
             </p>
           </div>
           <div>

@@ -1,6 +1,6 @@
 import { query } from '../db';
 import type { IdentifierType } from '../domain';
-import { checkedRow, one, ticketRow, type TicketRecord } from './rows';
+import { checkedRow, one, priorityRow, ticketRow, type TicketRecord } from './rows';
 // The queue engine. Each function here is one PL/pgSQL function in PostgreSQL,
 // called once, whose result is parsed before anyone sees it. The rules stay in
 // the database on purpose: issuing a ticket must number it, insert it, route it
@@ -116,10 +116,47 @@ export async function changePassword(
   return row?.changed === true;
 }
 
-/** The routing tick: expires silent agents, re-routes, rolls the day over. */
+// How many waiting tickets one lock acquisition routes. Every ticket action
+// and every heartbeat in the building waits behind this lock, so the sweep
+// takes it repeatedly for a bounded batch rather than once for the whole queue.
+const ROUTING_BATCH = 25;
+// A ceiling on one tick, so a runaway queue cannot hold the scheduler forever.
+const ROUTING_CEILING = 5000;
+
+/**
+ * The routing tick: maintenance first (day rollover, silent agents, expired
+ * rows), then the waiting queue in batches, then the heartbeat the health
+ * endpoint reads. Each statement is its own transaction, so the global lock is
+ * released between batches and staff can act while the sweep runs.
+ */
 export async function routeDue(): Promise<number> {
-  const result = await query('SELECT qms.route_due() checked');
-  return one(checkedRow, result, 'route_due').checked;
+  await query('SELECT qms.route_maintenance()');
+  let total = 0;
+  for (;;) {
+    const result = await query('SELECT qms.route_waiting($1,$2) checked', [
+      ROUTING_BATCH,
+      total,
+    ]);
+    const done = one(checkedRow, result, 'route_waiting').checked;
+    total += done;
+    if (done < ROUTING_BATCH || total >= ROUTING_CEILING) break;
+  }
+  await query('SELECT qms.note_worker_run($1)', [total]);
+  return total;
+}
+
+/** Sets how urgently a service is routed; 0 is normal and 9 is most urgent. */
+export async function setServicePriority(
+  service: string,
+  priority: number,
+  actorId: string,
+) {
+  const result = await query('SELECT qms.set_service_priority($1,$2,$3) priority', [
+    service,
+    priority,
+    actorId,
+  ]);
+  return one(priorityRow, result, 'service priority').priority;
 }
 
 export type { IdentifierType };

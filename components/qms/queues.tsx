@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Plus, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api, send } from '@/lib/client';
-import { SERVICES, roleLabel } from '@/lib/domain';
+import { MAX_PRIORITY, SERVICES, isPresent, priorityLabel, roleLabel } from '@/lib/domain';
 type Member = {
   id: string;
   name: string;
@@ -24,14 +24,18 @@ export default function Queues() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<Record<string, string>>({});
+  const [priority, setPriority] = useState<Record<string, number>>({});
   async function load() {
     setLoading(true);
     try {
-      const data = await api<{ members: Member[]; eligible: Eligible[] }>(
-        'queues',
-      );
+      const data = await api<{
+        members: Member[];
+        eligible: Eligible[];
+        priority: Record<string, number>;
+      }>('queues');
       setMembers(data.members);
       setEligible(data.eligible);
+      setPriority(data.priority);
       setError('');
     } catch (e) {
       setError((e as Error).message);
@@ -42,6 +46,23 @@ export default function Queues() {
   useEffect(() => {
     void load();
   }, []);
+  // Urgency between services. A waiting customer in a higher-priority service
+  // is routed before an older one elsewhere; inside a service, arrival order
+  // still decides, so raising this can never reorder one queue against itself.
+  async function changePriority(serviceId: string, next: number) {
+    const previous = priority[serviceId] ?? 0;
+    setPriority((current) => ({ ...current, [serviceId]: next }));
+    setBusy(true);
+    try {
+      await send('PUT', `queues/${serviceId}/priority`, { priority: next });
+      setError('');
+    } catch (e) {
+      setPriority((current) => ({ ...current, [serviceId]: previous }));
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function change(serviceId: string, userId: string, member: boolean) {
     if (!member) {
       const remaining =
@@ -70,8 +91,7 @@ export default function Queues() {
       setBusy(false);
     }
   }
-  const isOnline = (m: Member) =>
-    m.online && !!m.last_seen && Date.now() - Date.parse(m.last_seen) < 90000;
+  const isOnline = (m: Member) => isPresent(m.online, m.last_seen);
   return (
     <div className="stack">
       {error && (
@@ -109,6 +129,26 @@ export default function Queues() {
                   {list.length} member{list.length === 1 ? '' : 's'} ·{' '}
                   {list.filter(isOnline).length} online
                 </p>
+                <div className="queue-priority">
+                  <label htmlFor={'priority-' + service.id}>Urgency</label>
+                  <select
+                    id={'priority-' + service.id}
+                    value={priority[service.id] ?? 0}
+                    disabled={busy || loading}
+                    onChange={(e) =>
+                      void changePriority(service.id, Number(e.target.value))
+                    }
+                  >
+                    {[0, 3, 6, MAX_PRIORITY].map((level) => (
+                      <option key={level} value={level}>
+                        {priorityLabel(level)}
+                      </option>
+                    ))}
+                  </select>
+                  {(priority[service.id] ?? 0) > 0 && (
+                    <small>Routed ahead of lower-urgency services</small>
+                  )}
+                </div>
                 <ul className="queue-members">
                   {list.map((m) => (
                     <li key={m.id}>

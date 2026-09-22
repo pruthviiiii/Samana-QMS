@@ -27,6 +27,22 @@ async function timed(label, fn) {
   return result;
 }
 const ids = { users: [], lookups: [], tickets: [] };
+// Agents now hold one customer at a time (migration 017), so tickets left
+// waiting by an earlier run would take every agent before the fixture's own
+// tickets were reached and the run would measure nothing. Clear them on the
+// disposable test database; on samana_qms say so and stop rather than touch
+// real visits.
+{
+  const residue = (await pool.query("SELECT count(*)::int n FROM qms.tickets WHERE status IN ('waiting','called','serving')")).rows[0].n;
+  if (residue && new URL(url).pathname !== '/samana_qms_test') {
+    await pool.end();
+    throw new Error(`${residue} tickets are still active in this database. Run the load check against samana_qms_test.`);
+  }
+  if (residue) {
+    await pool.query("UPDATE qms.tickets SET status='closed',closed_at=now() WHERE status IN ('waiting','called','serving')");
+    console.log(`Closed ${residue} ticket(s) left active by an earlier run.`);
+  }
+}
 try {
   const admin = (
     await pool.query(
@@ -76,8 +92,57 @@ try {
   await timed(`route_due with ${tickets} waiting and 0 agents online`, () => pool.query('SELECT qms.route_due()'));
 
   // 3. Bring the agents online and tick again: everything gets assigned.
+  //    Production routes in bounded batches (lib/data/functions.ts) so the
+  //    global lock is released between them; qms.route_due() does the same work
+  //    in one transaction and is measured beside it as the old cost.
   await pool.query('UPDATE qms.users SET online=true,last_seen=now() WHERE id=ANY($1::uuid[])', [agentIds]);
-  await timed(`route_due with ${tickets} waiting and ${agents} agents online`, () => pool.query('SELECT qms.route_due()'));
+  const BATCH = 25;
+  // How long a ticket action waits for the lock while a sweep is running. This
+  // is the number the batching is for: one agent at a counter, mid-sweep.
+  // Runs `sweep` while something else keeps asking for the global lock, and
+  // reports how long that wait was: this is what an agent at a counter feels
+  // when they press Call while the sweep is running.
+  async function withLockProbe(label, sweep) {
+    const blocked = [];
+    let probing = true;
+    const probe = (async () => {
+      while (probing) {
+        const start = process.hrtime.bigint();
+        try {
+          // Takes and releases the global lock and does nothing else.
+          await pool.query('SELECT pg_advisory_xact_lock(1947301)');
+          blocked.push(ms(start));
+        } catch {
+          break;
+        }
+      }
+    })();
+    await timed(label, sweep);
+    probing = false;
+    await probe;
+    console.log(
+      blocked.length
+        ? `  lock wait meanwhile: p50 ${percentile(blocked, 0.5).toFixed(0)} ms, p95 ${percentile(blocked, 0.95).toFixed(0)} ms, max ${Math.max(...blocked).toFixed(0)} ms (${blocked.length} samples)`
+        : '  lock wait meanwhile: not sampled',
+    );
+  }
+  await withLockProbe(
+    `batched sweep (${BATCH} per lock) with ${tickets} waiting and ${agents} agents online`,
+    async () => {
+      await pool.query('SELECT qms.route_maintenance()');
+      let total = 0;
+      for (;;) {
+        const done = (await pool.query('SELECT qms.route_waiting($1,$2) n', [BATCH, total])).rows[0].n;
+        total += done;
+        if (done < BATCH) break;
+      }
+      await pool.query('SELECT qms.note_worker_run($1)', [total]);
+    },
+  );
+  await withLockProbe(
+    `single-transaction route_due with ${tickets} waiting and ${agents} agents online`,
+    () => pool.query('SELECT qms.route_due()'),
+  );
   const assigned = (
     await pool.query("SELECT count(*)::int n FROM qms.tickets WHERE id=ANY($1::uuid[]) AND assigned_to IS NOT NULL", [ids.tickets])
   ).rows[0].n;
@@ -107,7 +172,11 @@ try {
     ),
   );
   clearInterval(heartbeats);
-  console.log(`  ${actionLatency.length} actions, p50 ${percentile(actionLatency, 0.5).toFixed(0)} ms, p95 ${percentile(actionLatency, 0.95).toFixed(0)} ms, max ${Math.max(...actionLatency).toFixed(0)} ms`);
+  console.log(
+    actionLatency.length
+      ? `  ${actionLatency.length} actions, p50 ${percentile(actionLatency, 0.5).toFixed(0)} ms, p95 ${percentile(actionLatency, 0.95).toFixed(0)} ms, max ${Math.max(...actionLatency).toFixed(0)} ms`
+      : '  no tickets were assigned, so no actions were measured',
+  );
   const closed = (await pool.query("SELECT count(*)::int n FROM qms.tickets WHERE id=ANY($1::uuid[]) AND status='closed'", [ids.tickets])).rows[0].n;
   console.log(`  closed: ${closed} of ${assigned}`);
 } finally {
@@ -122,7 +191,6 @@ try {
     [ids.users],
   );
   await pool.query('DELETE FROM qms.lookups WHERE id=ANY($1::uuid[])', [ids.lookups]);
-  await pool.query('DELETE FROM qms.round_robin WHERE user_id=ANY($1::uuid[])', [ids.users]);
   await pool.query('DELETE FROM qms.rate_limits WHERE key LIKE $1', ['%' + tag + '%']);
   await pool.query('DELETE FROM qms.users WHERE id=ANY($1::uuid[])', [ids.users]);
   await pool.end();

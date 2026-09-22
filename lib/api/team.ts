@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { saveUser, setQueueMember } from '../data/functions';
+import { saveUser, setQueueMember, setServicePriority } from '../data/functions';
 import { directory, queueMembership } from '../data/users';
 import { HttpError, body, json, rateLimit } from '../http';
 import { hashPassword } from '../security';
-import { SERVICES, SERVICE_IDS, STAFF_ROLES } from '../domain';
+import { MAX_PRIORITY, SERVICES, SERVICE_IDS, STAFF_ROLES } from '../domain';
 import { searchUsers } from '../salesforce';
 import { define, roles } from '../router';
 import { MANAGERS, passwordSchema, salesforceUserId, uuid } from './shared';
@@ -45,6 +45,9 @@ async function saveMember(
   });
   return json({ ok: true });
 }
+const prioritySchema = z.object({
+  priority: z.number().int().min(0).max(MAX_PRIORITY),
+});
 const membership =
   (member: boolean) =>
   async ({
@@ -110,6 +113,22 @@ export const teamRoutes = [
     roles(...MANAGERS),
     'Remove a member from a service queue',
     membership(false),
+  ),
+  // Urgency is a property of the service, hence PUT on the service itself. A
+  // waiting customer in a higher-priority service is routed before an older one
+  // elsewhere; inside a service, arrival order still decides.
+  define(
+    'PUT',
+    'queues/:service/priority',
+    roles(...MANAGERS),
+    'Set how urgently a service is routed (0 normal to 9 urgent)',
+    async ({ params, request, user }) => {
+      const serviceId = z.enum(SERVICE_IDS).parse(params.service);
+      const input = prioritySchema.parse(await body(request));
+      const priority = await setServicePriority(serviceId, input.priority, user.id);
+      return json({ ok: true, priority });
+    },
+    prioritySchema,
   ),
   // On-demand search through QMSUserAPI; nothing is imported in bulk.
   define(

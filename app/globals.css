@@ -723,6 +723,34 @@ form {
   font-size: 0.95rem;
   margin: 0 0 2px;
 }
+/* How urgently a service is routed against the others. */
+.queue-priority {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0 2px;
+}
+.queue-priority label {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(20, 40, 35, 0.55);
+}
+.queue-priority select {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(20, 40, 35, 0.18);
+  background: #fff;
+  color: inherit;
+}
+.queue-priority small {
+  flex-basis: 100%;
+  font-size: 0.7rem;
+  color: rgba(20, 40, 35, 0.5);
+}
 .queue-members {
   list-style: none;
   margin: 10px 0 12px;

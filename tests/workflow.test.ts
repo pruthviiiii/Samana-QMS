@@ -85,8 +85,80 @@ describe('PostgreSQL workflow invariants', () => {
     ));
   it('maintains a monotonic round-robin cursor inside a single transaction', () =>
     check(
-      `t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);PERFORM qms.assign_ticket((t->>'id')::uuid,a,'test');SELECT position INTO before_a FROM qms.round_robin WHERE service_id='crm-general' AND user_id=a;PERFORM qms.assign_ticket((t->>'id')::uuid,b,'test');SELECT position INTO before_b FROM qms.round_robin WHERE service_id='crm-general' AND user_id=b;IF before_a IS NULL OR before_b IS NULL OR before_b<=before_a THEN RAISE EXCEPTION 'Round robin cursor is not monotonic';END IF;IF qms.choose_available('crm-general') IS DISTINCT FROM a THEN RAISE EXCEPTION 'Round robin ordering failed';END IF;`,
+      `t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);PERFORM qms.assign_ticket((t->>'id')::uuid,a,'test');SELECT rotation INTO before_a FROM qms.users WHERE id=a;PERFORM qms.assign_ticket((t->>'id')::uuid,b,'test');SELECT rotation INTO before_b FROM qms.users WHERE id=b;IF before_a IS NULL OR before_b IS NULL OR before_b<=before_a THEN RAISE EXCEPTION 'Round robin cursor is not monotonic';END IF;IF qms.choose_available('crm-general') IS DISTINCT FROM a THEN RAISE EXCEPTION 'Round robin ordering failed';END IF;`,
     ));
+  // Migration 017. Work at one counter must count at every other counter the
+  // same person covers, or whoever helps in the most places is handed the most
+  // customers.
+  it('carries one rotation across every service a person covers', () =>
+    check(`
+    t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
+    IF t->>'assigned_to' IS DISTINCT FROM a::text THEN RAISE EXCEPTION 'Owner not selected';END IF;
+    SELECT rotation INTO before_a FROM qms.users WHERE id=a;
+    SELECT rotation INTO before_b FROM qms.users WHERE id=b;
+    IF before_a<=before_b THEN RAISE EXCEPTION 'Assignment did not move the agent to the back of the rotation';END IF;
+    UPDATE qms.tickets SET status='closed',closed_at=now() WHERE id=(t->>'id')::uuid;
+    IF qms.choose_available('collection') IS DISTINCT FROM b THEN RAISE EXCEPTION 'A customer taken in one service did not count in another';END IF;
+  `));
+  // Migration 017. Ten waiting customers used to land on one agent's name
+  // because only a called or serving ticket counted as busy.
+  it('never offers a second customer to somebody already holding one', () =>
+    check(`
+    t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
+    IF t->>'assigned_to' IS DISTINCT FROM a::text THEN RAISE EXCEPTION 'Owner not selected';END IF;
+    IF qms.choose_available('crm-general') IS DISTINCT FROM b THEN RAISE EXCEPTION 'An agent holding a waiting ticket was offered another';END IF;
+    UPDATE qms.users SET online=false WHERE id=b;
+    IF qms.choose_available('crm-general') IS NOT NULL THEN RAISE EXCEPTION 'A busy agent was offered a second customer';END IF;
+  `));
+  // Migration 017. Holding one customer at a time must not leave an agent idle
+  // waiting for the next routing tick.
+  it('offers the next waiting customer the moment a visit closes', () =>
+    check(`
+    -- Earlier runs leave waiting tickets in the shared test database and this
+    -- assertion is about which customer a freed agent is offered, so the queue
+    -- starts empty. The fixture transaction rolls all of it back.
+    UPDATE qms.tickets SET status='closed',closed_at=now() WHERE status IN ('waiting','called','serving');
+    UPDATE qms.users SET online=false WHERE id=b;
+    INSERT INTO qms.lookups(actor_id,identifier_type,identifier_value,customer)
+     VALUES(actor,'mobile','second-'||r,jsonb_set(snapshot,'{salesforceId}',to_jsonb('other-'||r))) RETURNING id INTO lookup2;
+    t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
+    t2:=qms.issue_ticket(lookup2,'crm-general','unit-1',gen_random_uuid(),actor);
+    IF t2->>'assigned_to' IS NOT NULL THEN RAISE EXCEPTION 'Second customer was given to a busy agent';END IF;
+    SELECT version INTO v FROM qms.tickets WHERE id=(t->>'id')::uuid;
+    PERFORM qms.ticket_action((t->>'id')::uuid,'call',a,v);
+    SELECT version INTO v FROM qms.tickets WHERE id=(t->>'id')::uuid;
+    PERFORM qms.ticket_action((t->>'id')::uuid,'start',a,v);
+    SELECT version INTO v FROM qms.tickets WHERE id=(t->>'id')::uuid;
+    PERFORM qms.ticket_action((t->>'id')::uuid,'close',a,v);
+    SELECT assigned_to INTO chosen FROM qms.tickets WHERE id=(t2->>'id')::uuid;
+    IF chosen IS DISTINCT FROM a THEN RAISE EXCEPTION 'A freed agent was not offered the waiting customer';END IF;
+  `));
+  // Migration 017. A refund can now be put ahead of a general enquiry.
+  it('routes a higher-urgency service before an older ticket elsewhere', () =>
+    check(`
+    UPDATE qms.tickets SET status='closed',closed_at=now() WHERE status IN ('waiting','called','serving');
+    UPDATE qms.users SET services=ARRAY['crm-general','crm-refund'],online=false WHERE id IN (a,b);
+    UPDATE qms.services SET priority=9 WHERE id='crm-refund';
+    t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
+    t2:=qms.issue_ticket(lookup,'crm-refund','unit-1',gen_random_uuid(),actor);
+    IF t->>'assigned_to' IS NOT NULL OR t2->>'assigned_to' IS NOT NULL THEN RAISE EXCEPTION 'Tickets should be unassigned while nobody is online';END IF;
+    UPDATE qms.users SET online=true,last_seen=now() WHERE id=a;
+    PERFORM qms.route_waiting(25,0);
+    SELECT assigned_to INTO chosen FROM qms.tickets WHERE id=(t2->>'id')::uuid;
+    IF chosen IS DISTINCT FROM a THEN RAISE EXCEPTION 'The urgent service was not routed first';END IF;
+    SELECT assigned_to INTO chosen FROM qms.tickets WHERE id=(t->>'id')::uuid;
+    IF chosen IS NOT NULL THEN RAISE EXCEPTION 'The older lower-urgency ticket took the only agent';END IF;
+  `));
+  // Migration 017. The preferred owner still wins, but for one customer only.
+  it('sends a second customer past a preferred owner who already holds one', () =>
+    check(`
+    INSERT INTO qms.lookups(actor_id,identifier_type,identifier_value,customer)
+     VALUES(actor,'mobile','third-'||r,jsonb_set(snapshot,'{salesforceId}',to_jsonb('third-'||r))) RETURNING id INTO lookup2;
+    t:=qms.issue_ticket(lookup,'crm-general','unit-1',r,actor);
+    IF t->>'assigned_to' IS DISTINCT FROM a::text THEN RAISE EXCEPTION 'Owner not selected for the first customer';END IF;
+    t2:=qms.issue_ticket(lookup2,'crm-general','unit-1',gen_random_uuid(),actor);
+    IF t2->>'assigned_to' IS DISTINCT FROM b::text THEN RAISE EXCEPTION 'A queue was allowed to build on the preferred owner';END IF;
+  `));
   it('rejects a Collection call by a local manager after service access is removed', () =>
     check(`
     t:=qms.issue_ticket(lookup,'collection','unit-1',r,actor);

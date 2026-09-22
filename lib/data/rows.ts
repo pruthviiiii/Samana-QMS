@@ -76,6 +76,7 @@ export const commentRow = z.object({
 
 export const countRow = z.object({ total: z.number().int() });
 export const checkedRow = z.object({ checked: z.number().int() });
+export const priorityRow = z.object({ priority: z.number().int() });
 
 /** Headline numbers on the live queue. */
 export const queueStatisticsRow = z.object({
@@ -113,6 +114,23 @@ export const publicStatusRow = z.object({
   status: ticketStatus,
   counter: z.string().nullable(),
   waiting_ahead: z.number().int(),
+  // Used to build the queue window below; not returned to the phone.
+  service_id: z.string(),
+  day: z.union([z.string(), z.date()]),
+});
+
+/**
+ * One line of the queue a customer sees on their own phone. It carries a
+ * ticket number, its state and the counter it was called to — exactly what the
+ * reception television already shows the whole waiting room, and nothing that
+ * identifies anybody.
+ */
+export const publicQueueRow = z.object({
+  number: z.string(),
+  status: ticketStatus,
+  counter: z.string().nullable(),
+  position: z.number().int(),
+  total: z.number().int(),
 });
 
 /** Report rows: the view plus two computed durations. */

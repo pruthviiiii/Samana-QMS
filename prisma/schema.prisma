@@ -100,26 +100,14 @@ model rate_limits {
   @@schema("qms")
 }
 
-model round_robin {
-  service_id    String
-  user_id       String   @db.Uuid
-  last_assigned DateTime @default(now()) @db.Timestamptz(6)
-  position      BigInt   @default(autoincrement())
-  services      services @relation(fields: [service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users         users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@id([service_id, user_id])
-  @@schema("qms")
-}
-
 model services {
-  id          String        @id
-  name        String
-  department  String
-  prefix      String        @unique
-  counters    counters[]
-  round_robin round_robin[]
-  tickets     tickets[]
+  id         String     @id
+  name       String
+  department String
+  prefix     String     @unique
+  priority   Int        @default(0)
+  counters   counters[]
+  tickets    tickets[]
 
   @@schema("qms")
 }
@@ -190,6 +178,7 @@ model tickets {
   @@index([closed_at], map: "tickets_closed_at", where: raw("(closed_at IS NOT NULL)"))
   @@index([created_at], map: "tickets_created")
   @@index([service_id, status, created_at], map: "tickets_queue")
+  @@index([service_id, created_at], map: "tickets_waiting_unassigned", where: raw("(status = 'waiting'::text)"))
   @@schema("qms")
 }
 
@@ -211,13 +200,14 @@ model users {
   must_change_password               Boolean         @default(true)
   created_at                         DateTime        @default(now()) @db.Timestamptz(6)
   email                              String?
+  rotation                           BigInt          @default(autoincrement())
   events                             events[]
   lookups                            lookups[]
   notifications                      notifications[]
-  round_robin                        round_robin[]
   sessions                           sessions[]
   tickets_tickets_assigned_toTousers tickets?        @relation("tickets_assigned_toTousers")
   tickets_tickets_created_byTousers  tickets[]       @relation("tickets_created_byTousers")
 
+  @@index([rotation], map: "users_rotation", where: raw("(enabled AND online)"))
   @@schema("qms")
 }

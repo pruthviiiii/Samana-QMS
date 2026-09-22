@@ -50,6 +50,7 @@ import {
 import { ApiError, api, post, send } from '@/lib/client';
 import {
   type User,
+  SCHEDULER_STALE_MS,
   canShowCheckinQr,
   isManager,
   isServingRole,
@@ -507,7 +508,7 @@ export default function QmsApp({
           )}
           {data &&
             (!data.workerLastRun ||
-              Date.now() - Date.parse(data.workerLastRun) > 90000) && (
+              Date.now() - Date.parse(data.workerLastRun) > SCHEDULER_STALE_MS) && (
               <div className="connection-banner">
                 <span className="status-dot amber" />
                 Automatic routing needs attention.

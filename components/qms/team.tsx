@@ -20,6 +20,7 @@ import { api, send } from '@/lib/client';
 import {
   SERVICES,
   STAFF_ROLES,
+  isPresent,
   roleLabel,
   type User,
   type Role,
@@ -170,10 +171,7 @@ export default function Team({ user }: { user: User }) {
     setSfResults(null);
     setEdit(next);
   }
-  const online = users.filter(
-    (u) =>
-      u.online && u.last_seen && Date.now() - Date.parse(u.last_seen) < 90000,
-  ).length;
+  const online = users.filter((u) => isPresent(u.online, u.last_seen)).length;
   return (
     <div className="stack">
       {error && !edit && (
@@ -289,18 +287,14 @@ export default function Team({ user }: { user: User }) {
                       <span
                         className={
                           'badge ' +
-                          (u.online &&
-                          u.last_seen &&
-                          Date.now() - Date.parse(u.last_seen) < 90000
+                          (isPresent(u.online, u.last_seen)
                             ? 'serving'
                             : 'neutral')
                         }
                       >
                         {!u.enabled
                           ? 'Disabled'
-                          : u.online &&
-                              u.last_seen &&
-                              Date.now() - Date.parse(u.last_seen) < 90000
+                          : isPresent(u.online, u.last_seen)
                             ? 'Online'
                             : 'Offline'}
                       </span>

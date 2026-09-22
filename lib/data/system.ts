@@ -1,3 +1,4 @@
+import { SCHEDULER_STALE_MS } from '../domain';
 import { prisma } from '../prisma';
 // Small shared state: when the scheduler last ran.
 
@@ -11,6 +12,6 @@ export async function workerLastRun(): Promise<string | null> {
 }
 
 /** True while the last tick is recent enough to trust. */
-export function schedulerHealthy(lastRun: string | null, windowMs = 90000) {
+export function schedulerHealthy(lastRun: string | null, windowMs = SCHEDULER_STALE_MS) {
   return !!lastRun && Date.now() - new Date(lastRun).getTime() < windowMs;
 }

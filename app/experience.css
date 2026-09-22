@@ -1839,6 +1839,77 @@ tbody tr:hover {
   background: #eff5e7;
   border-radius: 12px;
 }
+/* The queue a customer sees on their own phone: their service's board, with
+   their own ticket marked. Ticket numbers only, as on the reception screen. */
+.visit-queue {
+  margin-top: 28px;
+  text-align: left;
+  border-top: 1px solid #e7edef;
+  padding-top: 24px;
+}
+.visit-queue h3 {
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: #7e9470;
+  margin: 0 0 14px;
+}
+.visit-queue table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.visit-queue caption {
+  caption-side: bottom;
+  font-size: 10px;
+  line-height: 1.7;
+  color: #a0aeb6;
+  text-align: left;
+  padding-top: 14px;
+}
+.visit-queue th,
+.visit-queue td {
+  text-align: left;
+  padding: 11px 10px;
+  border-bottom: 1px solid #eef2ea;
+}
+.visit-queue thead th {
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #a0aeb6;
+  font-weight: 600;
+  padding-bottom: 8px;
+}
+.visit-queue tbody th {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #385d2e;
+  white-space: nowrap;
+}
+.visit-queue td em {
+  font-style: normal;
+  color: #859ba6;
+  font-size: 12px;
+}
+.visit-queue tr.you {
+  background: #eff5e7;
+}
+.visit-queue tr.you th {
+  color: #244b5b;
+}
+.you-tag {
+  display: inline-block;
+  margin-left: 9px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #385d2e;
+  color: white;
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
 .ticket-success {
   border-radius: 12px;
   background: #f5f9ef;

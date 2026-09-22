@@ -135,7 +135,13 @@ export async function queueMembership() {
       })),
   );
   const eligible = staff.map(({ id, name, role, enabled }) => ({ id, name, role, enabled }));
-  return { members, eligible };
+  // Priority lives in the database because an administrator changes it; the
+  // rest of a service's description is fixed in lib/domain.ts.
+  const priorities = await prisma().services.findMany({
+    select: { id: true, priority: true },
+  });
+  const priority = Object.fromEntries(priorities.map((s) => [s.id, s.priority]));
+  return { members, eligible, priority };
 }
 
 /** A guest account and its session, created together for a QR visit. */

@@ -1365,6 +1365,73 @@
         }
       }
     },
+    "/api/queues/{service}/priority": {
+      "put": {
+        "summary": "Set how urgently a service is routed (0 normal to 9 urgent)",
+        "description": "Signed-in session with role admin, hod, manager.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-roles": [
+          "admin",
+          "hod",
+          "manager"
+        ],
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "priority": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9
+                  }
+                },
+                "required": [
+                  "priority"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input; the body carries a human message"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Wrong origin, role, or password change pending"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "Database or integration unavailable"
+          }
+        }
+      }
+    },
     "/api/integrations/salesforce/users": {
       "get": {
         "summary": "Search Salesforce users by name or email (q=, at least 3 characters)",

@@ -33,7 +33,6 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const table of ['notifications', 'outbox', 'events']) await query(`DELETE FROM qms.${table} WHERE ticket_id=$1`, [ticketId]);
   await query('DELETE FROM qms.tickets WHERE id=$1', [ticketId]);
-  await query('DELETE FROM qms.round_robin WHERE user_id=$1', [userId]);
   await query('DELETE FROM qms.lookups WHERE actor_id=$1', [userId]);
   await query('DELETE FROM qms.events WHERE actor_id=$1', [userId]);
   await query('DELETE FROM qms.sessions WHERE user_id=$1', [userId]);
