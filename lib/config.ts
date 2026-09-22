@@ -73,8 +73,8 @@ const serverSchema = z
     // When set, the API accepts only requests that carry this token in
     // x-internal-token, which the web tier adds to everything it forwards. It
     // makes a public API address unusable by anyone but the web tier; on a
-    // private network it is defence in depth. assertConfig() refuses to start a
-    // production API without it unless the host declares the network private.
+    // private network it is defence in depth. assertApiConfig() refuses to start
+    // a production API without it unless the host declares the network private.
     API_PROXY_TOKEN: z
       .string()
       .min(16, 'API_PROXY_TOKEN must be at least 16 characters')
@@ -212,17 +212,6 @@ export function webConfig(): WebConfig {
 /** Called at API and scheduler start so a bad deployment fails before traffic. */
 export function assertConfig(): Config {
   const value = config();
-  // The API is reachable on its own address on most hosts, so a missing gate
-  // is an open API rather than a warning. Fail here instead of at the first
-  // request: a deployment that cannot protect itself must not accept traffic.
-  if (
-    value.NODE_ENV === 'production' &&
-    !value.API_PROXY_TOKEN &&
-    !value.API_TRUSTS_NETWORK
-  )
-    throw new Error(
-      'Invalid configuration:\n  - API_PROXY_TOKEN: required in production so only the web tier can reach the API. Set API_TRUSTS_NETWORK=true only if this address is unreachable from the internet.',
-    );
   if (new URL(value.APP_ORIGIN).protocol !== 'https:')
     console.warn(
       JSON.stringify({
@@ -245,6 +234,27 @@ export function assertConfig(): Config {
       retentionEventDays: value.RETENTION_EVENT_DAYS ?? null,
     }),
   );
+  return value;
+}
+
+/**
+ * Called at API start, and only there. The API is the one tier that listens on
+ * an address of its own, which on most hosts is reachable from the internet, so
+ * a missing gate leaves it open rather than merely unlogged: refuse to accept
+ * traffic instead of failing at the first request. The scheduler calls
+ * assertConfig() above and not this, because it holds no socket to protect --
+ * it talks to the database directly and serves nobody.
+ */
+export function assertApiConfig(): Config {
+  const value = assertConfig();
+  if (
+    value.NODE_ENV === 'production' &&
+    !value.API_PROXY_TOKEN &&
+    !value.API_TRUSTS_NETWORK
+  )
+    throw new Error(
+      'Invalid configuration:\n  - API_PROXY_TOKEN: required in production so only the web tier can reach the API. Set API_TRUSTS_NETWORK=true only if this address is unreachable from the internet.',
+    );
   return value;
 }
 

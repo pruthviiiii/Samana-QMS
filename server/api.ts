@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { assertConfig } from '../lib/config';
+import { assertApiConfig } from '../lib/config';
 import { closeDb } from '../lib/db';
 import { closeListener } from '../lib/events';
 import { installShutdown } from '../lib/lifecycle';
@@ -9,7 +9,7 @@ import { handle } from './handler';
 // web tier forwards /api to it, and nothing else reaches it. It validates its
 // configuration before it listens, so a bad deployment stops here, and it
 // drains its connections when the host asks it to stop.
-const settings = assertConfig();
+const settings = assertApiConfig();
 const port = settings.API_PORT ?? settings.PORT ?? 3001;
 const server = serve(
   {

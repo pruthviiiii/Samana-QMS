@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assertConfig, config, resetConfigForTests, webConfig } from '../lib/config';
+import {
+  assertApiConfig,
+  assertConfig,
+  config,
+  resetConfigForTests,
+  webConfig,
+} from '../lib/config';
 // Configuration is the one place the environment is read, so its rules are
 // tested directly: what is required, what is refused, and which combinations
 // are contradictions that must stop a deployment rather than reach a customer.
@@ -60,27 +66,35 @@ describe('API and scheduler configuration', () => {
   });
   // The API service is reachable on its own address on most hosts, so a
   // missing gate is an open API and not a warning worth logging past.
+  const production = {
+    APP_ORIGIN: 'https://qms.test',
+    SESSION_COOKIE_SECURE: 'true',
+    NODE_ENV: 'production',
+  };
   it('refuses to start a production API with no gate in front of it', () => {
-    const production = {
-      APP_ORIGIN: 'https://qms.test',
-      SESSION_COOKIE_SECURE: 'true',
-      NODE_ENV: 'production',
-    };
     stub({ ...base, ...production });
-    expect(() => assertConfig()).toThrow(/API_PROXY_TOKEN/);
+    expect(() => assertApiConfig()).toThrow(/API_PROXY_TOKEN/);
     stub({
       ...base,
       ...production,
       API_PROXY_TOKEN: 'a-proxy-token-for-the-test-suite',
     });
-    expect(assertConfig().API_PROXY_TOKEN).toBe('a-proxy-token-for-the-test-suite');
+    expect(assertApiConfig().API_PROXY_TOKEN).toBe('a-proxy-token-for-the-test-suite');
     // A genuinely private address may waive it, but only by saying so.
     stub({ ...base, ...production, API_TRUSTS_NETWORK: 'true' });
-    expect(assertConfig().API_TRUSTS_NETWORK).toBe(true);
+    expect(assertApiConfig().API_TRUSTS_NETWORK).toBe(true);
   });
   it('does not demand the gate outside production', () => {
     stub({ ...base });
-    expect(assertConfig().NODE_ENV).toBe('development');
+    expect(() => assertApiConfig()).not.toThrow();
+  });
+  // The scheduler shares this configuration but listens on nothing, so the gate
+  // is meaningless to it. Requiring it there stops routing in production for a
+  // variable the scheduler has no reason to hold; that happened once.
+  it('lets the scheduler start in production without the API gate', () => {
+    stub({ ...base, ...production });
+    expect(() => assertConfig()).not.toThrow();
+    expect(assertConfig().NODE_ENV).toBe('production');
   });
   it('names the missing variable instead of failing later', () => {
     expect(() => load({ DATABASE_URL: undefined })).toThrow(/DATABASE_URL/);

@@ -179,6 +179,10 @@ model tickets {
   @@index([created_at], map: "tickets_created")
   @@index([service_id, status, created_at], map: "tickets_queue")
   @@index([service_id, created_at], map: "tickets_waiting_unassigned", where: raw("(status = 'waiting'::text)"))
+  @@index([status], map: "tickets_active", where: raw("(status = ANY (ARRAY['waiting'::text, 'called'::text, 'serving'::text]))"))
+  @@index([customer_name(ops: raw("gin_trgm_ops"))], map: "tickets_customer_name_trgm", type: Gin)
+  @@index([number(ops: raw("gin_trgm_ops"))], map: "tickets_number_trgm", type: Gin)
+  @@index([unit_name(ops: raw("gin_trgm_ops"))], map: "tickets_unit_name_trgm", type: Gin)
   @@schema("qms")
 }
 

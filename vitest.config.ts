@@ -22,7 +22,7 @@ export default defineConfig({
       // Measured on 22 September 2026 over lib/, components/qms/ and proxy.ts.
       // A change that lowers any of these fails the run. Raise them when a
       // change raises coverage, so the floor keeps following the suite.
-      thresholds: { statements: 41, branches: 37, functions: 33, lines: 42 },
+      thresholds: { statements: 46, branches: 40, functions: 37, lines: 47 },
     },
     projects: [
       {

@@ -19,6 +19,17 @@ App data is isolated in the `qms` schema of the `samana_qms` database on whichev
 
 ## Day rollover
 
+The reads that grow with the visit history are index-backed and measured.
+`qms.statistics` and `qms.serviceCounts` run on every staff screen refresh and
+once scanned the whole ticket table; migration 018 gives them a partial index
+over the active statuses and the queries say which rows they need, and queue
+search moved off a sequential scan onto trigram indexes. Measured on a local
+PostgreSQL 18 at 200,000 tickets (`node --env-file=.env.test
+scripts/read-path-check.mjs`): dashboard statistics 232 ms to 2.4 ms, service
+counts 215 ms to 0.2 ms. Re-run that script after touching either query; a
+sequential scan in its AFTER rows is a regression. Rolling a migration back is
+`docs/rollback.md`.
+
 Ticket numbers restart every Dubai day. A ticket still waiting or called from a previous day is marked no-show by the routing tick once it is more than two hours old, with an audited `day_rollover` reason, so it leaves the queue and the TV; a ticket being served is left to its agent. When a number from a previous day is still on the floor, today's numbering skips it, so two live tickets never share a number.
 
 ## Backups, retention, recovery

@@ -50,19 +50,33 @@ export async function queuePage(filter: QueueFilter) {
   return { tickets: rows(ticketRow, list, 'queue page'), total: one(countRow, count, 'queue count').total };
 }
 
-/** Headline numbers, for everyone or for one agent's own tickets. */
+/**
+ * Headline numbers, for everyone or for one agent's own tickets.
+ *
+ * Every row this needs is either still active or from today, so it says so:
+ * without that the aggregate scanned the entire visit history on every refresh
+ * of every staff screen. The two halves are read through two indexes
+ * (migration 018) and combined, which is why the predicate is an OR rather
+ * than a date window -- a ticket left serving across midnight is still active
+ * and must keep counting.
+ */
 export async function statistics(assignedTo: string | null) {
   const result = await query(
-    `SELECT count(*) FILTER(WHERE status='waiting')::int waiting,count(*) FILTER(WHERE status IN ('called','serving'))::int serving,count(*) FILTER(WHERE status='closed' AND day=(now() AT TIME ZONE 'Asia/Dubai')::date)::int completed,coalesce(round(avg(extract(epoch from coalesce(called_at,closed_at,now())-created_at)/60) FILTER(WHERE day=(now() AT TIME ZONE 'Asia/Dubai')::date AND status<>'no_show')::numeric,1),0)::float avg_wait,count(*) FILTER(WHERE status='waiting' AND assigned_to IS NULL)::int unassigned FROM qms.tickets WHERE ($1::uuid IS NULL OR assigned_to=$1)`,
+    `SELECT count(*) FILTER(WHERE status='waiting')::int waiting,count(*) FILTER(WHERE status IN ('called','serving'))::int serving,count(*) FILTER(WHERE status='closed' AND day=(now() AT TIME ZONE 'Asia/Dubai')::date)::int completed,coalesce(round(avg(extract(epoch from coalesce(called_at,closed_at,now())-created_at)/60) FILTER(WHERE day=(now() AT TIME ZONE 'Asia/Dubai')::date AND status<>'no_show')::numeric,1),0)::float avg_wait,count(*) FILTER(WHERE status='waiting' AND assigned_to IS NULL)::int unassigned FROM qms.tickets WHERE ($1::uuid IS NULL OR assigned_to=$1) AND (status IN ('waiting','called','serving') OR day=(now() AT TIME ZONE 'Asia/Dubai')::date)`,
     [assignedTo],
   );
   return one(queueStatisticsRow, result, 'queue statistics');
 }
 
-/** Every service with its waiting and serving counts. */
+/**
+ * Every service with its waiting and serving counts. The join is restricted to
+ * the active statuses the counts already filter on, which changes no result and
+ * lets the partial index (migration 018) answer it instead of reading every
+ * ticket ever issued.
+ */
 export async function serviceCounts(assignedTo: string | null) {
   const result = await query(
-    `SELECT s.*,count(t.id) FILTER(WHERE t.status='waiting')::int waiting,count(t.id) FILTER(WHERE t.status IN ('called','serving'))::int serving FROM qms.services s LEFT JOIN qms.tickets t ON t.service_id=s.id AND ($1::uuid IS NULL OR t.assigned_to=$1) GROUP BY s.id ORDER BY s.department,s.name`,
+    `SELECT s.*,count(t.id) FILTER(WHERE t.status='waiting')::int waiting,count(t.id) FILTER(WHERE t.status IN ('called','serving'))::int serving FROM qms.services s LEFT JOIN qms.tickets t ON t.service_id=s.id AND t.status IN ('waiting','called','serving') AND ($1::uuid IS NULL OR t.assigned_to=$1) GROUP BY s.id ORDER BY s.department,s.name`,
     [assignedTo],
   );
   return rows(serviceCountRow, result, 'service counts');
