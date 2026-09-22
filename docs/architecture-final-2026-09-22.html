@@ -71,7 +71,7 @@
 <body>
 
 <h1>Samana QMS: final production architecture</h1>
-<p class="meta">22 September 2026 · Third and final report of the day · Code at commit {{COMMIT}} · Written for management, engineering, and whoever reviews this next</p>
+<p class="meta">22 September 2026 · Third and final report of the day · Code at commit 9295489 · Written for management, engineering, and whoever reviews this next</p>
 
 <div class="lead">
   <p><b>The system now has the architecture the external review asked for, built properly rather than bolted on.</b> The API is its own service, unreachable from the internet. The web tier serves screens and holds no credential of any kind. Prisma is the master description of the data and the typed client for every record, and the queue engine's rules stay in PostgreSQL behind typed, validated calls. Every one of those statements is enforced by a test, not by a convention.</p>
@@ -216,7 +216,7 @@ npm run build &amp;&amp; npm run build:api &amp;&amp; npm run build:worker
   <thead><tr><th>Commit</th><th>Date</th><th>Scope</th></tr></thead>
   <tbody>
   <tr><td class="n">2341d2a</td><td class="n">22 Sep</td><td>Architecture review change set described; report stamped</td></tr>
-  <tr><td class="n">{{COMMIT}}</td><td class="n">22 Sep</td><td>API extracted into its own private service on a Node HTTP host; web tier reduced to screens and a forwarding proxy with no credentials; client address carried as x-client-address; Prisma 7 schema introspected and pinned by a drift test; typed data layer in lib/data with validated raw results; one UTC-pinned pool shared by the Prisma client and raw queries; time-zone defect found and fixed with a regression test; server, data-layer, configuration and proxy tests; three build artefacts, Compose services and Render services; documentation and runbooks</td></tr>
+  <tr><td class="n">9295489</td><td class="n">22 Sep</td><td>API extracted into its own private service on a Node HTTP host; web tier reduced to screens and a forwarding proxy with no credentials; client address carried as x-client-address; Prisma 7 schema introspected and pinned by a drift test; typed data layer in lib/data with validated raw results; one UTC-pinned pool shared by the Prisma client and raw queries; time-zone defect found and fixed with a regression test; server, data-layer, configuration and proxy tests; three build artefacts, Compose services and Render services; documentation and runbooks</td></tr>
   </tbody>
 </table>
 <p class="small">Companion documents: <code>docs/review-response-2026-09-22.html</code> (response to the first review), <code>docs/architecture-review-2026-09-22.html</code> (the morning's review), <code>docs/review-checklist-2026-09-21.md</code> sections I and J, <code>docs/requirements.md</code> decisions, <code>docs/render.md</code>, <code>.env.example</code>, and the design document "Samana QMS – Demo Flow and Technical Design".</p>
