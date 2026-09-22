@@ -184,7 +184,7 @@
 </table>
 
 <h2>7. Deploying it</h2>
-<p><b>Render.</b> The Blueprint now declares three services. An existing deployment must sync the Blueprint once after this commit reaches <code>main</code>: Render creates the private API service, asks for the secrets once (they move from the web service to the API), and wires the API's private address into the web tier. Between the deploy of the web tier and that sync, the web tier answers every API call with <code>503 API_NOT_CONFIGURED</code>, so sync straight after the push. The steps are in <code>docs/render.md</code>.</p>
+<p><b>Render.</b> The Blueprint now declares three services. An existing deployment must sync the Blueprint once after this commit reaches <code>main</code>: Render creates the private API service, asks for the secrets once (they move from the web service to the API), and wires the API's private address into the web tier. Until that sync, the new web tier refuses to start because it has no <code>API_URL</code>, and Render keeps the previous version serving, so the site stays on the old code rather than failing; the boot validation is doing exactly what it is for. The steps are in <code>docs/render.md</code>.</p>
 <p><b>Your own server.</b> <code>docker compose up -d</code> builds the three images and starts them on one private network; only the web tier publishes a port, on the loopback address, for a TLS reverse proxy to front. The API never needs a public address.</p>
 <p><b>Any Node host.</b> Three processes from three artefacts: <code>node dist-api/api.mjs</code>, <code>node dist-node/standalone/server.js</code> with <code>API_URL</code> pointing at the first, and <code>node dist-worker/worker.mjs</code>.</p>
 

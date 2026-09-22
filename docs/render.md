@@ -44,12 +44,15 @@ caller.
 ## Upgrading an existing deployment
 
 A deployment created before the API became its own service has a web service that used to
-host the API itself. After the code that splits them is on `main`, that web service forwards
-`/api` to `API_URL`, which it does not have until the Blueprint is synced, and answers every
-API call with `503 API_NOT_CONFIGURED` in the meantime. Sync the Blueprint straight after
-the push: Render creates `samana-qms-api`, moves the secrets to it (you are asked for them
-once), and wires `API_URL` into the web service. Existing services created by hand are not
-reconfigured by a Blueprint file; confirm their build and start commands match `render.yaml`.
+host the API itself. When the code that splits them reaches `main`, that web service builds
+the new version but refuses to start it, because the web tier validates its settings at boot
+and has no `API_URL` until the Blueprint is synced. Render keeps the previous version
+serving, so the site stays up on the old code; the failed deploy in the dashboard reads
+"API_URL is required: the address of the API service". Sync the Blueprint to move on: Render
+creates `samana-qms-api`, moves the secrets to it (you are asked for them once), wires
+`API_URL` into the web service and redeploys all three. Existing services created by hand
+are not reconfigured by a Blueprint file; confirm their build and start commands match
+`render.yaml`.
 
 ## Validation at start
 
