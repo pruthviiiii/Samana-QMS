@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Samana QMS · Technical Design Document</title>
+<style>
+:root{
+  --sans:'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+  --mono:'Cascadia Mono','SF Mono',Menlo,Consolas,'Liberation Mono',monospace;
+  --ease:cubic-bezier(.25,.1,.25,1);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--sans);font-size:14px;line-height:1.5;color:#181818;background:#e7e7e5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:#1d6b3f;text-decoration:none}
+a:hover{color:#134b2b;text-decoration:underline}
+p{margin:0 0 12px;text-wrap:pretty}
+main h1{font-size:26px;line-height:1.18;font-weight:700;color:#12331f;margin:0}
+main h2{font-size:18.5px;font-weight:700;color:#181818;margin:26px 0 10px;scroll-margin-top:16px}
+main h3{font-size:15px;font-weight:700;color:#1d6b3f;margin:18px 0 8px}
+main h4{font-size:12px;font-weight:700;color:#706e6b;margin:15px 0 6px;text-transform:uppercase;letter-spacing:.06em}
+ul{margin:0 0 12px;padding:0;list-style:none}
+main li{position:relative;padding:4px 0 4px 20px;color:#2b2826;text-wrap:pretty}
+main li::before{content:"";position:absolute;left:3px;top:11px;width:6px;height:6px;border-radius:50%;background:#2e844a}
+table{width:100%;border-collapse:collapse;margin:8px 0 16px;font-size:12.5px;background:#fff;border:1px solid #dddbda;border-radius:6px;overflow:hidden}
+th{text-align:left;padding:9px 13px;background:#f3f2f2;color:#514f4d;font-weight:700;font-size:10.5px;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid #dddbda;vertical-align:bottom}
+td{padding:9px 13px;border-bottom:1px solid #ecebea;vertical-align:top;color:#2b2826}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafaf9}
+td code,p code,li code{font-family:var(--mono);font-size:11.5px;background:#eef4ee;color:#12331f;padding:1px 5px;border-radius:3px;white-space:nowrap}
+pre{margin:14px 0;background:#fbfcfb;border:1px solid #dddbda;border-left:3px solid #2e844a;border-radius:6px;padding:15px 18px;overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.65;color:#2b2826}
+pre .cx-c{color:#8a9a8d;font-style:italic}
+pre .cx-s{color:#1d6b3f}
+pre .cx-n{color:#c23934}
+pre .cx-k{color:#0b5cab;font-weight:600}
+pre .cx-t{color:#a96404;font-weight:600}
+pre .cx-q{color:#6a0a94;font-weight:700}
+.pre-cap{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:#706e6b;margin:14px 0 -8px}
+[data-callout]{display:flex;gap:12px;margin:16px 0;padding:13px 16px;border-radius:6px;border:1px solid #dddbda;border-left-width:4px;background:#fff;font-size:13px;line-height:1.5}
+[data-callout] p{margin:0}
+[data-callout] p+p{margin-top:6px}
+[data-callout] .co-t{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+[data-callout] svg{flex:none;margin-top:1px}
+[data-callout="note"]{border-left-color:#0176d3;background:#f4f8fe}
+[data-callout="note"] .co-t{color:#0b5cab}
+[data-callout="warn"]{border-left-color:#fe9339;background:#fff7f0}
+[data-callout="warn"] .co-t{color:#a96404}
+[data-callout="danger"]{border-left-color:#ea001e;background:#fef4f2}
+[data-callout="danger"] .co-t{color:#ba0517}
+[data-callout="success"]{border-left-color:#2e844a;background:#f2faee}
+[data-callout="success"] .co-t{color:#194e31}
+[data-eyebrow]{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#2e844a}
+[data-chip]{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:15rem;border:1px solid #c9c7c5;background:#fff;color:#514f4d;cursor:pointer;transition:all .15s var(--ease);user-select:none;line-height:1}
+[data-chip]:hover{border-color:#2e844a;color:#2e844a}
+[data-chip] .dot{width:9px;height:9px;border-radius:2px;flex:none}
+[data-chip][data-on="true"]{background:#2e844a;border-color:#2e844a;color:#fff}
+[data-btn]{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;padding:7px 14px;border-radius:4px;border:1px solid #2e844a;background:#2e844a;color:#fff;cursor:pointer;transition:all .15s var(--ease);font-family:inherit;line-height:1}
+[data-btn]:hover{background:#194e31;border-color:#194e31}
+[data-btn][data-on="true"]{background:#194e31}
+nav a{display:flex;gap:9px;align-items:baseline;padding:6px 14px 6px 15px;color:#b6d8c1;font-size:12.5px;border-left:3px solid transparent;text-decoration:none;line-height:1.3;transition:all .12s var(--ease)}
+nav a:hover{color:#fff;background:rgba(255,255,255,.07);text-decoration:none}
+nav a[data-active="true"]{color:#fff;background:rgba(72,187,120,.18);border-left-color:#48bb78;font-weight:600}
+nav a .n{font-size:10px;font-weight:700;color:#5fc487;min-width:16px;font-variant-numeric:tabular-nums}
+nav a[data-active="true"] .n{color:#8ce0aa}
+[data-diagram]{position:relative;margin:18px 0 8px;border:1px solid #dddbda;border-radius:10px;background:#fff;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+[data-diagram] .dg-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(180deg,#fbfdfb,#f2f7f3);border-bottom:1px solid #dddbda}
+[data-diagram] .dg-title{font-size:13px;font-weight:700;color:#12331f;display:flex;align-items:center;gap:8px}
+[data-diagram] .dg-tools{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+[data-diagram] .dg-body{padding:22px;overflow:auto}
+.fig-cap{font-size:11.5px;color:#706e6b;margin:2px 0 20px;font-style:italic}
+.gnode{position:relative;background:#fff;border:1px solid #cfdbd2;border-radius:9px;padding:11px 13px;box-shadow:0 1px 2px rgba(18,51,31,.08);transition:opacity .3s var(--ease),box-shadow .3s var(--ease),transform .3s var(--ease),filter .3s}
+.gnode .gt{font-size:12.5px;font-weight:700;color:#12331f;line-height:1.25;display:flex;align-items:center;gap:7px}
+.gnode .gs{font-size:11px;color:#55705f;margin-top:3px;line-height:1.4}
+.gnode .gtag{font-family:var(--mono);font-size:10px;background:#eef4ee;color:#1d6b3f;padding:1px 6px;border-radius:3px;display:inline-block}
+.gbadge{width:22px;height:22px;flex:none;border-radius:50%;background:#2e844a;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.glayer{border:1px solid #cfdbd2;border-radius:10px;overflow:hidden;transition:opacity .3s,filter .3s}
+.glabel{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:7px 13px;color:#fff;display:flex;align-items:center;gap:8px}
+.varr{width:2px;background:#9ab5a4;margin:0 auto;position:relative;flex:none}
+.varr::after{content:"";position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #9ab5a4}
+.gpath{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:15rem;display:inline-block}
+.gdia{background:linear-gradient(180deg,#fff7f0,#ffede0);border:1px solid #fbc99a;border-radius:9px;padding:11px 15px;text-align:center;color:#8a4b00;font-weight:700;font-size:12px;transition:opacity .3s,box-shadow .3s,filter .3s}
+#prog{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,#48bb78,#2e844a);z-index:50;width:0;transition:width .1s linear}
+.tblwrap{max-width:100%}
+#topbar{display:none}
+#scrim{display:none}
+.metric{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:#dddbda;border:1px solid #dddbda;border-radius:8px;overflow:hidden;margin:14px 0 18px}
+.metric>div{background:#fff;padding:12px 14px}
+.metric .mv{font-size:20px;font-weight:700;color:#12331f;font-variant-numeric:tabular-nums;line-height:1.1}
+.metric .ml{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#706e6b;font-weight:700;margin-top:4px}
+@media (max-width:1024px){
+  #doc{display:block!important}
+  #topbar{display:flex;align-items:center;gap:11px;position:sticky;top:0;z-index:55;background:#12331f;padding:9px 13px;border-bottom:1px solid #0b2114}
+  #nav{position:fixed!important;top:0;left:0;width:284px!important;height:100vh!important;z-index:60;transform:translateX(-102%);transition:transform .26s var(--ease);box-shadow:0 0 34px rgba(0,0,0,.42)}
+  #nav[data-open="true"]{transform:none}
+  #scrim{display:block;position:fixed;inset:0;background:rgba(8,7,7,.45);z-index:58;opacity:0;pointer-events:none;transition:opacity .26s var(--ease)}
+  #scrim[data-open="true"]{opacity:1;pointer-events:auto}
+  main header[data-cover]{padding:34px 26px 54px!important}
+  main [data-paper]{max-width:none!important;margin:-34px 16px 40px!important;padding:26px 26px 34px!important;border-radius:8px!important}
+}
+@media (max-width:760px){
+  body{font-size:13.5px}
+  main h1{font-size:22px}
+  main [data-cover] h1{font-size:32px!important}
+  main [data-paper]{margin:-28px 10px 32px!important;padding:20px 18px 26px!important}
+  .tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:8px 0 16px;border:1px solid #dddbda;border-radius:6px;background:#fff}
+  .tblwrap table{margin:0;min-width:560px;border:none;border-radius:0}
+  pre{font-size:11.5px;padding:12px 13px}
+  [data-diagram] .dg-body{padding:14px!important}
+  [data-diagram] .dg-body [style*="grid-template-columns"]{grid-template-columns:1fr!important}
+}
+@media print{
+  #nav,#prog,.dg-tools,#topbar,#scrim{display:none!important}
+  .tblwrap{overflow:visible!important;border:none!important}
+  body{background:#fff}
+  #doc{display:block}
+  [data-paper]{box-shadow:none!important;border:none!important;margin:0!important;max-width:none!important;border-radius:0!important}
+  section,pre,table,[data-callout],[data-diagram],tr{break-inside:avoid}
+  [data-cover]{break-after:page}
+}
+</style>
+</head>
+<body>
+<div id="prog"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"></circle><circle cx="12" cy="8" r="1.3" fill="currentColor"></circle><path d="M12 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l9 16H3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="M12 9v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><circle cx="12" cy="16.5" r="1.2" fill="currentColor"></circle></symbol>
+<symbol id="i-err" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></symbol>
+<symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M8 12.5l2.5 2.5 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"></path></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16l-6 8v5l-4 2v-7z" fill="currentColor"></path></symbol>
+<symbol id="i-flow" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="5" rx="1" fill="currentColor"></rect><rect x="14" y="15" width="7" height="5" rx="1" fill="currentColor"></rect><path d="M6.5 9v4a2 2 0 002 2h6" stroke="currentColor" stroke-width="2" fill="none"></path></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4 4 0 01-.5-7.97A5 5 0 0116 9.5a3.5 3.5 0 01.5 6.98z" fill="currentColor"></path></symbol>
+</defs></svg>
+<div id="doc" style="display:flex;min-height:100vh;background:#e7e7e5">
+  <div id="topbar">
+    <button id="menu" type="button" aria-label="Open contents" aria-expanded="false" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;flex:none;border:1px solid rgba(255,255,255,.22);border-radius:5px;background:rgba(255,255,255,.08);cursor:pointer;padding:0">
+      <svg width="19" height="19" viewBox="0 0 24 24" style="color:#fff"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"></path></svg>
+    </button>
+    <div style="min-width:0;flex:1">
+      <div style="color:#fff;font-weight:700;font-size:13px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Samana QMS · TDD V1.0</div>
+      <div id="crumb" style="color:#8ce0aa;font-size:11px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Document Control</div>
+    </div>
+    <span style="flex:none;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#12331f;background:#5fc487;padding:3px 8px;border-radius:15rem">eb8e8d2</span>
+  </div>
+  <div id="scrim"></div>
+  <aside id="nav" style="width:266px;flex:none;background:#12331f;position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid #0b2114">
+    <div style="padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.1)">
+      <div style="display:flex;align-items:center;gap:9px;color:#48bb78"><svg width="26" height="26" style="color:#48bb78"><use href="#i-flow"></use></svg><div style="color:#fff;font-weight:700;font-size:14px;line-height:1.1">Samana QMS<div style="color:#8ce0aa;font-weight:400;font-size:11px;margin-top:2px">Technical Design Document</div></div></div>
+      <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
+        <span style="font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#12331f;background:#5fc487;padding:3px 8px;border-radius:15rem">V1.0 · CURRENT</span>
+        <span style="font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#b6d8c1;background:rgba(72,187,120,.16);padding:3px 8px;border-radius:15rem">18 migrations · 32 routes</span>
+      </div>
+    </div>
+    <nav style="padding:8px 0 32px">
+      <a href="#s-0"><span class="n">00</span><span>Document Control</span></a>
+      <a href="#s-1"><span class="n">01</span><span>Executive Summary</span></a>
+      <a href="#s-2"><span class="n">02</span><span>Context &amp; Drivers</span></a>
+      <a href="#s-3"><span class="n">03</span><span>Solution Architecture</span></a>
+      <a href="#s-4"><span class="n">04</span><span>Data Layer</span></a>
+      <a href="#s-5"><span class="n">05</span><span>Schema Authority &amp; Migrations</span></a>
+      <a href="#s-6"><span class="n">06</span><span>The Queue Engine</span></a>
+      <a href="#s-7"><span class="n">07</span><span>Concurrency &amp; Locking</span></a>
+      <a href="#s-8"><span class="n">08</span><span>Real-Time Delivery</span></a>
+      <a href="#s-9"><span class="n">09</span><span>API Specification</span></a>
+      <a href="#s-10"><span class="n">10</span><span>Security Model</span></a>
+      <a href="#s-11"><span class="n">11</span><span>Salesforce Integration</span></a>
+      <a href="#s-12"><span class="n">12</span><span>Performance &amp; Load</span></a>
+      <a href="#s-13"><span class="n">13</span><span>Failure Modes</span></a>
+      <a href="#s-14"><span class="n">14</span><span>Testing Strategy</span></a>
+      <a href="#s-15"><span class="n">15</span><span>Deployment &amp; Rollback</span></a>
+      <a href="#s-16"><span class="n">16</span><span>Appendices</span></a>
+    </nav>
+  </aside>
+  <main style="flex:1;min-width:0">
+    <header data-cover="" style="position:relative;padding:52px 48px 72px;background:radial-gradient(120% 140% at 85% 0%,#2e844a 0%,#12331f 55%,#0b2114 100%);color:#fff;overflow:hidden">
+      <div style="position:absolute;inset:0;opacity:.5;background:radial-gradient(60% 80% at 100% 100%,rgba(72,187,120,.35),transparent 60%);pointer-events:none"></div>
+      <div style="position:relative;max-width:940px;margin:0 auto">
+        <div style="display:flex;align-items:center;gap:10px;color:#8ce0aa;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase"><svg width="16" height="16"><use href="#i-flow"></use></svg>Customer Experience Centre · Technical Design Document</div>
+        <h1 style="font-size:46px;line-height:1.03;font-weight:700;margin:16px 0 0;color:#fff;letter-spacing:-.01em">Samana QMS</h1>
+        <p style="font-size:19px;color:#d6ecdd;margin:12px 0 0;max-width:660px;font-weight:300">A three-tier queue management system for one reception floor — a Next.js web tier, a standalone API service, and a database that owns the queue engine. This document states what was built, and why each boundary sits where it does.</p>
+        <div style="display:flex;gap:9px;margin-top:20px;flex-wrap:wrap">
+          <span style="font-size:11.5px;font-weight:700;background:rgba(255,255,255,.14);color:#fff;padding:5px 12px;border-radius:15rem">Next.js 16.3.5</span>
+          <span style="font-size:11.5px;font-weight:700;background:rgba(255,255,255,.14);color:#fff;padding:5px 12px;border-radius:15rem">PostgreSQL 18</span>
+          <span style="font-size:11.5px;font-weight:700;background:rgba(255,255,255,.14);color:#fff;padding:5px 12px;border-radius:15rem">Prisma 7 + pg</span>
+          <span style="font-size:11.5px;font-weight:700;background:#48bb78;color:#12331f;padding:5px 12px;border-radius:15rem">Salesforce Apex-only</span>
+        </div>
+        <div class="metric" style="margin-top:34px;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.14)">
+          <div style="background:#173d26"><div class="mv" style="color:#fff">3</div><div class="ml" style="color:#8ce0aa">Deployables</div></div>
+          <div style="background:#173d26"><div class="mv" style="color:#fff">32</div><div class="ml" style="color:#8ce0aa">Declared routes</div></div>
+          <div style="background:#173d26"><div class="mv" style="color:#fff">18</div><div class="ml" style="color:#8ce0aa">Migrations</div></div>
+          <div style="background:#173d26"><div class="mv" style="color:#fff">22</div><div class="ml" style="color:#8ce0aa">Engine functions</div></div>
+          <div style="background:#173d26"><div class="mv" style="color:#fff">255</div><div class="ml" style="color:#8ce0aa">Tests</div></div>
+          <div style="background:#173d26"><div class="mv" style="color:#fff">0</div><div class="ml" style="color:#8ce0aa">High advisories</div></div>
+        </div>
+        <div style="margin-top:14px;font-size:11px;color:#b6d8c1">Audience — Architects · Senior Developers · Reviewers · QA · DevOps</div>
+      </div>
+    </header>
+    <div data-paper="" style="max-width:940px;margin:-44px auto 64px;background:#fff;border:1px solid #dddbda;border-radius:10px;box-shadow:0 10px 30px rgba(18,51,31,.12);padding:38px 48px 52px;position:relative">
+
+      <section id="s-0" style="scroll-margin-top:14px">
+        <div data-eyebrow="">Section 00</div>
+        <h1>Document Control</h1>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">Scope of this document</span><p>This is a design document, not a status report. It records the architecture as deployed at commit <code>eb8e8d2</code> and the reasoning behind each decision, including the decisions a reviewer is most likely to challenge. Where a choice carries a known cost, that cost is stated in the same paragraph as the choice.</p></div></div>
+
+        <h2>Revision History</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:52px">Ver</th><th style="width:96px">Date</th><th style="width:88px">Commit</th><th>Scope</th></tr></thead>
+          <tbody>
+            <tr><td><b>0.1</b></td><td>19 Sep 2026</td><td><code>7ac21d9</code></td><td>Initial build — single Next.js application, route handler under <code>app/api</code>, Neon serverless HTTP driver, queue logic in PL/pgSQL.</td></tr>
+            <tr><td><b>0.2</b></td><td>21 Sep 2026</td><td><code>3aac449</code></td><td>Audit trail, walk-in fallback, TV session expiry, 404 handling, retention.</td></tr>
+            <tr><td><b>0.3</b></td><td>22 Sep 2026</td><td><code>b42b51b</code></td><td>Next.js 16, declarative route table, server-sent events, pooled connections.</td></tr>
+            <tr><td><b>0.4</b></td><td>22 Sep 2026</td><td><code>9295489</code></td><td>API split into its own service; Prisma introduced as the typed data layer.</td></tr>
+            <tr><td><b>1.0</b></td><td>22 Sep 2026</td><td><code>eb8e8d2</code></td><td><b>Current.</b> Fair routing and service urgency (017), read-path indexes (018), customer identity normalisation, reception board rebuilt. Baselined as this TDD.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>Related Artifacts</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:190px">Artifact</th><th>Location</th></tr></thead>
+          <tbody>
+            <tr><td>Generated schema snapshot</td><td><code>db/schema.sql</code> — produced by <code>npm run db:schema</code>; a test fails when it drifts from the migrated database.</td></tr>
+            <tr><td>API document</td><td><code>docs/openapi.json</code> — generated from the route table by <code>npm run api:docs</code>.</td></tr>
+            <tr><td>Operations runbook</td><td><code>docs/operations.md</code></td></tr>
+            <tr><td>Rollback procedure</td><td><code>docs/rollback.md</code></td></tr>
+            <tr><td>Deployment blueprint</td><td><code>render.yaml</code>, <code>Dockerfile</code>, <code>compose.yaml</code></td></tr>
+            <tr><td>Load harnesses</td><td><code>scripts/load-check.mjs</code> (lock contention), <code>scripts/read-path-check.mjs</code> (read scaling)</td></tr>
+            <tr><td>Salesforce package</td><td><code>salesforce/qms-integration</code>, <code>salesforce/qms-writeback</code> — Apex classes and tests</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section id="s-1" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 01</div>
+        <h1>Executive Summary</h1>
+        <p style="margin-top:14px">The Samana QMS issues and routes queue tickets for one Customer Experience Centre. A customer checks in at reception or from their phone by scanning a rotating QR code; the system identifies them against Salesforce, issues a numbered ticket for a service, assigns it to a member of staff, announces it on a waiting-room television, and writes the finished visit back to Salesforce.</p>
+        <p>The system is three deployables — a Next.js web tier, a standalone API service, and a background scheduler — over one PostgreSQL database. The division is not decorative: the web tier holds no database credential at all, and a repository test fails if a server module is ever imported into browser code. That boundary is the security model, and it is enforced by a test rather than by convention.</p>
+        <p>The single most consequential decision is that <b>the queue engine lives in the database</b>, as PL/pgSQL functions, rather than in application code. Issuing a ticket is four writes that must commit together; assigning one is a decision that must be made against a consistent view of who is free. Both are transactional problems, and putting them next to the data makes them one transaction rather than a distributed protocol. The cost is real and is stated in §6.6: that logic cannot be unit-tested without a live database, and cannot be stepped through in a debugger. Every mitigation applied to that cost is described in the same section.</p>
+
+        <h3>Design Tenets</h3>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:230px">Tenet</th><th>How it shows up</th></tr></thead>
+          <tbody>
+            <tr><td><b>Boundaries are tested, not agreed</b></td><td><code>tests/boundary.test.ts</code> asserts that no server module reaches browser code, that only <code>server/handler.ts</code> may import the route table, and that <code>process.env</code> is read in one file.</td></tr>
+            <tr><td><b>Access is declared, not positional</b></td><td>Every route names its own permission in a table. Nothing depends on where a handler sits in a file.</td></tr>
+            <tr><td><b>One definition per concept</b></td><td>Role groups, the presence window and the scheduler staleness window each exist once, shared between TypeScript and SQL, with a test that fails on drift.</td></tr>
+            <tr><td><b>Correctness before throughput</b></td><td>Assignment is serialised by one advisory lock. The cost was measured and bounded rather than traded away (§7).</td></tr>
+            <tr><td><b>Claims carry measurements</b></td><td>Performance statements in §12 come from reproducible harnesses in <code>scripts/</code>, not from reasoning.</td></tr>
+            <tr><td><b>Degrade, do not fail</b></td><td>Salesforce down still admits walk-ins; the event stream falling back still refreshes screens; a dead scheduler raises a 503 on a health endpoint rather than going quiet.</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section id="s-2" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 02</div>
+        <h1>Context &amp; Drivers</h1>
+        <h2>2.1 Functional Drivers</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:44px">#</th><th style="width:230px">Requirement</th><th>Architectural consequence</th></tr></thead>
+          <tbody>
+            <tr><td><b>F1</b></td><td>A called ticket must appear on the waiting-room television immediately.</td><td>Rules out a pure polling design. Drives the <code>LISTEN/NOTIFY</code> → server-sent events path in §8.</td></tr>
+            <tr><td><b>F2</b></td><td>Tickets must be routed whether or not any browser is open.</td><td>Requires a process that runs without a client. Drives the separate scheduler deployable.</td></tr>
+            <tr><td><b>F3</b></td><td>Issuing a ticket is read-counter, increment, insert, assign — all or nothing.</td><td>Requires a real transaction, which requires a pooled session connection. Drives §4.</td></tr>
+            <tr><td><b>F4</b></td><td>Five client types: staff browsers, reception TV, customer phones, the scheduler, print.</td><td>The API cannot be a subfolder of one of its own clients. Drives the three-tier split.</td></tr>
+            <tr><td><b>F5</b></td><td>The system holds Emirates ID and passport numbers.</td><td>Requires a deployment boundary, not a naming convention, between browser code and credentials.</td></tr>
+            <tr><td><b>F6</b></td><td>Work must be shared fairly across staff who cover several counters.</td><td>Drives one rotation cursor per person rather than per service (§6.3).</td></tr>
+            <tr><td><b>F7</b></td><td>Salesforce is the customer master and is not ours to change.</td><td>Integration must adapt to Salesforce's exact-match semantics, not the reverse (§11).</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>2.2 Constraints</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:200px">Constraint</th><th>Effect on the design</th></tr></thead>
+          <tbody>
+            <tr><td>One branch, ~20 staff</td><td>Correctness is worth more than horizontal scalability. A single-writer lock is an acceptable trade at this size; it would not be at fifty branches.</td></tr>
+            <tr><td>Salesforce Apex only</td><td>The integration user holds class access and nothing else — no SOQL, no object API. Every read and write goes through three Apex classes.</td></tr>
+            <tr><td>Render as the host</td><td>No private networking on the available plan, so the API is reachable on its own address and must gate itself (§10.4).</td></tr>
+            <tr><td>Managed PostgreSQL</td><td>No superuser, no server extensions beyond those the host offers. <code>pg_trgm</code> is available and used; nothing else is assumed.</td></tr>
+            <tr><td>Asia/Dubai operating day</td><td>Ticket numbering, rollover and reporting are calendar-day scoped in a fixed zone, never in the server's local time.</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section id="s-3" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 03</div>
+        <h1>Solution Architecture</h1>
+
+        <div data-diagram="" id="dg-arch">
+          <div class="dg-head">
+            <div class="dg-title"><svg width="15" height="15" style="color:#2e844a"><use href="#i-flow"></use></svg>Figure 1 · Deployment topology</div>
+            <div class="dg-tools">
+              <span data-chip="" data-filter="" data-scope="dg-arch" data-group="all" data-on="true"><svg width="12" height="12"><use href="#i-filter"></use></svg>All tiers</span>
+              <span data-chip="" data-filter="" data-scope="dg-arch" data-group="client"><span class="dot" style="background:#48bb78"></span>Clients</span>
+              <span data-chip="" data-filter="" data-scope="dg-arch" data-group="web"><span class="dot" style="background:#2e844a"></span>Web tier</span>
+              <span data-chip="" data-filter="" data-scope="dg-arch" data-group="api"><span class="dot" style="background:#0176d3"></span>API</span>
+              <span data-chip="" data-filter="" data-scope="dg-arch" data-group="data"><span class="dot" style="background:#6a0a94"></span>Data</span>
+            </div>
+          </div>
+          <div class="dg-body" style="display:flex;flex-direction:column;gap:0;background:linear-gradient(180deg,#fbfdfb,#f4f8f5)">
+            <div class="glayer" data-group="client" style="border-color:#a9dcb9">
+              <div class="glabel" style="background:linear-gradient(90deg,#48bb78,#2e844a)">Clients</div>
+              <div style="display:flex;flex-wrap:wrap;gap:10px;padding:13px">
+                <div class="gnode" style="flex:1;min-width:140px"><div class="gt">Staff workspace</div><div class="gs">Queue, team, reports · SSE + 30 s safety poll</div></div>
+                <div class="gnode" style="flex:1;min-width:140px"><div class="gt">Reception TV</div><div class="gs"><code>display</code> role · announcement + board</div></div>
+                <div class="gnode" style="flex:1;min-width:140px"><div class="gt">Customer phone</div><div class="gs">QR check-in · private status link</div></div>
+                <div class="gnode" style="flex:1;min-width:140px"><div class="gt">Print view</div><div class="gs">Receipt, rendered on request</div></div>
+              </div>
+            </div>
+            <div class="varr" style="height:22px"></div>
+            <div class="glayer" data-group="web" style="border-color:#a9dcb9">
+              <div class="glabel" style="background:linear-gradient(90deg,#2e844a,#194e31)">Web tier — <code style="color:#d6ecdd;background:none">samana-qms</code></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:9px;padding:13px">
+                <div class="gnode"><div class="gt">Next.js 16 standalone</div><div class="gs">Screens only. Holds no database or Salesforce credential.</div></div>
+                <div class="gnode"><div class="gt"><code>proxy.ts</code></div><div class="gs">Forwards <code>/api</code>, sets the nonce CSP, stamps <code>x-client-address</code></div></div>
+              </div>
+            </div>
+            <div class="varr" style="height:22px"></div>
+            <div class="glayer" data-group="api" style="border-color:#a9c7f0">
+              <div class="glabel" style="background:linear-gradient(90deg,#0176d3,#032d60)">API service — <code style="color:#d8e6fe;background:none">samana-qms-api</code></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:9px;padding:13px">
+                <div class="gnode"><div class="gt"><code>server/api.ts</code></div><div class="gs">Plain Node HTTP host, graceful drain</div></div>
+                <div class="gnode"><div class="gt"><code>lib/router.ts</code></div><div class="gs">32 declared routes, access enforced before the handler</div></div>
+                <div class="gnode"><div class="gt"><code>lib/data/*</code></div><div class="gs">Prisma for records · validated raw SQL for the engine</div></div>
+                <div class="gnode"><div class="gt"><code>lib/salesforce.ts</code></div><div class="gs">Apex-only client with a circuit breaker</div></div>
+              </div>
+            </div>
+            <div class="varr" style="height:22px"></div>
+            <div class="glayer" data-group="data" style="border-color:#e0b6f2">
+              <div class="glabel" style="background:linear-gradient(90deg,#9602c7,#6a0a94)">Data — PostgreSQL 18 · schema <code style="color:#f0dcf8;background:none">qms</code></div>
+              <div style="display:flex;flex-wrap:wrap;gap:10px;padding:13px">
+                <div class="gnode" style="flex:1;min-width:150px"><div class="gt">Queue engine</div><div class="gs">22 PL/pgSQL functions · the routing rules</div></div>
+                <div class="gnode" style="flex:1;min-width:150px"><div class="gt">Records</div><div class="gs">Tickets, users, events, outbox, lookups</div></div>
+                <div class="gnode" style="flex:1;min-width:150px"><div class="gt"><code>NOTIFY qms_changes</code></div><div class="gs">Trigger-raised change signal</div></div>
+                <div class="gnode" style="flex:1;min-width:150px"><div class="gt">Scheduler</div><div class="gs">Direct worker · routing tick every 15 s</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="fig-cap">The scheduler connects to the database directly; it does not call the API. Filter by tier to isolate a layer.</div>
+
+        <h2>3.1 Why three deployables and not one Next.js application</h2>
+        <p>Putting an API inside a web framework is a legitimate arrangement, and it is correct when there is one client, every request is short, nothing runs on a schedule, and nothing is pushed in real time. This system fails all four conditions (§2.1, F1–F4). The specific forces:</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:190px">Force</th><th>Why a single application cannot satisfy it</th></tr></thead>
+          <tbody>
+            <tr><td>Work without a client</td><td>Routing must happen when the building is empty of browsers. A request-scoped runtime has nowhere to put that.</td></tr>
+            <tr><td>Open connections</td><td>A server-sent event stream is a long-lived response held per screen. That is a property of a process, not of a request handler.</td></tr>
+            <tr><td>Connection pooling</td><td>Transactions require a session held across statements, which requires a pool that outlives a request.</td></tr>
+            <tr><td>Credential isolation</td><td>With one deployable, the boundary between browser code and the database credential is a naming convention. One wrong import crosses it silently.</td></tr>
+            <tr><td>Independent release</td><td>A change to a screen should not redeploy the ticketing engine, and the two carry different review standards.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">The boundary is enforced, not documented</span><p>A split that exists only in folder names decays. <code>tests/boundary.test.ts</code> walks <code>app/</code> and <code>components/</code> and fails the build if any file imports a server module, <code>pg</code>, <code>@prisma/*</code> or a <code>node:</code> builtin — and separately asserts that <code>server/handler.ts</code> is the <em>only</em> importer of the route table. The architecture is therefore a property the test suite defends.</p></div></div>
+
+        <h2>3.2 Trust between the tiers</h2>
+        <p>The web tier reaches the API over HTTP. On the available Render plan the API has a public address, so it cannot rely on network isolation and gates itself instead: every forwarded request carries a shared token, and the API refuses anything without it.</p>
+        <div class="pre-cap">server/handler.ts</div>
+        <pre data-lang="ts">const READINESS = '/api/health';
+async function requireProxyToken(request: Request) {
+  const expected = config().API_PROXY_TOKEN;
+  if (!expected) return;
+  if (new URL(request.url).pathname === READINESS) return;
+  const given = request.headers.get('x-internal-token') ?? '';
+  if ((await sha256(given)) !== (await sha256(expected)))
+    throw new HttpError(401, 'This address serves the web tier only.', 'NOT_VIA_WEB_TIER');
+}</pre>
+        <p>The comparison is over digests rather than the raw strings so that it does not leak length or share a timing profile with the secret. The readiness path is exempt because the load balancer must be able to probe it, and it reveals nothing.</p>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">Fail closed, by assertion</span><p>A missing token would silently open the API. <code>assertApiConfig()</code> therefore refuses to start a production API without either <code>API_PROXY_TOKEN</code> or an explicit <code>API_TRUSTS_NETWORK=true</code>. The check lives on the API's own start path and <b>not</b> in the shared <code>assertConfig()</code> — the scheduler holds no socket and has nothing to protect, and requiring the token there once stopped routing in production. <code>tests/config.test.ts</code> now asserts the scheduler starts without it.</p></div></div>
+      </section>
+
+      <section id="s-4" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 04</div>
+        <h1>Data Layer</h1>
+        <h2>4.1 One pool, two access paths</h2>
+        <p>The process opens exactly one connection pool. Prisma runs over that same pool through the <code>pg</code> driver adapter, so a process never holds two independent sets of connections or two TLS configurations.</p>
+        <div class="pre-cap">lib/db.ts · lib/prisma.ts</div>
+        <pre data-lang="ts">export function pool() {
+  if (!current)
+    current = new pg.Pool({
+      connectionString: config().DATABASE_URL,
+      options: '-c timezone=UTC',   // the engine names Asia/Dubai explicitly
+      max: 10,
+      idleTimeoutMillis: 30000,
+      allowExitOnIdle: true,
+      statement_timeout: 15000,
+      query_timeout: 20000,
+    });
+  return current;
+}
+
+export function prisma() {
+  if (!client) client = new PrismaClient({ adapter: new PrismaPg(pool()) });
+  return client;
+}</pre>
+        <p>Connections are pinned to UTC rather than left to the server's default, because the Prisma client assumes UTC when it reads timestamps. Calendar-day rules name <code>Asia/Dubai</code> explicitly wherever they appear, so nothing depends on where the database happens to run. Statement and query timeouts are set at the pool so a pathological wait fails rather than hanging a screen.</p>
+
+        <h2>4.2 Why both Prisma and raw SQL</h2>
+        <p>Prisma is the schema of record and types every ordinary read and write. It cannot express the queue engine: PL/pgSQL functions, triggers, partial indexes and views are outside its language. Rather than degrade the engine to fit the ORM, or abandon typing for the sake of uniformity, the split is explicit and the boundary is validated.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:150px">Path</th><th style="width:210px">Used for</th><th>Safety</th></tr></thead>
+          <tbody>
+            <tr><td><b>Prisma client</b></td><td>Records and relations — staff, sessions, events, notifications, lookups, deliveries, services</td><td>Compile-time types generated from <code>prisma/schema.prisma</code>, which is introspected from the live database.</td></tr>
+            <tr><td><b>Validated raw SQL</b></td><td>Engine functions, the ticket view, aggregates, and the two statements that must be single atomic writes</td><td>Every row parsed against a Zod schema at runtime before use.</td></tr>
+          </tbody>
+        </table></div>
+        <div class="pre-cap">lib/data/rows.ts — the boundary</div>
+        <pre data-lang="ts">export function rows&lt;T extends z.ZodType&gt;(schema: T, result: unknown[], label: string): z.infer&lt;T&gt;[] {
+  return result.map((row, index) =&gt; {
+    const parsed = schema.safeParse(row);
+    if (!parsed.success)
+      throw new Error(
+        `Unexpected row shape from ${label} (row ${index}): ` +
+          parsed.error.issues.map((i) =&gt; i.path.join('.') + ' ' + i.message).join('; '),
+      );
+    return parsed.data;
+  });
+}</pre>
+        <div data-callout="success"><svg width="17" height="17"><use href="#i-ok"></use></svg><div><span class="co-t">Assertion replaced by check</span><p>The earlier design cast query results with <code>as T[]</code> — an assertion the compiler accepts and the runtime never verifies, so a renamed column reached a staff screen as <code>undefined</code>. Now a missing or retyped column throws at the boundary, naming the query and the row. All raw call sites go through <code>rows()</code> or <code>one()</code>; the single remaining cast lives inside <code>query()</code> itself and is what those two functions exist to discipline.</p></div></div>
+      </section>
+
+      <section id="s-5" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 05</div>
+        <h1>Schema Authority &amp; Migrations</h1>
+        <h2>5.1 Three descriptions, one truth</h2>
+        <p>The database is described in three places, and the relationship between them is deliberate: the numbered migrations are the only thing that changes a database, and the other two are derived and verified.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:190px">Artifact</th><th style="width:96px">Authority</th><th>Kept honest by</th></tr></thead>
+          <tbody>
+            <tr><td><code>db/0NN_*.sql</code></td><td><b>Source</b></td><td>Applied in order, each inside one transaction, each checksummed.</td></tr>
+            <tr><td><code>db/schema.sql</code></td><td>Derived</td><td><code>tests/schema.test.ts</code> regenerates the snapshot from the migrated database and fails on any difference.</td></tr>
+            <tr><td><code>prisma/schema.prisma</code></td><td>Derived</td><td>Introspected with <code>npm run prisma:pull</code>; <code>tests/prisma-schema.test.ts</code> fails when it drifts.</td></tr>
+          </tbody>
+        </table></div>
+        <p>This answers the question a reviewer asks first — <em>what does this system do today?</em> — with one file rather than with eleven migrations read in date order.</p>
+
+        <h2>5.2 Forward-only, and why</h2>
+        <p>The runner records a SHA-256 of each applied file and refuses to run one that has been edited.</p>
+        <div class="pre-cap">scripts/migrate.mjs</div>
+        <pre data-lang="ts">if (applied) {
+  if (!applied.checksum) { /* record it, first run after the ledger gained the column */ }
+  else if (applied.checksum !== checksum)
+    throw new Error(
+      `${name} was changed after it was applied. Applied migrations are immutable; add a new migration instead.`,
+    );
+  continue;
+}
+await db.transaction(async (run) =&gt; {
+  for (const statement of splitStatements(content)) await run(statement);
+  await run('INSERT INTO qms.migrations(name,checksum) VALUES($1,$2)', [name, checksum]);
+});</pre>
+        <p>Without the checksum, editing an applied migration to fix a bug produces "Already applied" and the fix silently never runs. That failure is invisible and was worth closing.</p>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">Why there are no down migrations</span><p>A down migration that has never been executed is a script that does not work, and an incident is the worst moment to discover that. The replacement is a written procedure (<code>docs/rollback.md</code>) built on two properties this design maintains deliberately: a snapshot is taken before every migrating deploy, and <b>each migration keeps the function signatures the previous application version calls</b>. That second property means rolling back the <em>application</em> alone is almost always the correct first move, and it takes a minute. Reverse scripts for the recent migrations are written out in that document, including the one thing 017 cannot restore and why it costs a rotation order rather than any record.</p></div></div>
+      </section>
+
+      <section id="s-6" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 06</div>
+        <h1>The Queue Engine</h1>
+        <p>The engine answers one question repeatedly: <em>who should serve this customer next?</em> It is 22 PL/pgSQL functions in schema <code>qms</code>. This section states the rules and the reasoning; §7 covers how they are serialised.</p>
+
+        <h2>6.1 Why the engine is in the database</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:190px">Option</th><th style="width:74px">Chosen</th><th>Reasoning</th></tr></thead>
+          <tbody>
+            <tr><td>Application code, ORM transactions</td><td>No</td><td>Viable, and the conventional answer. Rejected because every assignment decision reads the state of all candidate agents and all their active tickets; doing that in application code means either holding a long transaction across network round trips, or accepting a race. The round trips are the cost that matters: an assignment becomes 5–8 sequential hops instead of one.</td></tr>
+            <tr><td>Application code, optimistic retry</td><td>No</td><td>Retry loops are correct but make the worst case unbounded and the behaviour hard to reason about under contention — precisely when a reception floor is busy.</td></tr>
+            <tr><td><b>PL/pgSQL functions</b></td><td><b>Yes</b></td><td>The decision is made where the data is, inside one transaction, with row locks the planner already understands. Issuing a ticket — read counter, increment, insert, route — is one statement from the application's point of view and one transaction from the database's.</td></tr>
+          </tbody>
+        </table></div>
+        <p>The honest counter-argument is that this is the least visible place to put business rules, and §6.6 addresses it directly rather than dismissing it.</p>
+
+        <h2>6.2 Assignment rules, in order</h2>
+        <div data-diagram="" id="dg-route">
+          <div class="dg-head">
+            <div class="dg-title"><svg width="15" height="15" style="color:#2e844a"><use href="#i-flow"></use></svg>Figure 2 · <code>qms.route_ticket</code> decision path</div>
+            <div class="dg-tools">
+              <span data-step-label="" style="font-size:11px;font-weight:700;color:#1d6b3f;font-variant-numeric:tabular-nums;min-width:64px;text-align:right"></span>
+              <span data-btn="" data-play="" data-scope="dg-route"><svg width="13" height="13"><use href="#i-play"></use></svg>Play walkthrough</span>
+            </div>
+          </div>
+          <div class="dg-body" style="display:flex;flex-direction:column;gap:0;background:linear-gradient(180deg,#fbfdfb,#f4f8f5)">
+            <div class="gnode" data-step="1" style="display:flex;gap:13px"><span class="gbadge">1</span><div><div class="gt">Lock the ticket</div><div class="gs"><code>SELECT … FOR UPDATE</code>; return immediately if it is no longer <code>waiting</code>.</div></div></div>
+            <div class="varr" style="height:18px"></div>
+            <div class="gnode" data-step="2" style="display:flex;gap:13px"><span class="gbadge">2</span><div><div class="gt">Preferred unit owner <span class="gpath" style="background:#eaf7ee;color:#194e31">relationship</span></div><div class="gs">If Salesforce names an owner who is enabled, online and covers the service: free → assign; mid-service but holding nobody waiting → hold one for five minutes; already holding a waiting customer → fall through.</div></div></div>
+            <div class="varr" style="height:18px"></div>
+            <div class="gnode" data-step="3" style="display:flex;gap:13px"><span class="gbadge">3</span><div><div class="gt">Keep a valid existing assignment</div><div class="gs">If the assignee is still enabled, online, covers the service and is inside the five-minute hold, leave it alone.</div></div></div>
+            <div class="varr" style="height:18px"></div>
+            <div class="gnode" data-step="4" style="display:flex;gap:13px"><span class="gbadge">4</span><div><div class="gt">Collections escalation</div><div class="gs">Collections routes to the unit's collection manager; a missing mapping is surfaced as <code>manager_mapping_missing</code> rather than silently dropped.</div></div></div>
+            <div class="varr" style="height:18px"></div>
+            <div class="gnode" data-step="5" style="display:flex;gap:13px"><span class="gbadge">5</span><div><div class="gt">Rotation <span class="gpath" style="background:#eef4ee;color:#1d6b3f">fairness</span></div><div class="gs"><code>qms.choose_available</code> picks the eligible person who has waited longest for work.</div></div></div>
+            <div class="varr" style="height:18px"></div>
+            <div class="gnode" data-step="6" style="display:flex;gap:13px"><span class="gbadge">6</span><div><div class="gt">Nobody available</div><div class="gs">Recorded as <code>no_available_agent</code> and left visible on the board, not hidden.</div></div></div>
+          </div>
+        </div>
+        <div class="fig-cap">Every branch writes a <code>routing_reason</code> onto the ticket, so why a customer went where they did is answerable afterwards from the record.</div>
+
+        <h2>6.3 Fairness is per person, not per counter</h2>
+        <p>The original design kept a rotation cursor per <code>(service, user)</code>. A member of staff covering three counters therefore had three independent cursors, and work done at one counted for nothing at the others — so whoever helped in the most places was handed the most customers. Migration 017 replaced it with one cursor on the person.</p>
+        <div class="pre-cap">qms.assign_ticket — migration 017</div>
+        <pre data-lang="sql">IF p_user IS NOT NULL THEN
+  INSERT INTO qms.notifications(user_id,ticket_id) VALUES(p_user,p_ticket);
+  -- One cursor for the person, not one per service: a customer taken at any
+  -- counter moves them to the back of every queue they cover.
+  UPDATE qms.users SET rotation=nextval('qms.rotation_position') WHERE id=p_user;
+END IF;</pre>
+        <p>The cursor is a monotonic sequence rather than a timestamp so that two assignments in the same transaction are still strictly ordered. A new account takes its value from the same sequence on insert, which is why somebody added to a queue joins the <em>back</em> of the rotation instead of jumping to the front — the previous <code>NULLS FIRST</code> ordering gave newcomers priority over everyone who had been working all day.</p>
+
+        <h2>6.4 One customer at a time</h2>
+        <p>Eligibility previously treated a person as free until they had actually <em>called</em> someone, so ten waiting customers could all carry one agent's name while nobody else could pick them up.</p>
+        <div class="pre-cap">qms.choose_available — current</div>
+        <pre data-lang="sql">SELECT u.id FROM qms.users u
+ WHERE u.enabled AND u.online AND u.last_seen&gt;now()-qms.presence_window()
+   AND u.role=ANY(qms.serving_roles()) AND p_service=ANY(u.services)
+   AND (p_exclude IS NULL OR u.id&lt;&gt;p_exclude)
+   -- Already holding a customer, whether or not they have called them yet.
+   AND NOT EXISTS(SELECT 1 FROM qms.tickets t
+                   WHERE t.assigned_to=u.id AND t.status IN ('waiting','called','serving'))
+ ORDER BY u.rotation,u.created_at,u.id LIMIT 1</pre>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">The cost of the cap, and how it is paid</span><p>Holding one customer at a time would leave a freed agent idle until the next 15-second tick. Rather than accept that, closing a visit offers that agent the next customer immediately, inside the same transaction as the close:</p>
+        <pre data-lang="sql" style="margin:8px 0 0">IF p_action IN ('close','no_show') AND t.assigned_to IS NOT NULL THEN
+  PERFORM qms.offer_next(t.assigned_to);
+END IF;</pre></div></div>
+        <p><code>qms.offer_next</code> re-checks presence and that the agent now holds nothing, then takes the highest-priority, oldest unassigned ticket among the services they cover. The invariant that an agent has at most one <em>called or serving</em> ticket is additionally enforced by a unique partial index, so it holds even against a code path that forgets:</p>
+        <pre data-lang="sql">CREATE UNIQUE INDEX one_active_service_per_agent ON qms.tickets (assigned_to)
+  WHERE status = ANY (ARRAY['called','serving']) AND assigned_to IS NOT NULL;</pre>
+
+        <h2>6.5 Service urgency</h2>
+        <p>Migration 017 added <code>qms.services.priority</code> (0–9, admin-settable on the Queues screen). The sweep orders by priority first and arrival second, so a refund can be routed ahead of an older general enquiry — while arrival order still decides <em>inside</em> a service, which is the property customers can see and would rightly object to losing.</p>
+        <pre data-lang="sql">SELECT t.id FROM qms.tickets t JOIN qms.services s ON s.id=t.service_id
+ WHERE t.status='waiting'
+ ORDER BY s.priority DESC,t.created_at,t.id
+ LIMIT greatest(p_limit,1) OFFSET greatest(p_offset,0)</pre>
+
+        <h2>6.6 The cost of this decision, stated plainly</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:230px">Cost</th><th>Mitigation in this design</th></tr></thead>
+          <tbody>
+            <tr><td>Cannot be unit-tested without a database</td><td>Accepted. <code>tests/workflow.test.ts</code> runs 34 invariants against a real PostgreSQL inside one rolled-back transaction per test, and CI starts a PostgreSQL 18 container for every pull request — so "needs a database" costs nothing a developer has to arrange.</td></tr>
+            <tr><td>Not steppable in a debugger</td><td>Accepted, unmitigated. This is the real residual cost of the choice.</td></tr>
+            <tr><td>Reviewed as whole-function rewrites, not diffs</td><td>Partly mitigated: <code>db/schema.sql</code> is regenerated per change, so a reviewer diffs the <em>snapshot</em> and sees exactly which lines of a function body changed.</td></tr>
+            <tr><td>Values duplicated between SQL and TypeScript</td><td>Closed. The presence window and each role group exist once in SQL (<code>qms.presence_window()</code>, <code>qms.serving_roles()</code>, <code>qms.manager_roles()</code>) and once in <code>lib/domain.ts</code>, and a schema test compares them. No hand-written <code>role IN (...)</code> list remains in the schema.</td></tr>
+          </tbody>
+        </table></div>
+        <div class="pre-cap">tests/schema.test.ts — the drift guard</div>
+        <pre data-lang="ts">const [row] = await query(
+  "SELECT (extract(epoch from qms.presence_window())*1000)::int window_ms, " +
+  "qms.serving_roles() serving, qms.manager_roles() managers",
+);
+expect(row.window_ms).toBe(PRESENCE_WINDOW_MS);
+expect([...row.serving].sort()).toEqual([...SERVING_ROLES].sort());</pre>
+      </section>
+
+      <section id="s-7" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 07</div>
+        <h1>Concurrency &amp; Locking</h1>
+        <h2>7.1 The model</h2>
+        <p>Assignment decisions are serialised by one transaction-scoped advisory lock, <code>pg_advisory_xact_lock(1947301)</code>, taken by ticket actions, issuance, queue membership changes, staff record saves and the routing sweep. This is a single-writer model for the assignment critical section.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:200px">Option</th><th style="width:74px">Chosen</th><th>Reasoning</th></tr></thead>
+          <tbody>
+            <tr><td>Per-service locks</td><td>No</td><td>Looks like the obvious refinement and is wrong here: a member of staff covers several services, so two services choosing concurrently can pick the same person. The lock would have to cover the candidate set, which is not per service.</td></tr>
+            <tr><td>Optimistic concurrency only</td><td>No</td><td>Already present for ticket <em>edits</em> via a version column. Insufficient for <em>selection</em>, where the conflict is over a shared resource rather than a single row.</td></tr>
+            <tr><td><b>One advisory lock, bounded hold</b></td><td><b>Yes</b></td><td>Makes double-assignment impossible by construction. At one branch the throughput ceiling is far above demand, and the hold time is the thing to manage — which §7.2 does.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>7.2 Bounding the hold rather than removing the lock</h2>
+        <p>The sweep previously took the lock once and looped over every waiting ticket while holding it, so with a long queue no agent anywhere could call, start or close. Two changes fixed the consequence without giving up the guarantee.</p>
+        <p><b>First, the sweep routes in bounded batches.</b> Each call is its own transaction, so the lock is released between them and staff actions interleave.</p>
+        <div class="pre-cap">lib/data/functions.ts</div>
+        <pre data-lang="ts">const ROUTING_BATCH = 25;
+export async function routeDue(): Promise&lt;number&gt; {
+  await query('SELECT qms.route_maintenance()');
+  let total = 0;
+  for (;;) {
+    const result = await query('SELECT qms.route_waiting($1,$2) checked', [ROUTING_BATCH, total]);
+    const done = one(checkedRow, result, 'route_waiting').checked;
+    total += done;
+    if (done &lt; ROUTING_BATCH || total &gt;= ROUTING_CEILING) break;
+  }
+  await query('SELECT qms.note_worker_run($1)', [total]);
+  return total;
+}</pre>
+        <p>The offset is the count already processed, which is correct because routing a ticket assigns it but leaves it <code>waiting</code> — the result set does not shrink underneath the cursor.</p>
+        <p><b>Second, heartbeats left the lock entirely.</b> Every signed-in agent sends one every 15 seconds; at twenty staff that is the highest-frequency writer in the system, and it has no business queueing behind a routing sweep. It now locks only the account row it writes.</p>
+        <div class="pre-cap">qms.set_presence</div>
+        <pre data-lang="sql">-- The one account row, not the global lock: every agent sends this every 15
+-- seconds and must not queue behind the routing sweep. Routing may therefore
+-- read an agent as online in the instant they go offline; the next sweep moves
+-- that customer on, which is what already happens for a dead screen.
+SELECT online,enabled INTO was,allowed FROM qms.users WHERE id=p_user FOR UPDATE;</pre>
+        <div data-callout="success"><svg width="17" height="17"><use href="#i-ok"></use></svg><div><span class="co-t">Measured, not asserted</span><p>At 400 waiting tickets and 20 agents on PostgreSQL 18, the wait to acquire the lock during a sweep fell from <b>p50 252 ms / max 252 ms</b> to <b>p50 18 ms / max 53 ms</b>. Batching costs about 45% more total sweep time (365 ms against 253 ms) for the extra round trips — the intended trade, since the sweep runs on a timer with nobody waiting on it while the agent is a person standing at a counter. Reproduce with <code>node --env-file=.env.test scripts/load-check.mjs 20 400 20</code>.</p></div></div>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">Known limit</span><p>This is a single-writer design for assignment. It is right for one branch and would need revisiting — most likely as a lock per <em>staff pool</em> rather than per service — before a multi-site rollout. That is a deliberate boundary of the current design, not an oversight.</p></div></div>
+      </section>
+
+      <section id="s-8" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 08</div>
+        <h1>Real-Time Delivery</h1>
+        <h2>8.1 Why server-sent events over PostgreSQL NOTIFY</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:170px">Option</th><th style="width:74px">Chosen</th><th>Reasoning</th></tr></thead>
+          <tbody>
+            <tr><td>Polling only</td><td>No</td><td>Was the original design. A television showing a called number five seconds late is the product failing at its one visible job, and it put ~2,300 queries a minute on an idle database.</td></tr>
+            <tr><td>WebSockets</td><td>No</td><td>Bidirectional, and nothing here needs a client→server channel — clients already have a REST API. Costs a second protocol, its own auth handshake and its own proxy behaviour for no gain.</td></tr>
+            <tr><td>External broker</td><td>No</td><td>A fourth deployable and a second source of truth for "something changed", when the database already knows.</td></tr>
+            <tr><td><b>SSE fed by LISTEN/NOTIFY</b></td><td><b>Yes</b></td><td>One direction, plain HTTP, no extra infrastructure, and the signal originates at the only place that can know a change committed — a trigger on the data itself.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>8.2 Mechanism</h2>
+        <p>A trigger raises <code>NOTIFY qms_changes</code> when tickets, notifications or staff availability change. One database session per API process holds the <code>LISTEN</code>; every connected screen holds one SSE response.</p>
+        <div class="pre-cap">lib/api/events.ts</div>
+        <pre data-lang="ts">send('retry: 5000\n' + frame('status', JSON.stringify({ listening: listening() })));
+unsubscribe = subscribe(
+  (kind) =&gt; send(frame(null, JSON.stringify({ kind }))),
+  (ok) =&gt; send(frame('status', JSON.stringify({ listening: ok }))),
+);
+ping = setInterval(() =&gt; send(': ping\n\n'), 25000);</pre>
+        <p>The comment ping every 25 seconds keeps intermediaries from closing an idle stream. Headers include <code>X-Accel-Buffering: no</code> so a buffering proxy does not hold frames.</p>
+
+        <h2>8.3 The stream is advisory; the client stays correct without it</h2>
+        <p>The critical design property is that <b>the stream is an optimisation, never the source of truth</b>. The server reports whether its database listener is actually established, and a screen that is not told so keeps its own faster interval.</p>
+        <div class="pre-cap">components/qms/use-queue.ts</div>
+        <pre data-lang="ts">const live = useLive(enabled, () =&gt; void refresh(true));
+useEffect(() =&gt; {
+  if (!enabled) return;
+  const timer = setInterval(() =&gt; void refresh(true), live ? 30000 : 5000);
+  return () =&gt; clearInterval(timer);
+}, [enabled, live, refresh]);</pre>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">Connected is not the same as listening</span><p>A stream can be open while the database session behind it has dropped — the worst case, because the screen believes it is current. The <code>status</code> frame carries <code>listening</code> separately from the connection state, and the client treats only a confirmed listener as live. <code>tests/ui/use-live.test.tsx</code> pins this, along with the burst debounce and that a re-render does not open a second stream.</p></div></div>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">Deployment dependency</span><p><code>LISTEN</code> needs a session pinned to one server connection. A pooler in transaction mode accepts the command and never delivers a notification — silently. <code>listenUrl()</code> therefore rewrites a Neon <code>-pooler</code> hostname to the direct endpoint for this one connection; behind PgBouncer the same connection must bypass the pool. Getting this wrong degrades to polling rather than breaking, which is why it must be checked deliberately rather than noticed.</p></div></div>
+      </section>
+
+      <section id="s-9" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 09</div>
+        <h1>API Specification</h1>
+        <h2>9.1 Routes are data</h2>
+        <p>Every route is a record declaring its method, path, access rule and summary. The dispatcher enforces the declaration before the handler runs, so access never depends on where a handler sits in a file.</p>
+        <div class="pre-cap">lib/router.ts</div>
+        <pre data-lang="ts">export type Auth =
+  | { kind: 'public' }                        // no session; the handler validates its own inputs
+  | { kind: 'worker' }                        // bearer WORKER_SECRET from the scheduler
+  | { kind: 'session' }                       // any signed-in account, even before a password change
+  | { kind: 'roles'; roles: readonly Role[] }; // signed in, password set, role listed
+
+export interface Route {
+  method: Method;
+  path: string;            // e.g. 'tickets/:id/action'
+  auth: Auth;
+  summary: string;         // one line for the generated API document
+  handler: (context: Context) =&gt; Promise&lt;Response&gt;;
+  body?: ZodType;
+}</pre>
+        <div class="pre-cap">lib/router.ts — dispatch</div>
+        <pre data-lang="ts">// Browsers must prove same-origin for every state change; the scheduler is
+// server-to-server and proves itself with its own credential instead.
+if (request.method !== 'GET' &amp;&amp; route.auth.kind !== 'worker') sameOrigin(request);
+if (route.auth.kind === 'worker') { /* constant-time bearer comparison */ }
+else if (route.auth.kind !== 'public') {
+  user = await requireUser(request);
+  if (route.auth.kind === 'roles') {
+    if (user.must_change_password) throw new HttpError(403, 'Change your temporary password before continuing.');
+    if (!route.auth.roles.includes(user.role)) throw new HttpError(403, 'You do not have permission for this action.');
+  }
+}</pre>
+        <div data-callout="success"><svg width="17" height="17"><use href="#i-ok"></use></svg><div><span class="co-t">Three properties fall out of this shape</span><p>The route table is enumerable, so <code>docs/openapi.json</code> is generated rather than maintained and <code>tests/routes.test.ts</code> asserts every route declares a method, path, access rule and summary with no duplicates. Access is a value rather than a control-flow position, so a new route cannot accidentally inherit exemption from one above it. And the role groups it declares access with are the domain's own groups — there is no second list to keep in step.</p></div></div>
+
+        <h2>9.2 Access model in force</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:130px">Access</th><th style="width:60px">Count</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td><code>public</code></td><td>6</td><td><code>POST auth/login</code>, <code>GET health</code>, <code>GET health/alerts</code>, <code>GET public/status/:token</code></td></tr>
+            <tr><td><code>worker</code></td><td>1</td><td><code>POST jobs/run</code> — bearer <code>WORKER_SECRET</code></td></tr>
+            <tr><td><code>session</code></td><td>3</td><td><code>GET auth/me</code>, <code>PUT auth/password</code> — reachable before a forced password change</td></tr>
+            <tr><td><code>roles</code></td><td>22</td><td>Everything else, declared with <code>STAFF</code>, <code>SERVING</code>, <code>MANAGERS</code> or a literal role</td></tr>
+          </tbody>
+        </table></div>
+        <p>Real verbs are used throughout: <code>PUT presence</code> and <code>PUT auth/password</code> set a state, <code>PATCH notifications</code> changes part of a resource, <code>DELETE queues/:service/members/:user</code> removes one. This matters beyond tidiness — a log or firewall can tell a create from a delete.</p>
+
+        <h2>9.3 Errors are identified by code, not by prose</h2>
+        <p>Database rules are raised with <code>RAISE EXCEPTION</code> (SQLSTATE <code>P0001</code>) and mapped to a status and a sentence a person at a desk can act on.</p>
+        <div class="pre-cap">lib/errors.ts</div>
+        <pre data-lang="ts">export const RULE_MESSAGES: Record&lt;string, [number, string]&gt; = {
+  VERSION_CONFLICT: [409, 'This ticket was just updated by someone else. It has been refreshed; please try again.'],
+  AGENT_BUSY:       [409, 'That team member is already with a customer.'],
+  DUPLICATE_VISIT:  [409, 'This customer already has an open ticket for this service.'],
+  LOOKUP_EXPIRED:   [409, 'The customer lookup has expired. Look the customer up again.'],
+  // …
+};</pre>
+        <p>Identity is a field — <code>HttpError.code</code> and the SQLSTATE — never a substring of a sentence. Rewording a message can therefore never change a status code, and a customer's closing note containing the word <em>FORBIDDEN</em> can never be mistaken for a rule violation. Previously these codes were shown to staff verbatim, lowercased: a receptionist with a customer in front of them read <em>"version conflict"</em>.</p>
+      </section>
+
+      <section id="s-10" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 10</div>
+        <h1>Security Model</h1>
+        <h2>10.1 Credentials and sessions</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:190px">Control</th><th>Implementation</th></tr></thead>
+          <tbody>
+            <tr><td>Password hashing</td><td>PBKDF2-SHA256, 600,000 iterations — the current OWASP figure for this algorithm. Each hash carries its own iteration count, and a hash below the current factor is transparently re-hashed at the next successful sign-in.</td></tr>
+            <tr><td>Verification</td><td>Constant-time comparison. An unknown username is verified against a dummy hash of the same work factor, so a wrong username costs the same time as a wrong password.</td></tr>
+            <tr><td>Session token</td><td>256 bits from <code>crypto.getRandomValues</code>, stored only as SHA-256. A database read cannot reconstruct a live session.</td></tr>
+            <tr><td>Cookie</td><td><code>HttpOnly; SameSite=Strict; Secure</code> (when the origin is https), 8-hour lifetime.</td></tr>
+            <tr><td>Revocation</td><td>Changing a password or disabling an account deletes every session for that user in the same transaction as the change.</td></tr>
+            <tr><td>Database role</td><td>The runtime connects as a restricted <code>qms_app</code> role — DML and <code>EXECUTE</code> in schema <code>qms</code>, no DDL. Migrations use a separate owner string.</td></tr>
+          </tbody>
+        </table></div>
+        <div class="pre-cap">lib/security.ts</div>
+        <pre data-lang="ts">export const PBKDF2_ITERATIONS = 600000;
+export async function verifyPassword(password: string, hash: string) {
+  const [algorithm, iterationString, salt] = hash.split('$');
+  const iterations = Number(iterationString);
+  if (algorithm !== 'pbkdf2' || !salt || !Number.isInteger(iterations) ||
+      iterations &lt; 100000 || iterations &gt; 1000000) return false;
+  const actual = await hashPassword(password, salt, iterations);
+  if (actual.length !== hash.length) return false;
+  let diff = 0;
+  for (let i = 0; i &lt; actual.length; i++) diff |= actual.charCodeAt(i) ^ hash.charCodeAt(i);
+  return diff === 0;
+}</pre>
+
+        <h2>10.2 Browser protections</h2>
+        <p>Set in <code>proxy.ts</code>, which runs before every page request. The content security policy is nonce-based with <code>strict-dynamic</code> and no inline allowance, so an injected script is refused by the browser rather than merely discouraged.</p>
+        <pre data-lang="ts">const nonce = btoa(crypto.randomUUID());
+const policy = [
+  "default-src 'self'", "base-uri 'self'", "object-src 'none'",
+  "frame-ancestors 'none'", "form-action 'self'",
+  `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${production ? '' : " 'unsafe-eval'"}`,
+  "style-src 'self' 'unsafe-inline'",     // React sets style attributes; a style injection cannot execute
+  "img-src 'self' data: blob:", "font-src 'self'",
+  `connect-src 'self'${production ? '' : ' ws: wss:'}`,
+].join('; ');</pre>
+        <p>A fresh nonce per request means pages render per request rather than being statically cached — a deliberate cost accepted for the stronger policy. Typefaces are self-hosted, so <code>font-src 'self'</code> holds without exception.</p>
+
+        <h2>10.3 Cross-site request forgery</h2>
+        <p>Every non-<code>GET</code> route requires an <code>Origin</code> header exactly matching <code>APP_ORIGIN</code>, combined with a <code>SameSite=Strict</code> cookie. A synchroniser token was considered and not used: with a strictly same-site cookie and a mandatory origin check there is no cross-site path that reaches a handler, and the token would add state to every form for no additional coverage. The scheduler is exempt because it is server-to-server and proves itself with a bearer credential instead.</p>
+
+        <h2>10.4 Rate limiting</h2>
+        <p>The window is one atomic statement, so two requests arriving together cannot open two windows and spend the budget twice.</p>
+        <pre data-lang="sql">INSERT INTO qms.rate_limits(key,window_start,count) VALUES($1,now(),1)
+ON CONFLICT(key) DO UPDATE SET
+  count = CASE WHEN qms.rate_limits.window_start &gt; now()-make_interval(secs=&gt;$2)
+               THEN qms.rate_limits.count+1 ELSE 1 END,
+  window_start = CASE WHEN qms.rate_limits.window_start &gt; now()-make_interval(secs=&gt;$2)
+                      THEN qms.rate_limits.window_start ELSE now() END
+RETURNING count</pre>
+        <p>Sign-in is bounded three ways — globally, per account, and per client address — so neither a single account nor an attacker rotating usernames can drive unbounded password hashing. The client address is trusted only from a header the deployment explicitly names, and the web tier overwrites that header on every forwarded request so a client cannot forge it.</p>
+
+        <h2>10.5 Data protection</h2>
+        <ul>
+          <li><b>Identifier exposure is opt-in.</b> Emirates ID, passport and mobile leave the system only when a manager explicitly requests <code>identifiers=true</code> on an export, and that request is recorded in the activity log with its filters.</li>
+          <li><b>Spreadsheet safety.</b> Every CSV cell beginning <code>= + - @</code> or a control character is prefixed with an apostrophe, so an exported note cannot execute as a formula.</li>
+          <li><b>Logs carry shapes, not values.</b> The request log masks UUID path segments, so a private status token never reaches a log line; failure logs record the error type and SQLSTATE, never the message, which may contain customer data.</li>
+          <li><b>The customer's phone shows only their own visit.</b> Deliberately reverted from an earlier design that showed surrounding queue positions — the waiting-room television is the board, and other customers' numbers have no reason to be on a stranger's device.</li>
+          <li><b>Retention is scheduled.</b> <code>qms.apply_retention</code> anonymises identifiers and deletes old events on its own advisory lock, so it cannot block the routing path.</li>
+        </ul>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">Accepted residual risks</span><p><b>No single sign-on, MFA or HR deprovisioning.</b> A person's role is assigned by an administrator and persists until revoked by hand. This is a product decision, not an oversight, and is the weakest link in a system holding identity documents; it should be the first item in any next phase.</p><p><b>Sign-in is audited without an address or device</b>, so "who used this account, from where" is still unanswerable. The event exists; the attributes do not.</p></div></div>
+      </section>
+
+      <section id="s-11" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 11</div>
+        <h1>Salesforce Integration</h1>
+        <h2>11.1 Surface</h2>
+        <p>The integration user holds API access and class access to three Apex classes and nothing else — no SOQL, no object API. That constraint shapes everything below: the QMS adapts to Salesforce's semantics, never the reverse.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:170px">Apex class</th><th style="width:190px">Trigger</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>AccountLookupAPI</code></td><td>Every check-in attempt</td><td>Find a customer by mobile, Emirates ID or passport; returns units and their calling owners.</td></tr>
+            <tr><td><code>QMSUserAPI</code></td><td>Administrator search</td><td>On-demand staff search when adding a team member. Nothing is bulk-imported.</td></tr>
+            <tr><td><code>QMSTicketAPI</code></td><td>Scheduler, batched</td><td>Writes the finished visit back, ≤10 per tick.</td></tr>
+            <tr><td><code>oauth2/token</code></td><td>Before any call</td><td>Client-credentials flow. Token cached; a 401 forces one refresh and retry.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>11.2 Resilience — a slow Salesforce must not close reception</h2>
+        <p>The customer lookup is the first step of check-in, so an unreachable Salesforce once meant nobody could be served at all, walk-ins included. Three mechanisms now bound that.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:170px">Mechanism</th><th>Behaviour</th></tr></thead>
+          <tbody>
+            <tr><td>Walk-in fallback</td><td>Staff can issue a ticket without Salesforce. The lookup records <code>degraded: true</code> so the visit is identifiable afterwards.</td></tr>
+            <tr><td>Circuit breaker</td><td>Three consecutive transport or 5xx failures pause calls for 30 seconds, so each subsequent check-in fails immediately instead of waiting out a timeout. Exposed on <code>health/alerts</code> as <code>salesforce_paused</code>.</td></tr>
+            <tr><td>Lookup reuse</td><td>The same identifier within two minutes reuses the stored snapshot rather than asking Salesforce again — a retry or a second screen costs nothing.</td></tr>
+          </tbody>
+        </table></div>
+        <p>Delivery back to Salesforce is an outbox with leases rather than an inline call: a trigger writes one row per ticket and kind, the scheduler claims up to ten with <code>FOR UPDATE SKIP LOCKED</code>, and completion is guarded by a lease token so a worker that stalled cannot overwrite a newer attempt. Five failures park a row as <code>failed</code>, which surfaces on <code>health/alerts</code>.</p>
+
+        <h2>11.3 Customer identity — one phone number, however it was typed</h2>
+        <p>The Apex matches <code>Mobile_Number__c</code> <b>exactly</b> and is not ours to change. Salesforce stores the country code in a separate field, so the value it matches on is the national number. Customers, however, type the same phone four different ways.</p>
+        <div class="pre-cap">lib/domain.ts</div>
+        <pre data-lang="ts">export function nationalMobile(value: string): string {
+  let digits = value.replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  // Guarded by length: a national number is never itself 971 followed by
+  // nothing, and UAE mobiles start 5.
+  if (digits.startsWith('971') &amp;&amp; digits.length &gt; 9) digits = digits.slice(3);
+  if (digits.startsWith('0')) digits = digits.slice(1); // trunk prefix
+  if (!/^\d{7,15}$/.test(digits)) throw new Error('Enter a valid mobile number (at least 7 digits).');
+  return digits;
+}</pre>
+        <p>Normalising strips the <em>country code</em> rather than a fixed number of digits. A "last nine" rule would be correct for the UAE and wrong for the Indian, Afghan and Australian accounts that also exist in the org.</p>
+        <p>Because the match is exact and the stored data is not uniform, the lookup then offers the shapes the data actually holds, stopping at the first account found:</p>
+        <div class="pre-cap">lib/salesforce.ts</div>
+        <pre data-lang="ts">export function mobileVariants(national: string): string[] {
+  const seen = new Set&lt;string&gt;();
+  const add = (v: string) =&gt; { if (/^\d{7,15}$/.test(v)) seen.add(v); };
+  add(national); add('0' + national); add('971' + national);
+  if (national.length &gt; 10) { add(national.slice(-10)); add(national.slice(-9)); }
+  return [...seen];
+}</pre>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">Only a miss advances the loop</span><p>An empty result tries the next candidate; anything <em>thrown</em> — a timeout, a 5xx, an open breaker — propagates immediately. A Salesforce that is merely slow therefore still costs one request rather than five, and reception reaches the walk-in path as quickly as before. Verified against the POD2 sandbox: every way of writing one real customer's number reached the same account, each on the first candidate.</p></div></div>
+        <p>A useful side effect: because the stored lookup identifier is normalised, the same person checking in twice is recognised as a duplicate visit rather than two strangers.</p>
+      </section>
+
+      <section id="s-12" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 12</div>
+        <h1>Performance &amp; Load</h1>
+        <h2>12.1 Read paths that grow with history</h2>
+        <p>Two aggregates run on every staff screen refresh. Both scanned the entire ticket table — free at a few hundred rows and linear in the whole archive at a year's volume, which is the shape of problem that is invisible in testing and arrives all at once.</p>
+        <p>The fix is to say which rows are needed. Active-status counts and today's counts are read through two indexes and combined; the predicate is an <code>OR</code> rather than a date window because a ticket left serving across midnight is still active and must keep counting.</p>
+        <pre data-lang="sql">FROM qms.tickets
+WHERE ($1::uuid IS NULL OR assigned_to=$1)
+  AND (status IN ('waiting','called','serving') OR day=(now() AT TIME ZONE 'Asia/Dubai')::date)</pre>
+        <pre data-lang="sql">CREATE INDEX tickets_active ON qms.tickets (status)
+  WHERE status IN ('waiting','called','serving');
+CREATE INDEX tickets_customer_name_trgm ON qms.tickets USING gin (customer_name gin_trgm_ops);</pre>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:210px">Query (200,000 tickets)</th><th style="width:140px">Before</th><th style="width:140px">After</th><th>Plan</th></tr></thead>
+          <tbody>
+            <tr><td>Dashboard statistics</td><td>232.8 ms</td><td><b>2.4 ms</b></td><td>Seq Scan → Bitmap Index Scan</td></tr>
+            <tr><td>Service counts</td><td>214.7 ms</td><td><b>0.185 ms</b></td><td>Seq Scan → <code>tickets_active</code></td></tr>
+            <tr><td>Queue substring search</td><td>full scan</td><td><b>trigram index</b></td><td>Leading wildcard cannot use btree</td></tr>
+          </tbody>
+        </table></div>
+        <p>Together that removes roughly 450 ms of pure scan from every staff screen refresh at a year's volume. Reproduce with <code>node --env-file=.env.test scripts/read-path-check.mjs</code>; a sequential scan in its AFTER rows is a regression.</p>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">Run ANALYZE after a restore</span><p>On a freshly migrated or restored database with no planner statistics, the same sweep measured four times slower and the new indexes were ignored. This is a restore-procedure step, not a tuning suggestion.</p></div></div>
+
+        <h2>12.2 Idle load</h2>
+        <p>With the event stream live a staff screen polls every 30 seconds rather than every five, and the reception television the same rather than every three. The remaining floor is the 15-second presence heartbeat, which is a deliberate trade: it is what lets the system notice a dead screen within 45 seconds, and since migration 017 it no longer touches the global lock.</p>
+      </section>
+
+      <section id="s-13" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 13</div>
+        <h1>Failure Modes</h1>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:170px">Failure</th><th style="width:210px">Behaviour</th><th>Detection</th></tr></thead>
+          <tbody>
+            <tr><td>Scheduler stops</td><td>Check-in and manual calling keep working; nothing is re-routed and no delivery is made.</td><td><code>health/scheduler</code> and <code>health/alerts</code> return <b>503</b> with <code>scheduler_stale</code>; a banner appears in the workspace.</td></tr>
+            <tr><td>Salesforce unreachable</td><td>Walk-in path stays open; breaker fails subsequent calls fast.</td><td><code>salesforce_paused</code> on <code>health/alerts</code>.</td></tr>
+            <tr><td>Event listener drops</td><td>Screens fall back to their own interval; correctness unaffected.</td><td><code>status</code> frame reports <code>listening:false</code>; a five-second retry is scheduled.</td></tr>
+            <tr><td>Agent's screen dies</td><td>Presence expires after 45 s; their waiting customer is re-routed on the next sweep.</td><td><code>presence_offline</code> event with reason <code>heartbeat_expired</code>.</td></tr>
+            <tr><td>Delivery keeps failing</td><td>Exponential backoff to a one-hour cap, then parked as <code>failed</code> after five attempts.</td><td><code>outbox_failed:N</code> on <code>health/alerts</code>.</td></tr>
+            <tr><td>Bootstrap password left set</td><td>Administrator credential remains in the environment.</td><td><code>bootstrap_password_present</code> on <code>health/alerts</code> in production.</td></tr>
+            <tr><td>Two agents call one ticket</td><td>Second is rejected on the version check; no double service.</td><td>409 with a sentence telling the agent it was refreshed.</td></tr>
+            <tr><td>Queue emptied of members</td><td>Tickets route to nobody and wait.</td><td>Removing the last member requires confirmation; the ticket carries <code>no_available_agent</code> on the board.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="danger"><svg width="17" height="17"><use href="#i-err"></use></svg><div><span class="co-t">The alarm exists; the bell does not</span><p><code>/api/health/alerts</code> is a single public endpoint returning <b>503</b> with a machine-readable reason whenever any of the above needs a person. It is correct and it has already proved itself in production — during a scheduler outage it reported <code>scheduler_stale</code> throughout, and nobody was told, because <b>no external monitor is subscribed to it</b>. Wiring one is the highest-value operational task outstanding and requires no code.</p></div></div>
+      </section>
+
+      <section id="s-14" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 14</div>
+        <h1>Testing Strategy</h1>
+        <h2>14.1 Shape of the suite</h2>
+        <div class="metric">
+          <div><div class="mv">255</div><div class="ml">Tests</div></div>
+          <div><div class="mv">23</div><div class="ml">Files</div></div>
+          <div><div class="mv">47.1%</div><div class="ml">Statements</div></div>
+          <div><div class="mv">41.4%</div><div class="ml">Branches</div></div>
+        </div>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:180px">Suite</th><th>What it defends</th></tr></thead>
+          <tbody>
+            <tr><td><code>workflow.test.ts</code></td><td>34 engine invariants against real PostgreSQL — owner routing, the five-minute boundary exactly, escalation, idempotency, duplicate visits, rotation fairness, the one-customer cap, urgency ordering.</td></tr>
+            <tr><td><code>boundary.test.ts</code></td><td>The tier boundaries as repository rules.</td></tr>
+            <tr><td><code>schema.test.ts</code></td><td>The committed snapshot equals the migrated database; SQL and TypeScript agree on the presence window and role groups.</td></tr>
+            <tr><td><code>security.test.ts</code></td><td>Session revocation ordering, login throttling, password races.</td></tr>
+            <tr><td><code>api.test.ts</code></td><td>The route table against a real database and real handlers, including payload minimisation for customer-facing responses.</td></tr>
+            <tr><td><code>ui/*.test.tsx</code></td><td>Check-in, the queue table, the event hook, the reception board, the customer's phone.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>14.2 Assertions are verified to be able to fail</h2>
+        <p>A guard test that cannot go red is worse than no test, because it is believed. Each new invariant in this baseline was checked by deliberately breaking the behaviour and confirming the specific test failed — the presence-window drift guard, the customer's phone showing no other ticket numbers, the television distinguishing an expired sign-in from a network fault, the empty board drawing no headings, and the scheduler starting without the API gate.</p>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">Where coverage is thin, and why it is stated</span><p>47% is a blended figure and the distribution matters more than the number: the API and data layers sit between 58% and 100%, while several workspace screens remain at zero. The thresholds in <code>vitest.config.ts</code> are ratcheted to just below the current figure so coverage cannot silently fall, but the honest position is that the staff workspace is the least-tested area of the system.</p></div></div>
+
+        <h2>14.3 Continuous integration</h2>
+        <p>Every pull request runs typecheck, lint, both test projects, <code>npm audit --audit-level=high</code>, and all three builds; a second job starts a PostgreSQL 18 container, migrates it from <code>001</code> and runs the full suite with coverage thresholds. Migrating from scratch on every run is what proves the migration path a new environment will take.</p>
+      </section>
+
+      <section id="s-15" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 15</div>
+        <h1>Deployment &amp; Rollback</h1>
+        <h2>15.1 Topology</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:170px">Service</th><th style="width:130px">Start</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>samana-qms</code></td><td><code>dist-node/standalone/server.js</code></td><td>Web tier. Refuses to boot without <code>API_URL</code>, so a misconfigured deploy fails rather than serving a broken app.</td></tr>
+            <tr><td><code>samana-qms-api</code></td><td><code>dist-api/api.mjs</code></td><td>Runs migrations as its pre-deploy command, then serves. Refuses to boot in production without a gate.</td></tr>
+            <tr><td><code>samana-qms-scheduler</code></td><td><code>dist-worker/worker.mjs</code></td><td>Connects to the database directly — no HTTP hop, no shared secret with the API.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>15.2 Deployment order and the window it creates</h2>
+        <p>Migrations run in the API service's pre-deploy step, so for a short window <b>the new schema is live under the old application</b>. That window is safe by design and not by luck: every migration keeps the function signatures the previous version calls, and the application never queries the tables the engine owns directly. During the 017 release the old code ran against the new schema for roughly ninety seconds with no error.</p>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">Verify the build, not the health check</span><p>Health endpoints return 200 throughout a deploy because the <em>old</em> build is still serving. Confirming a release therefore means probing something only the new build has — a new route answering <code>403</code> instead of <code>404</code>, or a new CSS rule present in the served stylesheet — not the absence of alarms.</p></div></div>
+
+        <h2>15.3 Rollback</h2>
+        <p>Full procedure in <code>docs/rollback.md</code>. The decision order is what matters:</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:230px">Situation</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td>Schema applied, application misbehaving</td><td><b>Roll back the application.</b> Takes a minute and is almost always right, because migrations preserve the previous version's contract.</td></tr>
+            <tr><td>A migration added something unwanted</td><td>Apply the written reverse script, then a new migration recording the change.</td></tr>
+            <tr><td>Data destroyed or corrupted</td><td>Restore the snapshot. Nothing else recovers it.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="danger"><svg width="17" height="17"><use href="#i-err"></use></svg><div><span class="co-t">Snapshots, not point-in-time</span><p>The managed database retains only <b>six hours</b> of point-in-time history — shorter than the time a data problem usually takes to notice. A snapshot taken immediately before a migrating deploy is the real restore point, and taking one is a required step rather than a precaution.</p></div></div>
+      </section>
+
+      <section id="s-16" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 16</div>
+        <h1>Appendices</h1>
+
+        <h2>16.1 Architecture Decision Log</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:44px">#</th><th style="width:210px">Decision</th><th style="width:200px">Alternative rejected</th><th>Consequence accepted</th></tr></thead>
+          <tbody>
+            <tr><td><b>A1</b></td><td>Three deployables</td><td>Single Next.js application</td><td>More moving parts and a deploy window; buys a real credential boundary, scheduled work and open connections.</td></tr>
+            <tr><td><b>A2</b></td><td>Queue engine in PL/pgSQL</td><td>Application-code transactions</td><td>Not steppable in a debugger; needs a database to test. Buys one transaction per decision and no round-trip races.</td></tr>
+            <tr><td><b>A3</b></td><td>Prisma for records, validated raw SQL for the engine</td><td>ORM everywhere, or raw everywhere</td><td>Two access paths to understand; buys compile-time types where they are possible and runtime checks where they are not.</td></tr>
+            <tr><td><b>A4</b></td><td>Forward-only migrations</td><td>Paired up/down scripts</td><td>No automatic reversal; buys a ledger that always describes reality, plus a written procedure that has been thought through.</td></tr>
+            <tr><td><b>A5</b></td><td>One advisory lock, bounded hold</td><td>Per-service locks; optimistic retry</td><td>Single-writer ceiling for assignment; buys impossibility of double-assignment. Revisit before multi-site.</td></tr>
+            <tr><td><b>A6</b></td><td>SSE over LISTEN/NOTIFY</td><td>WebSockets; polling; broker</td><td>One-directional and pooler-sensitive; buys push with no new infrastructure and a clean degrade path.</td></tr>
+            <tr><td><b>A7</b></td><td>Declarative route table</td><td>Framework file-system routing</td><td>A table to maintain; buys enumerable access rules, a generated API document and positional exemption made impossible.</td></tr>
+            <tr><td><b>A8</b></td><td>Origin check + <code>SameSite=Strict</code></td><td>Synchroniser tokens</td><td>Relies on correct <code>APP_ORIGIN</code>; buys no per-form state.</td></tr>
+            <tr><td><b>A9</b></td><td>Standard <code>pg</code> driver and pool</td><td>Serverless HTTP driver</td><td>Requires a host that allows long-lived connections; buys transactions, <code>LISTEN</code>, and one round trip instead of one per statement.</td></tr>
+            <tr><td><b>A10</b></td><td>Rotation cursor per person</td><td>Cursor per service</td><td>One extra write per assignment; buys fairness for staff who cover several counters.</td></tr>
+            <tr><td><b>A11</b></td><td>National-number customer identity</td><td>Last-N-digits; raw as typed</td><td>A foreign number typed with its own country code may still miss; buys one identity per phone and duplicate-visit detection.</td></tr>
+            <tr><td><b>A12</b></td><td>Customer phone shows only their own visit</td><td>Queue window with nearby tickets</td><td>Less information on the phone; buys no disclosure of other customers and less to keep in step with the board.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>16.2 Component Catalogue</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:230px">Component</th><th style="width:96px">Type</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>server/api.ts</code></td><td>Entry</td><td>API host — validates configuration, listens, drains on shutdown.</td></tr>
+            <tr><td><code>server/handler.ts</code></td><td>Module</td><td>Request → response: logging, error mapping, proxy-token gate, dispatch.</td></tr>
+            <tr><td><code>lib/router.ts</code></td><td>Module</td><td>Route type, matcher and access enforcement.</td></tr>
+            <tr><td><code>lib/api/*</code></td><td>Modules</td><td>Seven route groups — auth, public, tickets, queue, team, reports, events.</td></tr>
+            <tr><td><code>lib/data/*</code></td><td>Modules</td><td>Typed data access; <code>rows.ts</code> holds every raw-row schema.</td></tr>
+            <tr><td><code>lib/domain.ts</code></td><td>Module</td><td>Shared vocabulary — services, roles, windows, identity normalisation.</td></tr>
+            <tr><td><code>proxy.ts</code></td><td>Web tier</td><td>API forwarding, CSP nonce, security headers, hidden-path refusal.</td></tr>
+            <tr><td><code>scripts/worker.mjs</code></td><td>Entry</td><td>Scheduler loop — routing tick, delivery, retention every 15 s.</td></tr>
+            <tr><td><code>scripts/migrate.mjs</code></td><td>Tool</td><td>Checksummed, transactional migration runner.</td></tr>
+            <tr><td><code>scripts/load-check.mjs</code></td><td>Harness</td><td>Lock contention and action latency under concurrency.</td></tr>
+            <tr><td><code>scripts/read-path-check.mjs</code></td><td>Harness</td><td>Read scaling at a year of history.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>16.3 Glossary</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:190px">Term</th><th>Definition</th></tr></thead>
+          <tbody>
+            <tr><td>Rotation cursor</td><td>A monotonic number on each person recording when they were last given a customer, at any counter. Lower means waiting longer for work.</td></tr>
+            <tr><td>Presence window</td><td>45 seconds — three missed 15-second heartbeats — after which an agent is treated as gone. Defined once in SQL and once in TypeScript, with a test comparing them.</td></tr>
+            <tr><td>Routing sweep</td><td>The scheduler's 15-second pass: maintenance, then waiting tickets in bounded batches, then the health heartbeat.</td></tr>
+            <tr><td>Five-minute hold</td><td>How long a ticket stays with an assigned agent before the sweep reconsiders it.</td></tr>
+            <tr><td>Outbox</td><td>Table of pending deliveries to Salesforce and SMS, claimed under lease with backoff.</td></tr>
+            <tr><td>Advisory lock</td><td>A PostgreSQL lock on an arbitrary number rather than a row; here, the assignment critical section.</td></tr>
+            <tr><td>Walk-in</td><td>A visit issued without a Salesforce record, either unregistered or because Salesforce was unreachable.</td></tr>
+            <tr><td>Degraded lookup</td><td>A check-in recorded with <code>degraded: true</code> because it bypassed Salesforce.</td></tr>
+          </tbody>
+        </table></div>
+
+        <div data-callout="success" style="margin-top:22px"><svg width="17" height="17"><use href="#i-ok"></use></svg><div><span class="co-t">End of document</span><p>Samana QMS · Technical Design Document V1.0 · baselined at commit <code>eb8e8d2</code>, 22 September 2026. Reviewed alongside <code>docs/operations.md</code> and <code>docs/rollback.md</code>.</p></div></div>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+(function () {
+  var root = document.getElementById('doc');
+  if (!root) return;
+
+  /* ---------- syntax highlighting ---------- */
+  var KW = /^(const|let|var|function|return|if|else|for|while|await|async|export|import|from|new|throw|try|catch|finally|class|interface|type|extends|implements|null|true|false|undefined|typeof|instanceof|of|in|break|continue|default|case|switch|BEGIN|END|IF|THEN|ELSE|ELSIF|LOOP|PERFORM|DECLARE|RETURN|RETURNS|LANGUAGE|CREATE|OR|REPLACE|INDEX|UNIQUE|USING|WHERE|ON|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CONFLICT|DO|NOTHING|EXISTS|NOT|AND|CASE|WHEN|END|IS|NULL)$/;
+  var TY = /^(string|number|boolean|Promise|Record|Array|Set|Map|Response|Request|URL|Error|z|uuid|text|integer|boolean|timestamptz|jsonb|interval|bigint|date)$/;
+  var SQ = /^(SELECT|FROM|ORDER|BY|LIMIT|OFFSET|GROUP|HAVING|JOIN|DESC|ASC|ANY|FILTER|OVER|WITH|AS)$/;
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  root.querySelectorAll('pre[data-lang]').forEach(function (pre) {
+    var code = pre.textContent, out = '';
+    var tok = /(--[^\n]*|\/\/[^\n]*)|('(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*")|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|(\s+)|([^\sA-Za-z0-9_])/g, m;
+    function push(c, t) { out += '<span class="cx-' + c + '">' + esc(t) + '</span>'; }
+    while ((m = tok.exec(code)) !== null) {
+      if (m[1]) push('c', m[1]);
+      else if (m[2]) push('s', m[2]);
+      else if (m[3]) push('n', m[3]);
+      else if (m[4]) {
+        var w = m[4];
+        if (KW.test(w)) push('k', w);
+        else if (SQ.test(w)) push('q', w);
+        else if (TY.test(w)) push('t', w);
+        else out += esc(w);
+      } else out += esc(m[0]);
+    }
+    pre.innerHTML = '<code>' + out + '</code>';
+  });
+
+  /* ---------- responsive drawer + scrollable tables ---------- */
+  var nav = document.getElementById('nav'), scrim = document.getElementById('scrim'), btn = document.getElementById('menu');
+  function narrow() { return window.matchMedia('(max-width: 1024px)').matches; }
+  function setOpen(v) {
+    if (nav) nav.setAttribute('data-open', String(v));
+    if (scrim) scrim.setAttribute('data-open', String(v));
+    if (btn) btn.setAttribute('aria-expanded', String(v));
+    document.body.style.overflow = v && narrow() ? 'hidden' : '';
+  }
+  if (btn) btn.addEventListener('click', function () { setOpen(!(nav && nav.getAttribute('data-open') === 'true')); });
+  if (scrim) scrim.addEventListener('click', function () { setOpen(false); });
+  window.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+  window.addEventListener('resize', function () { if (!narrow()) setOpen(false); });
+  root.querySelectorAll('main table').forEach(function (t) {
+    var p = t.parentElement;
+    if (p && p.classList.contains('tblwrap')) return;
+    var w = document.createElement('div');
+    w.className = 'tblwrap';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+
+  /* ---------- nav + scroll spy ---------- */
+  var links = Array.prototype.slice.call(root.querySelectorAll('nav a[href^="#s-"]'));
+  var crumb = document.getElementById('crumb');
+  links.forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      var el = document.getElementById(a.getAttribute('href').slice(1));
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 14, behavior: 'smooth' });
+      if (narrow()) setTimeout(function () { setOpen(false); }, 60);
+    });
+  });
+  var secs = Array.prototype.slice.call(root.querySelectorAll('main section[id^="s-"]'));
+  function setActive(id) {
+    links.forEach(function (a) {
+      var on = a.getAttribute('href') === '#' + id;
+      a.setAttribute('data-active', String(on));
+      if (on && crumb) { var l = a.querySelector('span:last-child'); crumb.textContent = l ? l.textContent : ''; }
+    });
+  }
+  if (window.IntersectionObserver) {
+    var io = new IntersectionObserver(function (entries) {
+      var vis = entries.filter(function (e) { return e.isIntersecting; })
+        .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+      if (vis[0]) setActive(vis[0].target.id);
+    }, { rootMargin: '-8% 0px -78% 0px', threshold: 0 });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  if (links[0]) links[0].setAttribute('data-active', 'true');
+
+  /* ---------- progress bar ---------- */
+  var bar = document.getElementById('prog');
+  function progress() {
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    if (bar) bar.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + '%';
+  }
+  window.addEventListener('scroll', progress, { passive: true });
+  window.addEventListener('resize', progress);
+  progress();
+
+  /* ---------- diagram filters ---------- */
+  root.querySelectorAll('[data-filter]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var scope = chip.getAttribute('data-scope'), grp = chip.getAttribute('data-group');
+      var dia = document.getElementById(scope);
+      if (!dia) return;
+      var chips = Array.prototype.slice.call(root.querySelectorAll('[data-filter][data-scope="' + scope + '"]'));
+      var wasOn = chip.getAttribute('data-on') === 'true';
+      chips.forEach(function (c) { c.setAttribute('data-on', 'false'); });
+      var active = wasOn ? null : grp;
+      if (active) chip.setAttribute('data-on', 'true');
+      dia.querySelectorAll('[data-group]').forEach(function (el) {
+        var groups = (el.getAttribute('data-group') || '').split(' ');
+        var match = !active || active === 'all' || groups.indexOf(active) !== -1;
+        el.style.opacity = match ? '1' : '0.12';
+        el.style.filter = match ? 'none' : 'grayscale(0.85)';
+      });
+    });
+  });
+
+  /* ---------- diagram walkthrough ---------- */
+  root.querySelectorAll('[data-play]').forEach(function (play) {
+    var timer = null, scope = play.getAttribute('data-scope'), dia = document.getElementById(scope);
+    if (!dia) return;
+    var steps = Array.prototype.slice.call(dia.querySelectorAll('[data-step]'))
+      .sort(function (a, b) { return +a.dataset.step - +b.dataset.step; });
+    var counter = dia.querySelector('[data-step-label]');
+    function stop() { if (timer) { clearInterval(timer); timer = null; } play.setAttribute('data-on', 'false'); }
+    function reset() { steps.forEach(function (s) { s.style.opacity = '1'; s.style.boxShadow = 'none'; s.style.transform = 'none'; }); if (counter) counter.textContent = ''; }
+    function apply(idx) {
+      steps.forEach(function (s, k) {
+        s.style.transition = 'all .35s cubic-bezier(.25,.1,.25,1)';
+        if (k === idx) { s.style.opacity = '1'; s.style.boxShadow = '0 0 0 3px #48bb78, 0 6px 18px rgba(46,132,74,.35)'; s.style.transform = 'scale(1.015)'; }
+        else if (k < idx) { s.style.opacity = '1'; s.style.boxShadow = 'none'; s.style.transform = 'none'; }
+        else { s.style.opacity = '.32'; s.style.boxShadow = 'none'; s.style.transform = 'none'; }
+      });
+      if (counter) counter.textContent = 'Step ' + (idx + 1) + ' / ' + steps.length;
+    }
+    play.addEventListener('click', function () {
+      if (timer) { stop(); reset(); return; }
+      if (!steps.length) return;
+      play.setAttribute('data-on', 'true');
+      var i = 0; apply(0);
+      timer = setInterval(function () {
+        i++;
+        if (i >= steps.length) { stop(); setTimeout(reset, 900); return; }
+        apply(i);
+      }, 1150);
+    });
+  });
+})();
+</script>
+</body>
+</html>
