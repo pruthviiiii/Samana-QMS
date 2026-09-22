@@ -170,13 +170,14 @@ services:
           type: web
           name: samana-qms-api
           envVarKey: SMS_SENDER
+      # Not fromService: Render's sync engine evaluates a fromService.envVarKey
+      # reference at the same time it creates the source variable, and an
+      # empty-string value on the source is not resolved in time, so a
+      # variable declared this way (unlike a real value or a sync: false
+      # secret) fails the sync with "used but not defined". Declared directly
+      # here instead, with the same empty default the API service uses (above).
+      # When a retention period is agreed, set both copies.
       - key: RETENTION_IDENTIFIER_DAYS
-        fromService:
-          type: web
-          name: samana-qms-api
-          envVarKey: RETENTION_IDENTIFIER_DAYS
+        value: ""
       - key: RETENTION_EVENT_DAYS
-        fromService:
-          type: web
-          name: samana-qms-api
-          envVarKey: RETENTION_EVENT_DAYS
+        value: ""
