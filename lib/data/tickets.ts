@@ -82,11 +82,27 @@ export async function serviceCounts(assignedTo: string | null) {
   return rows(serviceCountRow, result, 'service counts');
 }
 
-/** The reception TV: one featured ticket and six more, plus the waiting count. */
-export async function board() {
+/** How many rows the reception television has room for without scrolling. */
+export const BOARD_ROWS = 9;
+
+/**
+ * The reception television: the live queue, not only the tickets already at a
+ * counter. Whoever was called most recently comes first so the screen can
+ * announce them, then anyone else being served, then the people still waiting
+ * in the order they will be called. `waiting` is the total still waiting, which
+ * the screen turns into an overflow line once the board is full.
+ */
+export async function board(limit = BOARD_ROWS) {
   const [list, waiting] = await Promise.all([
     query(
-      "SELECT number,service_name,department,status,counter,called_at FROM qms.ticket_view WHERE status IN ('called','serving') ORDER BY called_at DESC LIMIT 7",
+      `SELECT number,service_name,department,status,counter,called_at,created_at
+         FROM qms.ticket_view
+        WHERE status IN ('called','serving','waiting')
+        ORDER BY CASE WHEN status IN ('called','serving') THEN 0 ELSE 1 END,
+                 CASE WHEN status IN ('called','serving') THEN called_at END DESC NULLS LAST,
+                 created_at
+        LIMIT $1`,
+      [limit],
     ),
     prisma().tickets.count({ where: { status: 'waiting' } }),
   ]);

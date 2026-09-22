@@ -2062,6 +2062,38 @@ textarea {
   font-size: 11px;
   letter-spacing: 1.5px;
 }
+/* The board: who is at a counter now, then who is next. A row for somebody
+   still in the queue is quieter than one already being served, so a glance
+   separates "go now" from "not yet" without reading a word. */
+.tv-list {
+  margin-top: 8px;
+}
+.tv-ticket.waiting > strong {
+  color: #b9c9a8;
+}
+.tv-ticket.waiting > i {
+  font-style: normal;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: #7f9670;
+}
+.tv-ticket.called {
+  background: #2a412c66;
+}
+.tv-ticket.called > b,
+.tv-ticket.serving > b {
+  color: #e7d4a7;
+}
+.tv-more {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 20px 12px 4px;
+  font-size: 12px;
+  color: #8fa680;
+  border-top: 1px dashed #365135;
+}
 .tv-ticket {
   border-color: #365135;
   padding: 22px 12px;
@@ -2125,7 +2157,7 @@ textarea {
   color: #9bb48b;
   background: #102a22;
 }
-.tv-waiting {
+.tv-more {
   color: #9cb58b;
   font-size: 12px;
 }
@@ -3201,7 +3233,7 @@ textarea {
   .tv-ticket > b {
     font-size: 13px;
   }
-  .tv-waiting {
+  .tv-more {
     font-size: 11px;
   }
 }

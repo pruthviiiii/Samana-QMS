@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { record, forTicket, page } from '../lib/data/events';
 import { markRead, unread } from '../lib/data/notifications';
 import { one, rows, ticketRow } from '../lib/data/rows';
+import { BOARD_ROWS, board } from '../lib/data/tickets';
 import { createGuest, findSessionUser, loginCandidates, revokeSession } from '../lib/data/users';
 import { closeDb, query } from '../lib/db';
 import { closePrisma } from '../lib/prisma';
@@ -53,6 +54,44 @@ describe('Row validation', () => {
     expect(() => rows(ticketRow, [{ id: 'x' }], 'broken query')).toThrow(/broken query \(row 0\)/);
     expect(() => rows(ticketRow, [{ id: 'x' }], 'broken query')).toThrow(/number/);
     expect(() => one(ticketRow, [], 'empty query')).toThrow(/Expected one row from empty query/);
+  });
+});
+describe('The reception television board', () => {
+  // The board is the queue, not only the tickets already at a counter: a room
+  // with people waiting and nobody called must still have something to show,
+  // which is the defect this replaced.
+  it('lists tickets that are still waiting, not only those at a counter', async () => {
+    const { tickets } = await board();
+    // The fixture issued a ticket and never called it, so a board that only
+    // knew about counters would come back empty here.
+    expect(tickets.length).toBeGreaterThan(0);
+    expect(tickets.some((t) => t.status === 'waiting')).toBe(true);
+  });
+  it('gives every row what the screen prints, including when it arrived', async () => {
+    const { tickets } = await board();
+    for (const ticket of tickets) {
+      expect(typeof ticket.number).toBe('string');
+      expect(typeof ticket.service_name).toBe('string');
+      expect(ticket.created_at).toBeTruthy();
+      expect(['waiting', 'called', 'serving']).toContain(ticket.status);
+    }
+  });
+  it('never returns more rows than the screen has room for', async () => {
+    const { tickets, waiting } = await board();
+    expect(tickets.length).toBeLessThanOrEqual(BOARD_ROWS);
+    // The total is what the screen turns into its overflow line, so it counts
+    // everyone waiting and not just the ones that fit.
+    expect(waiting).toBeGreaterThanOrEqual(
+      tickets.filter((t) => t.status === 'waiting').length,
+    );
+  });
+  it('puts whoever was called most recently first, so the screen can announce them', async () => {
+    const { tickets } = await board();
+    const active = tickets.filter((t) => t.status !== 'waiting');
+    // Active tickets lead the board, and the waiting queue follows it.
+    const firstWaiting = tickets.findIndex((t) => t.status === 'waiting');
+    if (active.length && firstWaiting !== -1)
+      expect(firstWaiting).toBe(active.length);
   });
 });
 describe('Records through the Prisma client', () => {

@@ -1244,12 +1244,17 @@ input[type='checkbox'] {
   color: #cdbf9d;
   font-weight: 400;
 }
-.tv-waiting {
+.tv-ticket > i {
+  font-style: normal;
+  font-size: 14px;
+  color: #7f9ca8;
+}
+.tv-more {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
   color: #7f9ca8;
-  padding: 24px 0;
+  padding: 20px 20px 4px;
 }
 .tv-feature {
   position: relative;

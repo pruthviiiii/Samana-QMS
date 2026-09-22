@@ -97,7 +97,7 @@ export const serviceCountRow = z.object({
   serving: z.number().int(),
 });
 
-/** What the reception TV shows for one ticket. */
+/** One line of the reception TV: a ticket at a counter, or one still waiting. */
 export const boardRow = z.object({
   number: z.string(),
   service_name: z.string(),
@@ -105,6 +105,7 @@ export const boardRow = z.object({
   status: ticketStatus,
   counter: z.string().nullable(),
   called_at: nullableTimestamp,
+  created_at: timestamp,
 });
 
 /** What a customer's phone may see about their own ticket. */

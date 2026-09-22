@@ -11,8 +11,12 @@ type DisplayTicket = {
   department: string;
   status: string;
   counter: string;
-  called_at: string;
+  called_at: string | null;
+  created_at: string;
 };
+// Room for the board plus the overflow line. The server sends at most this
+// many rows (BOARD_ROWS in lib/data/tickets.ts).
+const ROWS = 9;
 export default function TVDisplay() {
   const [data, setData] = useState<{
     tickets: DisplayTicket[];
@@ -104,8 +108,12 @@ export default function TVDisplay() {
       clearInterval(clockTimer);
     };
   }, []);
+  // The ticket being announced: the one most recently called and not yet
+  // started. It holds the screen until the agent starts serving, which is what
+  // moves it down into the board with its counter beside it.
+  const announcing = data.tickets.find((t) => t.status === 'called') ?? null;
   useEffect(() => {
-    const ticket = data.tickets[0];
+    const ticket = announcing;
     if (!ticket) return;
     const key = ticket.number + '|' + ticket.called_at;
     if (lastCall.current === key) return;
@@ -117,10 +125,19 @@ export default function TVDisplay() {
       announcement.lang = 'en-GB';
       window.speechSynthesis.speak(announcement);
     }
-  }, [data, sound]);
-  const current = data.tickets[0];
+  }, [announcing, sound]);
   const stale =
     expired || (!!error && Date.now() - lastSuccess.current > 30000);
+  // Everything else on the board, in the order it will be called. The
+  // announced ticket is not repeated here; it is already filling the screen.
+  const listed = data.tickets.filter((t) => t !== announcing).slice(0, ROWS - 1);
+  // People still waiting beyond the rows that fit. Only this number is shown,
+  // and only when there is an overflow: a board that says "12 waiting" while
+  // listing them all is telling the room something it can already see.
+  const overflow = Math.max(
+    0,
+    data.waiting - listed.filter((t) => t.status === 'waiting').length,
+  );
   return (
     <main className="tv-screen">
       <header className="tv-header">
@@ -167,21 +184,27 @@ export default function TVDisplay() {
               {error}
             </div>
           )}
-          {!stale && current ? (
-            <div className="now-serving">
+          {!stale && announcing ? (
+            // A customer has just been called. This is the one moment the
+            // screen has a job beyond informing, so it takes the whole panel
+            // until the agent starts serving them.
+            // `output` is the live region for a value the page has produced:
+            // it carries the status role, so a screen reader announces a call
+            // without the number being polled for.
+            <output className="now-serving">
               <div>
                 <small>TICKET NUMBER</small>
-                <strong>{current.number}</strong>
+                <strong>{announcing.number}</strong>
                 <p>
-                  {current.department} · {current.service_name}
+                  {announcing.department} · {announcing.service_name}
                 </p>
               </div>
               <ArrowRight size={48} />
               <div>
                 <small>PLEASE PROCEED TO</small>
-                <h1>{current.counter || 'Service desk'}</h1>
+                <h1>{announcing.counter || 'Service desk'}</h1>
               </div>
-            </div>
+            </output>
           ) : (
             <div className="tv-welcome">
               <h1>{stale ? 'Reconnecting…' : 'Welcome to Samana'}</h1>
@@ -192,26 +215,38 @@ export default function TVDisplay() {
               </p>
             </div>
           )}
-          <div className="tv-list-heading">
-            <span>TICKET</span>
-            <span>SERVICE</span>
-            <span>COUNTER</span>
-          </div>
-          {!stale &&
-            data.tickets.slice(1, 7).map((ticket) => (
-              <div
-                className="tv-ticket"
-                key={ticket.number + '|' + ticket.called_at}
-              >
-                <strong>{ticket.number}</strong>
-                <span>{ticket.service_name}</span>
-                <b>{ticket.counter || 'Service desk'}</b>
+          {!stale && listed.length > 0 && (
+            <div className="tv-list">
+              <div className="tv-list-heading">
+                <span>TICKET</span>
+                <span>SERVICE</span>
+                <span>COUNTER</span>
               </div>
-            ))}
-          <div className="tv-waiting">
-            <span>{data.waiting} customers waiting</span>
-            <span>Thank you for your patience.</span>
-          </div>
+              {listed.map((ticket) => (
+                <div className={'tv-ticket ' + ticket.status} key={ticket.number}>
+                  <strong>{ticket.number}</strong>
+                  <span>{ticket.service_name}</span>
+                  {/* The counter is the answer to "where do I go", so it
+                      appears the moment a ticket has one. A ticket still in
+                      the queue has none yet and says where it stands instead. */}
+                  {ticket.status === 'waiting' ? (
+                    <i>Waiting</i>
+                  ) : (
+                    <b>{ticket.counter || 'Service desk'}</b>
+                  )}
+                </div>
+              ))}
+              {overflow > 0 && (
+                <div className="tv-more">
+                  <span>
+                    +{overflow} more {overflow === 1 ? 'customer' : 'customers'}{' '}
+                    waiting
+                  </span>
+                  <span>Thank you for your patience.</span>
+                </div>
+              )}
+            </div>
+          )}
         </section>
         <aside className="tv-feature">
           <img
