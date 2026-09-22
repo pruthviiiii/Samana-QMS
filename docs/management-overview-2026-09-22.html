@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Samana QMS · Management Overview</title>
+<style>
+:root{--sans:'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;--mono:'Cascadia Mono','SF Mono',Menlo,Consolas,monospace;--ease:cubic-bezier(.25,.1,.25,1)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--sans);font-size:14.5px;line-height:1.58;color:#181818;background:#e7e7e5;-webkit-font-smoothing:antialiased}
+a{color:#1d6b3f;text-decoration:none}
+a:hover{color:#134b2b;text-decoration:underline}
+p{margin:0 0 13px;text-wrap:pretty}
+main h1{font-size:27px;line-height:1.18;font-weight:700;color:#12331f;margin:0}
+main h2{font-size:19px;font-weight:700;color:#181818;margin:28px 0 10px;scroll-margin-top:16px}
+main h3{font-size:15.5px;font-weight:700;color:#1d6b3f;margin:20px 0 8px}
+ul{margin:0 0 13px;padding:0;list-style:none}
+main li{position:relative;padding:5px 0 5px 21px;color:#2b2826;text-wrap:pretty}
+main li::before{content:"";position:absolute;left:3px;top:13px;width:6px;height:6px;border-radius:50%;background:#2e844a}
+table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13px;background:#fff;border:1px solid #dddbda;border-radius:6px;overflow:hidden}
+th{text-align:left;padding:10px 13px;background:#f3f2f2;color:#514f4d;font-weight:700;font-size:10.5px;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid #dddbda;vertical-align:bottom}
+td{padding:10px 13px;border-bottom:1px solid #ecebea;vertical-align:top;color:#2b2826}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafaf9}
+td code,p code,li code{font-family:var(--mono);font-size:12px;background:#eef4ee;color:#12331f;padding:1px 5px;border-radius:3px;white-space:nowrap}
+[data-callout]{display:flex;gap:12px;margin:17px 0;padding:14px 16px;border-radius:6px;border:1px solid #dddbda;border-left-width:4px;background:#fff;font-size:13.5px;line-height:1.55}
+[data-callout] p{margin:0}
+[data-callout] p+p{margin-top:7px}
+[data-callout] .co-t{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+[data-callout] svg{flex:none;margin-top:2px}
+[data-callout="note"]{border-left-color:#0176d3;background:#f4f8fe}
+[data-callout="note"] .co-t{color:#0b5cab}
+[data-callout="warn"]{border-left-color:#fe9339;background:#fff7f0}
+[data-callout="warn"] .co-t{color:#a96404}
+[data-callout="danger"]{border-left-color:#ea001e;background:#fef4f2}
+[data-callout="danger"] .co-t{color:#ba0517}
+[data-callout="success"]{border-left-color:#2e844a;background:#f2faee}
+[data-callout="success"] .co-t{color:#194e31}
+[data-eyebrow]{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#2e844a}
+[data-chip]{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:15rem;border:1px solid #c9c7c5;background:#fff;color:#514f4d;cursor:pointer;transition:all .15s var(--ease);user-select:none;line-height:1}
+[data-chip]:hover{border-color:#2e844a;color:#2e844a}
+[data-chip][data-on="true"]{background:#2e844a;border-color:#2e844a;color:#fff}
+[data-btn]{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;padding:7px 14px;border-radius:4px;border:1px solid #2e844a;background:#2e844a;color:#fff;cursor:pointer;transition:all .15s var(--ease);font-family:inherit;line-height:1}
+[data-btn]:hover{background:#194e31;border-color:#194e31}
+nav a{display:flex;gap:9px;align-items:baseline;padding:7px 14px 7px 15px;color:#b6d8c1;font-size:12.5px;border-left:3px solid transparent;text-decoration:none;line-height:1.3;transition:all .12s var(--ease)}
+nav a:hover{color:#fff;background:rgba(255,255,255,.07);text-decoration:none}
+nav a[data-active="true"]{color:#fff;background:rgba(72,187,120,.18);border-left-color:#48bb78;font-weight:600}
+nav a .n{font-size:10px;font-weight:700;color:#5fc487;min-width:16px;font-variant-numeric:tabular-nums}
+[data-panel]{position:relative;margin:18px 0 8px;border:1px solid #dddbda;border-radius:10px;background:#fff;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+[data-panel] .p-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(180deg,#fbfdfb,#f2f7f3);border-bottom:1px solid #dddbda}
+[data-panel] .p-title{font-size:13.5px;font-weight:700;color:#12331f;display:flex;align-items:center;gap:8px}
+[data-panel] .p-tools{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+[data-panel] .p-body{padding:22px;overflow:auto;background:linear-gradient(180deg,#fbfdfb,#f4f8f5)}
+.fig-cap{font-size:12px;color:#706e6b;margin:2px 0 22px;font-style:italic}
+.step{background:#fff;border:1px solid #cfdbd2;border-radius:9px;padding:13px 15px;box-shadow:0 1px 2px rgba(18,51,31,.08);display:flex;gap:13px;align-items:flex-start;transition:opacity .3s var(--ease),box-shadow .3s var(--ease),transform .3s var(--ease)}
+.step .st{font-size:13.5px;font-weight:700;color:#12331f;line-height:1.3}
+.step .ss{font-size:12.5px;color:#55705f;margin-top:4px;line-height:1.5}
+.step .who{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:15rem;background:#eef4ee;color:#1d6b3f;margin-left:8px;vertical-align:2px}
+.badge{width:24px;height:24px;flex:none;border-radius:50%;background:#2e844a;color:#fff;font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.varr{width:2px;background:#9ab5a4;margin:0 auto;position:relative;flex:none}
+.varr::after{content:"";position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #9ab5a4}
+.metric{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:#dddbda;border:1px solid #dddbda;border-radius:8px;overflow:hidden;margin:16px 0 20px}
+.metric>div{background:#fff;padding:13px 15px}
+.metric .mv{font-size:21px;font-weight:700;color:#12331f;font-variant-numeric:tabular-nums;line-height:1.1}
+.metric .ml{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#706e6b;font-weight:700;margin-top:4px}
+.yes{color:#194e31;font-weight:700}
+.no{color:#ba0517;font-weight:700}
+.dash{color:#a8a8a6}
+#prog{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,#48bb78,#2e844a);z-index:50;width:0;transition:width .1s linear}
+.tblwrap{max-width:100%}
+#topbar{display:none}
+#scrim{display:none}
+@media (max-width:1024px){
+  #doc{display:block!important}
+  #topbar{display:flex;align-items:center;gap:11px;position:sticky;top:0;z-index:55;background:#12331f;padding:9px 13px;border-bottom:1px solid #0b2114}
+  #nav{position:fixed!important;top:0;left:0;width:284px!important;height:100vh!important;z-index:60;transform:translateX(-102%);transition:transform .26s var(--ease);box-shadow:0 0 34px rgba(0,0,0,.42)}
+  #nav[data-open="true"]{transform:none}
+  #scrim{display:block;position:fixed;inset:0;background:rgba(8,7,7,.45);z-index:58;opacity:0;pointer-events:none;transition:opacity .26s var(--ease)}
+  #scrim[data-open="true"]{opacity:1;pointer-events:auto}
+  main header[data-cover]{padding:34px 26px 54px!important}
+  main [data-paper]{max-width:none!important;margin:-34px 16px 40px!important;padding:26px 26px 34px!important;border-radius:8px!important}
+}
+@media (max-width:760px){
+  main [data-cover] h1{font-size:32px!important}
+  main [data-paper]{margin:-28px 10px 32px!important;padding:20px 18px 26px!important}
+  .tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:10px 0 18px;border:1px solid #dddbda;border-radius:6px;background:#fff}
+  .tblwrap table{margin:0;min-width:600px;border:none;border-radius:0}
+  [data-panel] .p-body{padding:14px!important}
+}
+@media print{
+  #nav,#prog,.p-tools,#topbar,#scrim{display:none!important}
+  .tblwrap{overflow:visible!important;border:none!important}
+  body{background:#fff}
+  #doc{display:block}
+  [data-paper]{box-shadow:none!important;border:none!important;margin:0!important;max-width:none!important;border-radius:0!important}
+  section,table,[data-callout],[data-panel],tr,.step{break-inside:avoid}
+  [data-cover]{break-after:page}
+}
+</style>
+</head>
+<body>
+<div id="prog"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"></circle><circle cx="12" cy="8" r="1.3" fill="currentColor"></circle><path d="M12 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l9 16H3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="M12 9v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><circle cx="12" cy="16.5" r="1.2" fill="currentColor"></circle></symbol>
+<symbol id="i-err" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></symbol>
+<symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M8 12.5l2.5 2.5 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"></path></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16l-6 8v5l-4 2v-7z" fill="currentColor"></path></symbol>
+<symbol id="i-flow" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="5" rx="1" fill="currentColor"></rect><rect x="14" y="15" width="7" height="5" rx="1" fill="currentColor"></rect><path d="M6.5 9v4a2 2 0 002 2h6" stroke="currentColor" stroke-width="2" fill="none"></path></symbol>
+</defs></svg>
+<div id="doc" style="display:flex;min-height:100vh;background:#e7e7e5">
+  <div id="topbar">
+    <button id="menu" type="button" aria-label="Open contents" aria-expanded="false" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;flex:none;border:1px solid rgba(255,255,255,.22);border-radius:5px;background:rgba(255,255,255,.08);cursor:pointer;padding:0">
+      <svg width="19" height="19" viewBox="0 0 24 24" style="color:#fff"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"></path></svg>
+    </button>
+    <div style="min-width:0;flex:1">
+      <div style="color:#fff;font-weight:700;font-size:13px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Samana QMS · Management Overview</div>
+      <div id="crumb" style="color:#8ce0aa;font-size:11px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">About This Document</div>
+    </div>
+  </div>
+  <div id="scrim"></div>
+  <aside id="nav" style="width:272px;flex:none;background:#12331f;position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid #0b2114">
+    <div style="padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.1)">
+      <div style="display:flex;align-items:center;gap:9px;color:#48bb78"><svg width="26" height="26" style="color:#48bb78"><use href="#i-flow"></use></svg><div style="color:#fff;font-weight:700;font-size:14px;line-height:1.1">Samana QMS<div style="color:#8ce0aa;font-weight:400;font-size:11px;margin-top:2px">Management Overview</div></div></div>
+      <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
+        <span style="font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#12331f;background:#5fc487;padding:3px 8px;border-radius:15rem">V1.0 · NON-TECHNICAL</span>
+      </div>
+    </div>
+    <nav style="padding:8px 0 32px">
+      <a href="#s-0"><span class="n">00</span><span>About This Document</span></a>
+      <a href="#s-1"><span class="n">01</span><span>What the System Does</span></a>
+      <a href="#s-2"><span class="n">02</span><span>Names Used Throughout</span></a>
+      <a href="#s-3"><span class="n">03</span><span>People &amp; Permissions</span></a>
+      <a href="#s-4"><span class="n">04</span><span>Services Offered</span></a>
+      <a href="#s-5"><span class="n">05</span><span>Workflow A — A Customer's Visit</span></a>
+      <a href="#s-6"><span class="n">06</span><span>Workflow B — Reaching Staff</span></a>
+      <a href="#s-7"><span class="n">07</span><span>Workflow C — A Working Day</span></a>
+      <a href="#s-8"><span class="n">08</span><span>Workflow D — When Things Fail</span></a>
+      <a href="#s-9"><span class="n">09</span><span>What Management Controls</span></a>
+      <a href="#s-10"><span class="n">10</span><span>What Is Recorded</span></a>
+      <a href="#s-11"><span class="n">11</span><span>Personal Data</span></a>
+      <a href="#s-12"><span class="n">12</span><span>Decisions Required</span></a>
+      <a href="#s-13"><span class="n">13</span><span>Glossary</span></a>
+    </nav>
+  </aside>
+  <main style="flex:1;min-width:0">
+    <header data-cover="" style="position:relative;padding:52px 48px 72px;background:radial-gradient(120% 140% at 85% 0%,#2e844a 0%,#12331f 55%,#0b2114 100%);color:#fff;overflow:hidden">
+      <div style="position:absolute;inset:0;opacity:.5;background:radial-gradient(60% 80% at 100% 100%,rgba(72,187,120,.35),transparent 60%);pointer-events:none"></div>
+      <div style="position:relative;max-width:940px;margin:0 auto">
+        <div style="display:flex;align-items:center;gap:10px;color:#8ce0aa;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase"><svg width="16" height="16"><use href="#i-flow"></use></svg>Customer Experience Centre · Management Overview</div>
+        <h1 style="font-size:46px;line-height:1.03;font-weight:700;margin:16px 0 0;color:#fff;letter-spacing:-.01em">How the Queue System Works</h1>
+        <p style="font-size:19px;color:#d6ecdd;margin:12px 0 0;max-width:660px;font-weight:300">A plain-language account of what happens from the moment a customer walks in to the moment their visit is written back to Salesforce — who does what, what you control, and what still needs a decision.</p>
+        <div class="metric" style="margin-top:34px;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.14)">
+          <div style="background:#173d26"><div class="mv" style="color:#fff">6</div><div class="ml" style="color:#8ce0aa">Services</div></div>
+          <div style="background:#173d26"><div class="mv" style="color:#fff">6</div><div class="ml" style="color:#8ce0aa">Staff roles</div></div>
+          <div style="background:#173d26"><div class="mv" style="color:#fff">4</div><div class="ml" style="color:#8ce0aa">Workflows</div></div>
+          <div style="background:#173d26"><div class="mv" style="color:#fff">8</div><div class="ml" style="color:#8ce0aa">Decisions for you</div></div>
+        </div>
+        <div style="margin-top:14px;font-size:11px;color:#b6d8c1">Audience — Management · Operations · Department Heads · Reception supervisors. No technical knowledge assumed.</div>
+      </div>
+    </header>
+    <div data-paper="" style="max-width:940px;margin:-44px auto 64px;background:#fff;border:1px solid #dddbda;border-radius:10px;box-shadow:0 10px 30px rgba(18,51,31,.12);padding:38px 48px 52px;position:relative">
+
+      <section id="s-0" style="scroll-margin-top:14px">
+        <div data-eyebrow="">Section 00</div>
+        <h1>About This Document</h1>
+        <p style="margin-top:14px">This document explains the Samana Queue Management System in business terms. It is written to be read end to end in about twenty minutes, and it assumes no technical knowledge. Where a limit exists, it is stated plainly rather than described as a feature.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:180px">This document</th><th>Its companion</th></tr></thead>
+          <tbody>
+            <tr><td><b>Management Overview</b><br>(this file)</td><td>What the system does, who does what, what you control, and what needs your decision. Plain language, no code.</td></tr>
+            <tr><td>Technical Design Document</td><td><code>docs/tdd-2026-09-22.html</code> — the same system described for engineers: architecture, data design, and the reasoning behind each technical choice. Read that one only if you need the <em>how</em>.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">One name per thing</span><p>Every term in this document matches exactly what appears on screen for staff. Where the software currently uses two different names for one thing — or one name for two different things — that is flagged rather than smoothed over, because it will otherwise reach a report and confuse the reader. Section 02 is the vocabulary; Section 12 lists the one naming problem that needs a decision.</p></div></div>
+      </section>
+
+      <section id="s-1" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 01</div>
+        <h1>What the System Does</h1>
+        <p style="margin-top:14px">The system runs the queue at the Customer Experience Centre. It replaces a paper token and a shouted name with four things working together:</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:180px">Part</th><th>What it is</th></tr></thead>
+          <tbody>
+            <tr><td><b>Check-in</b></td><td>A screen at reception, or the customer's own phone after scanning a QR code, where the visit begins.</td></tr>
+            <tr><td><b>Staff workspace</b></td><td>The screen each member of staff uses to see their queue, call a customer, and close the visit.</td></tr>
+            <tr><td><b>Reception television</b></td><td>The screen in the waiting area showing who is being called and to which counter.</td></tr>
+            <tr><td><b>Salesforce link</b></td><td>Identifies the customer on arrival and writes the finished visit back afterwards.</td></tr>
+          </tbody>
+        </table></div>
+        <p>Between them sits the part nobody sees: the system decides, on its own, which member of staff each customer should go to. That decision is the subject of <a href="#s-6">Workflow B</a> and is where most of the operational value sits.</p>
+        <h3>What it is not</h3>
+        <ul>
+          <li>It is not an appointment or booking system. It handles people who are already in the building.</li>
+          <li>It is not a CRM. Salesforce remains the customer record; this system reads from it and writes visits back to it.</li>
+          <li>It does not replace judgement. A Manager can always reassign a customer by hand.</li>
+        </ul>
+      </section>
+
+      <section id="s-2" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 02</div>
+        <h1>Names Used Throughout</h1>
+        <p style="margin-top:14px">These are the words the software puts on screen. This document uses the same ones, and nothing else, so that a sentence here and a label in the product always mean the same thing.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:190px">Name</th><th style="width:150px">Do not call it</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><b>Customer</b></td><td>Visitor, client, guest</td><td>The person who has come to the Centre.</td></tr>
+            <tr><td><b>Ticket</b></td><td>Token, number slip</td><td>One visit. Carries a ticket number such as <code>C-041</code>.</td></tr>
+            <tr><td><b>Ticket number</b></td><td>Queue number</td><td>A letter for the service and a running count for the day — <code>C-041</code>, <code>N-007</code>.</td></tr>
+            <tr><td><b>Service</b></td><td>Category, queue type</td><td>What the customer came for. The six are listed in Section 04.</td></tr>
+            <tr><td><b>Counter</b></td><td>Desk, window, booth</td><td>Where the customer is served. Set per member of staff.</td></tr>
+            <tr><td><b>Check-in</b></td><td>Registration, sign-in</td><td>Joining the queue. <em>Sign-in</em> means a member of staff logging in, which is different.</td></tr>
+            <tr><td><b>Called</b></td><td>Announced, paged</td><td>The customer's number is on the television and they should come forward.</td></tr>
+            <tr><td><b>Serving</b></td><td>In progress, active</td><td>The member of staff has started the visit.</td></tr>
+            <tr><td><b>Closed</b></td><td>Completed, done</td><td>The visit finished normally.</td></tr>
+            <tr><td><b>No-show</b></td><td>Missed, abandoned</td><td>The customer was called and did not come forward.</td></tr>
+            <tr><td><b>Urgency</b></td><td>Priority, severity</td><td>How far ahead a service is routed. Normal, Elevated, High or Urgent.</td></tr>
+            <tr><td><b>Rotation</b></td><td>Round robin, turn order</td><td>The order deciding who gets the next customer.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">Two things that sound alike and are not</span><p><b>TV display</b> is a <em>staff role</em> — the account the waiting-area screen signs in as. The <b>reception television</b> is the physical screen. A sentence such as "give her TV display" means granting an account a role, not handing over a monitor.</p><p><b>Check-in</b> is a customer joining the queue. <b>Sign-in</b> is a member of staff logging into the system. They are different actions with different records behind them.</p></div></div>
+      </section>
+
+      <section id="s-3" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 03</div>
+        <h1>People &amp; Permissions</h1>
+        <p style="margin-top:14px">Six roles. A person holds exactly one. Use the filter to see what a single role can do.</p>
+
+        <div data-panel="" id="p-roles">
+          <div class="p-head">
+            <div class="p-title"><svg width="15" height="15" style="color:#2e844a"><use href="#i-filter"></use></svg>Who can do what</div>
+            <div class="p-tools">
+              <span data-chip="" data-rolefilter="" data-role="all" data-on="true">All roles</span>
+              <span data-chip="" data-rolefilter="" data-role="admin">Administrator</span>
+              <span data-chip="" data-rolefilter="" data-role="hod">Head of Department</span>
+              <span data-chip="" data-rolefilter="" data-role="manager">Manager</span>
+              <span data-chip="" data-rolefilter="" data-role="exec">Executive</span>
+              <span data-chip="" data-rolefilter="" data-role="reception">Reception</span>
+              <span data-chip="" data-rolefilter="" data-role="tv">TV display</span>
+            </div>
+          </div>
+          <div class="p-body" style="padding:0">
+            <div class="tblwrap"><table style="margin:0;border:none;border-radius:0">
+              <thead><tr>
+                <th style="width:250px">Can…</th>
+                <th data-col="admin" style="width:78px">Admin</th>
+                <th data-col="hod" style="width:78px">HoD</th>
+                <th data-col="manager" style="width:78px">Manager</th>
+                <th data-col="exec" style="width:78px">Executive</th>
+                <th data-col="reception" style="width:78px">Reception</th>
+                <th data-col="tv" style="width:78px">TV display</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>Check a customer in</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="yes">Yes</td><td data-col="reception" class="yes">Yes</td><td data-col="tv" class="no">No</td></tr>
+                <tr><td>Call, serve and close a customer</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="yes">Yes</td><td data-col="reception" class="no">No</td><td data-col="tv" class="no">No</td></tr>
+                <tr><td>See the live queue</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="yes">Own only</td><td data-col="reception" class="yes">Yes</td><td data-col="tv" class="no">No</td></tr>
+                <tr><td>Reassign a customer to someone else</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="no">No</td><td data-col="reception" class="no">No</td><td data-col="tv" class="no">No</td></tr>
+                <tr><td>Change who covers which service</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="no">No</td><td data-col="reception" class="no">No</td><td data-col="tv" class="no">No</td></tr>
+                <tr><td>Set a service's urgency</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="no">No</td><td data-col="reception" class="no">No</td><td data-col="tv" class="no">No</td></tr>
+                <tr><td>View reports and the activity log</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="no">No</td><td data-col="reception" class="no">No</td><td data-col="tv" class="no">No</td></tr>
+                <tr><td>Export a report containing ID numbers</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="no">No</td><td data-col="reception" class="no">No</td><td data-col="tv" class="no">No</td></tr>
+                <tr><td>Create or edit a staff account</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="no">No</td><td data-col="manager" class="no">No</td><td data-col="exec" class="no">No</td><td data-col="reception" class="no">No</td><td data-col="tv" class="no">No</td></tr>
+                <tr><td>Show the check-in QR code</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="no">No</td><td data-col="reception" class="yes">Yes</td><td data-col="tv" class="yes">Yes</td></tr>
+                <tr><td>Display the waiting-area board</td><td data-col="admin" class="yes">Yes</td><td data-col="hod" class="yes">Yes</td><td data-col="manager" class="yes">Yes</td><td data-col="exec" class="no">No</td><td data-col="reception" class="no">No</td><td data-col="tv" class="yes">Yes</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </div>
+        <div class="fig-cap">"Own only" means an Executive sees the customers assigned to them, not the whole floor.</div>
+
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">Two roles worth understanding</span><p><b>Executive</b> is the role that serves customers. It is what the software calls a front-line team member; there is no separate "agent" role.</p><p><b>TV display</b> is an account, not a person. The waiting-area screen signs in with it once and stays signed in. It can show the board and the QR code and can do nothing else — it cannot see customer names or the queue list.</p></div></div>
+      </section>
+
+      <section id="s-4" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 04</div>
+        <h1>Services Offered</h1>
+        <p style="margin-top:14px">Six services across three departments. The letter is the start of every ticket number for that service, which is how a number on the television identifies what the customer came for.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:56px">Letter</th><th style="width:190px">Service</th><th style="width:150px">Department</th><th>Who it is for</th></tr></thead>
+          <tbody>
+            <tr><td><b>C</b></td><td>General Query</td><td>CRM</td><td>A registered customer with at least one unit, with a general question.</td></tr>
+            <tr><td><b>N</b></td><td>NOC / Resale</td><td>CRM</td><td>No-objection certificates and resale matters on an owned unit.</td></tr>
+            <tr><td><b>R</b></td><td>Refund</td><td>CRM</td><td>Refund requests on an owned unit.</td></tr>
+            <tr><td><b>H</b></td><td>Handover</td><td>CRM</td><td>Unit handover.</td></tr>
+            <tr><td><b>P</b></td><td>Collections</td><td>Collection</td><td>Payments and collections. Routed to the unit's collection manager rather than by rotation.</td></tr>
+            <tr><td><b>G</b></td><td>General Query</td><td>General Query</td><td>A walk-in, or a registered customer with no unit on their record.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="danger"><svg width="17" height="17"><use href="#i-err"></use></svg><div><span class="co-t">Naming conflict — needs your decision</span><p>Two services are both named <b>General Query</b>: the CRM one (tickets beginning <code>C</code>) and the walk-in one (tickets beginning <code>G</code>). They are different services, handled by different people, and reported separately.</p><p>In a report they appear as two rows with the same name, told apart only by a department column that itself reads "General Query". Anyone reading that report will either merge two numbers that should be separate, or ask which is which every time.</p><p>Recommendation: rename the walk-in service to something unambiguous — <em>Walk-in Enquiry</em> is the obvious candidate. It is a label change only; ticket numbers, history and reports are unaffected. Listed again in <a href="#s-12">Section 12</a>.</p></div></div>
+        <p>Throughout the rest of this document the two are written as <b>General Query (CRM)</b> and <b>General Query (Walk-in)</b> so that no sentence is ambiguous.</p>
+      </section>
+
+      <section id="s-5" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 05</div>
+        <h1>Workflow A — A Customer's Visit</h1>
+        <p style="margin-top:14px">The full journey, from the door to the record in Salesforce. Press <b>Play</b> to step through it.</p>
+
+        <div data-panel="" id="p-visit">
+          <div class="p-head">
+            <div class="p-title"><svg width="15" height="15" style="color:#2e844a"><use href="#i-flow"></use></svg>Workflow A · One customer, start to finish</div>
+            <div class="p-tools">
+              <span data-step-label="" style="font-size:11.5px;font-weight:700;color:#1d6b3f;font-variant-numeric:tabular-nums;min-width:70px;text-align:right"></span>
+              <span data-btn="" data-play="" data-scope="p-visit"><svg width="13" height="13"><use href="#i-play"></use></svg>Play walkthrough</span>
+            </div>
+          </div>
+          <div class="p-body" style="display:flex;flex-direction:column;gap:0">
+            <div class="step" data-step="1"><span class="badge">1</span><div><div class="st">The customer arrives<span class="who">Customer</span></div><div class="ss">They either use the check-in screen at reception, or scan the QR code shown on the reception television with their own phone. Both lead to the same place.</div></div></div>
+            <div class="varr" style="height:20px"></div>
+            <div class="step" data-step="2"><span class="badge">2</span><div><div class="st">They are identified<span class="who">System · Salesforce</span></div><div class="ss">They give a mobile number, Emirates ID or passport number. The system asks Salesforce who that is. A customer may type their mobile number in any usual form — with or without 971, with or without a leading zero — and it finds the same person.</div></div></div>
+            <div class="varr" style="height:20px"></div>
+            <div class="step" data-step="3"><span class="badge">3</span><div><div class="st">They choose a service<span class="who">Customer</span></div><div class="ss">A registered customer with units picks the unit and one of the CRM services or Collections. Anyone else gets General Query (Walk-in). Nobody can pick a service that does not apply to them.</div></div></div>
+            <div class="varr" style="height:20px"></div>
+            <div class="step" data-step="4"><span class="badge">4</span><div><div class="st">A ticket is issued<span class="who">System</span></div><div class="ss">They receive a ticket number — for example <code>C-041</code> — and, if they checked in by phone, a private link that shows their own progress. Numbers restart each day.</div></div></div>
+            <div class="varr" style="height:20px"></div>
+            <div class="step" data-step="5"><span class="badge">5</span><div><div class="st">The system picks a member of staff<span class="who">System</span></div><div class="ss">Immediately, not on a timer. The rules are <a href="#s-6">Workflow B</a>. If nobody suitable is free, the ticket waits and stays visible on the board rather than disappearing.</div></div></div>
+            <div class="varr" style="height:20px"></div>
+            <div class="step" data-step="6"><span class="badge">6</span><div><div class="st">The customer is called<span class="who">Executive</span></div><div class="ss">The member of staff presses Call. The number and counter appear on the reception television straight away, and the customer's phone updates at the same moment.</div></div></div>
+            <div class="varr" style="height:20px"></div>
+            <div class="step" data-step="7"><span class="badge">7</span><div><div class="st">The visit takes place<span class="who">Executive</span></div><div class="ss">They press Start when the customer arrives at the counter. The ticket moves from the announcement to the board, now showing the counter number.</div></div></div>
+            <div class="varr" style="height:20px"></div>
+            <div class="step" data-step="8"><span class="badge">8</span><div><div class="st">The visit is closed<span class="who">Executive</span></div><div class="ss">They press Close and may add a note. If the customer never came forward, they press No-show instead. Either way the outcome is recorded against the ticket.</div></div></div>
+            <div class="varr" style="height:20px"></div>
+            <div class="step" data-step="9"><span class="badge">9</span><div><div class="st">The next customer is offered at once<span class="who">System</span></div><div class="ss">Closing a visit immediately offers that member of staff the next customer waiting for a service they cover. They are not left idle.</div></div></div>
+            <div class="varr" style="height:20px"></div>
+            <div class="step" data-step="10"><span class="badge">10</span><div><div class="st">The visit is written back<span class="who">System · Salesforce</span></div><div class="ss">Within about fifteen seconds the completed visit, including any note, is sent to Salesforce. If Salesforce is unavailable it is retried automatically, and flagged for attention if it keeps failing.</div></div></div>
+          </div>
+        </div>
+        <div class="fig-cap">Steps 1–5 take seconds. Step 6 is the only point at which a person waits for another person.</div>
+      </section>
+
+      <section id="s-6" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 06</div>
+        <h1>Workflow B — How a Customer Reaches a Member of Staff</h1>
+        <p style="margin-top:14px">This is the part that used to be a supervisor walking the floor. The rules are applied in order; the first one that fits decides.</p>
+
+        <div data-panel="" id="p-route">
+          <div class="p-head">
+            <div class="p-title"><svg width="15" height="15" style="color:#2e844a"><use href="#i-flow"></use></svg>Workflow B · The routing rules, in order</div>
+            <div class="p-tools">
+              <span data-step-label="" style="font-size:11.5px;font-weight:700;color:#1d6b3f;font-variant-numeric:tabular-nums;min-width:70px;text-align:right"></span>
+              <span data-btn="" data-play="" data-scope="p-route"><svg width="13" height="13"><use href="#i-play"></use></svg>Play walkthrough</span>
+            </div>
+          </div>
+          <div class="p-body" style="display:flex;flex-direction:column;gap:0">
+            <div class="step" data-step="1"><span class="badge">1</span><div><div class="st">Does this customer already have a relationship manager?</div><div class="ss">If Salesforce names an owner for the unit and that person is signed in, covering the service, and <b>not already with a customer</b>, they get it. The relationship is honoured first.</div></div></div>
+            <div class="varr" style="height:18px"></div>
+            <div class="step" data-step="2"><span class="badge">2</span><div><div class="st">Is that person mid-visit?</div><div class="ss">They may hold <b>one</b> customer waiting for them, for up to five minutes. A second customer for the same person goes to the rotation instead, so a queue never builds on one desk.</div></div></div>
+            <div class="varr" style="height:18px"></div>
+            <div class="step" data-step="3"><span class="badge">3</span><div><div class="st">Is this Collections?</div><div class="ss">Collections goes to the unit's collection manager rather than by rotation. If no manager is mapped, the ticket is shown as needing attention rather than quietly left unassigned.</div></div></div>
+            <div class="varr" style="height:18px"></div>
+            <div class="step" data-step="4"><span class="badge">4</span><div><div class="st">Otherwise, whose turn is it?</div><div class="ss">Among everyone signed in, covering that service, and not already holding a customer, the system picks whoever has waited longest for work — counting work at <b>every</b> counter they cover, not just this one.</div></div></div>
+            <div class="varr" style="height:18px"></div>
+            <div class="step" data-step="5"><span class="badge">5</span><div><div class="st">Nobody available?</div><div class="ss">The ticket stays on the board marked as waiting for a member of staff. It is not hidden, and it is picked up the moment somebody becomes free.</div></div></div>
+          </div>
+        </div>
+
+        <h2>6.1 Three rules worth knowing</h2>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:210px">Rule</th><th>Why it is there</th></tr></thead>
+          <tbody>
+            <tr><td><b>One customer at a time</b></td><td>Nobody is given a second customer while they still hold one. Previously ten waiting customers could all carry one person's name while nobody else could pick them up, and the board read as though one person was serving ten. Closing a visit offers the next customer immediately, so this costs no waiting time.</td></tr>
+            <tr><td><b>Fair turns across counters</b></td><td>Someone covering three services is measured on all their work, not on each counter separately. Before this, whoever helped in the most places was handed the most customers — helping more meant working more.</td></tr>
+            <tr><td><b>Newcomers join the back</b></td><td>Adding somebody to a service puts them at the end of the rotation, not the front. Previously they jumped ahead of everyone who had been working that queue all day.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2>6.2 Urgency between services</h2>
+        <p>Each service carries an urgency: <b>Normal</b>, <b>Elevated</b>, <b>High</b> or <b>Urgent</b>. A customer waiting for a higher-urgency service is routed before an older customer waiting elsewhere — so a Refund can be put ahead of a General Query if that is the policy.</p>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">Urgency never reorders one queue against itself</span><p>Inside a single service, arrival order always decides. Urgency only affects which <em>service</em> is served first when people are waiting in several. This is deliberate: a customer who can see somebody who arrived after them being called first would rightly object, and no setting should be able to cause that.</p><p>All six services are currently set to <b>Normal</b>. Changing that is a management decision — see <a href="#s-12">Section 12</a>.</p></div></div>
+      </section>
+
+      <section id="s-7" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 07</div>
+        <h1>Workflow C — A Working Day</h1>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:150px">When</th><th style="width:150px">Who</th><th>What happens</th></tr></thead>
+          <tbody>
+            <tr><td><b>Opening</b></td><td>Reception</td><td>The reception television is switched on and signs in once with the TV display account. It shows the QR code and the board. If it has been off for a long time it may need signing in again — see Section 08.</td></tr>
+            <tr><td><b>Opening</b></td><td>Every Executive</td><td>Each signs in and sets themselves online, choosing their counter. Until somebody is online, no customer can be assigned to them.</td></tr>
+            <tr><td><b>During the day</b></td><td>Customers</td><td>Check in at reception or by phone. Tickets are issued and assigned immediately.</td></tr>
+            <tr><td><b>During the day</b></td><td>System</td><td>Every fifteen seconds it reconsiders anything waiting — picking up customers nobody took, moving on from staff who have disappeared, and sending completed visits to Salesforce.</td></tr>
+            <tr><td><b>Breaks</b></td><td>Executive</td><td>Going offline stops new customers arriving. The system will not let somebody go offline while they still have a customer at their counter.</td></tr>
+            <tr><td><b>Closing</b></td><td>Executive</td><td>Close or mark no-show on anything remaining, then go offline.</td></tr>
+            <tr><td><b>Overnight</b></td><td>System</td><td>Anything still waiting from a previous day is marked no-show automatically once it is more than two hours past the day boundary, so the morning starts clean. A visit still in progress is left for its Executive to finish.</td></tr>
+            <tr><td><b>Next morning</b></td><td>System</td><td>Ticket numbers restart. A number still showing on the floor from the previous day is skipped, so two live tickets never share a number.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">Being signed in is not the same as being online</span><p>A member of staff can be signed in and still be offline — on a break, or between counters. Only <b>online</b> staff receive customers. If nobody in a service is online, customers for that service wait and the board shows them as waiting for a member of staff.</p><p>The system notices a screen that has died — a closed laptop or lost connection — within about forty-five seconds, marks that person offline, and moves their waiting customer to somebody else on the next pass.</p></div></div>
+      </section>
+
+      <section id="s-8" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 08</div>
+        <h1>Workflow D — When Things Fail</h1>
+        <p style="margin-top:14px">Every failure below degrades the service rather than stopping it. What matters operationally is the last column: who finds out, and how.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:170px">If this happens</th><th style="width:230px">What customers and staff see</th><th>How it is noticed</th></tr></thead>
+          <tbody>
+            <tr><td><b>Salesforce is slow or down</b></td><td>Customers cannot be looked up, but reception can still issue a ticket as a walk-in. Nobody is turned away.</td><td>Flagged on the system health page. Those visits are marked so they can be reconciled later.</td></tr>
+            <tr><td><b>A member of staff's screen dies</b></td><td>They stop receiving customers after about forty-five seconds; anyone waiting for them is moved on.</td><td>They appear offline on the team screen.</td></tr>
+            <tr><td><b>The reception television's session expires</b></td><td>The screen says its sign-in has expired and asks somebody to sign in again.</td><td>Visible on the screen itself. It no longer blames the network and wait silently, which was the previous behaviour.</td></tr>
+            <tr><td><b>Two Executives call the same customer</b></td><td>The second is told the ticket was just updated and their screen refreshes. The customer is served once.</td><td>Self-correcting; no action needed.</td></tr>
+            <tr><td><b>Nobody covers a service</b></td><td>Customers for it wait, shown on the board as waiting for a member of staff.</td><td>Removing the last person from a service asks for confirmation first.</td></tr>
+            <tr><td><b>The routing service stops</b></td><td>Check-in and manual calling keep working. Nothing is reassigned and no visit reaches Salesforce.</td><td>A banner appears in the staff workspace, and the system health page reports a fault.</td></tr>
+            <tr><td><b>A visit will not reach Salesforce</b></td><td>No visible effect on the floor.</td><td>Retried automatically with increasing delays, then flagged for a person after five attempts.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="danger"><svg width="17" height="17"><use href="#i-err"></use></svg><div><span class="co-t">Nobody is currently told automatically</span><p>The system has a single health page that reports, in one place, whenever any of the above needs a person. It works — during a recent fault it reported the problem correctly for the whole duration.</p><p><b>Nothing is watching that page.</b> Faults are currently found by somebody noticing. Connecting an automatic monitor to it is a small, external task and is the single most valuable operational improvement outstanding. It needs an owner and an escalation contact, which is a management decision — see <a href="#s-12">Section 12</a>.</p></div></div>
+      </section>
+
+      <section id="s-9" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 09</div>
+        <h1>What Management Controls</h1>
+        <p style="margin-top:14px">Everything in the first column can be changed on screen, by the roles shown in Section 03, taking effect immediately. Everything in the second requires development work.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:50%">You can change on screen</th><th>Requires development</th></tr></thead>
+          <tbody>
+            <tr><td>Who has an account, and their role</td><td>How long a customer waits before the system tries somebody else (fixed at five minutes)</td></tr>
+            <tr><td>Which services each person covers</td><td>How many customers one person may hold at once (fixed at one)</td></tr>
+            <tr><td>Which counter a person sits at</td><td>A target waiting time, or an alert when it is exceeded</td></tr>
+            <tr><td>Whether an account is switched on</td><td>Adding or renaming a service</td></tr>
+            <tr><td><b>A service's urgency</b> — Normal to Urgent</td><td>Marking an individual customer as urgent (urgency is per service, not per person)</td></tr>
+            <tr><td>A person's Salesforce ID, used to route their own customers to them</td><td>How often the system reconsiders the queue (fixed at fifteen seconds)</td></tr>
+            <tr><td>Whether the reception television announces audibly</td><td>Single sign-on, two-factor authentication, or automatic removal of leavers</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">One field deserves attention</span><p>A person's <b>Salesforce ID</b> is typed in by hand when their account is created. It is what causes a customer's own relationship manager to receive them. If it is mistyped, that person's customers are simply never routed to them — silently, with no error to anyone. There is a search tool to find the right value, and it is worth confirming for every Executive during setup.</p></div></div>
+      </section>
+
+      <section id="s-10" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 10</div>
+        <h1>What Is Recorded</h1>
+        <p style="margin-top:14px">Every action is recorded with who did it and when. This is what lets a question about a past visit be answered from the record rather than from memory.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:230px">Recorded</th><th>Question it answers</th></tr></thead>
+          <tbody>
+            <tr><td>Ticket issued</td><td>When did this customer arrive, and for what?</td></tr>
+            <tr><td>Assigned, with the reason</td><td>Why did this customer go to this person and not another?</td></tr>
+            <tr><td>Called, started, closed or no-show</td><td>How long did they wait, and how long did the visit take?</td></tr>
+            <tr><td>Reassigned</td><td>Who moved this customer, and when?</td></tr>
+            <tr><td>Customer lookup</td><td>Who searched for a customer, and was Salesforce available?</td></tr>
+            <tr><td>Sign-in, failed sign-in, sign-out</td><td>Was this account in use at the time?</td></tr>
+            <tr><td>Going online and offline</td><td>Was anybody actually available at 11am?</td></tr>
+            <tr><td>Staff and queue changes</td><td>Who changed this person's services or role?</td></tr>
+            <tr><td>Report exports</td><td>Who exported customer data, when, and with what filters?</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Reporting available on screen</h3>
+        <ul>
+          <li>Tickets by day, service and department, with completion counts.</li>
+          <li>Average waiting time and average service time.</li>
+          <li>The full activity log, searchable by action and date range, with paging.</li>
+          <li>Export to spreadsheet for any date range up to one year.</li>
+        </ul>
+        <div data-callout="note"><svg width="17" height="17"><use href="#i-info"></use></svg><div><span class="co-t">One limit worth stating</span><p>Sign-in is recorded, but not the device or network address it came from. If an account were misused, the record shows <em>when</em> and <em>what it did</em>, but not <em>from where</em>. Adding that is small work and is listed in Section 12.</p></div></div>
+      </section>
+
+      <section id="s-11" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 11</div>
+        <h1>Personal Data</h1>
+        <p style="margin-top:14px">The system holds customer names, mobile numbers, Emirates ID and passport numbers, and unit details. How that is handled:</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:210px">Control</th><th>How it works</th></tr></thead>
+          <tbody>
+            <tr><td><b>ID numbers are not shown casually</b></td><td>They appear on a ticket's detail for the staff serving that customer, and nowhere else on the floor.</td></tr>
+            <tr><td><b>Export is deliberate and recorded</b></td><td>ID numbers leave the system only when a Manager explicitly asks for them on an export, and that request is written to the activity log with its filters and who made it.</td></tr>
+            <tr><td><b>The reception television shows numbers only</b></td><td>The waiting area sees ticket numbers, services and counters. No names.</td></tr>
+            <tr><td><b>A customer's phone shows only their own visit</b></td><td>Their ticket number and how many people are ahead of them. No other customer's ticket number appears, deliberately.</td></tr>
+            <tr><td><b>Old records are cleared</b></td><td>Identifiers can be anonymised and old activity removed automatically after a set period. The period is a management decision — see Section 12.</td></tr>
+            <tr><td><b>Access follows the role</b></td><td>An Executive sees their own customers. Reception sees the queue but cannot serve. The television account sees neither.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="warn"><svg width="17" height="17"><use href="#i-warn"></use></svg><div><span class="co-t">Where the weakness is</span><p>Access is granted by an Administrator and stays until an Administrator removes it. There is no single sign-on, no two-factor authentication, and no link to HR — so <b>a leaver keeps access until somebody remembers to switch it off</b>.</p><p>For a system holding identity documents, that is the most significant remaining gap. It is a policy and investment decision rather than a defect, and it should be the first item of any next phase.</p></div></div>
+      </section>
+
+      <section id="s-12" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 12</div>
+        <h1>Decisions Required</h1>
+        <p style="margin-top:14px">Eight items that need a decision from management rather than work from engineering. Ordered by what would cause the most trouble if left.</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:38px">#</th><th style="width:210px">Decision</th><th style="width:96px">Effort</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td><b>1</b></td><td>Who is alerted when the system reports a fault, and how</td><td>Small, external</td><td>The health page works and nothing is watching it. Until an alert reaches a person, faults are found by someone noticing. Needs a named owner and a contact method.</td></tr>
+            <tr><td><b>2</b></td><td>Rename the walk-in <b>General Query</b> service</td><td>Small</td><td>Two services share a name and appear as two identically-labelled rows in reports. <em>Walk-in Enquiry</em> is suggested. Label only; no history is affected.</td></tr>
+            <tr><td><b>3</b></td><td>Acceptance testing on the real television, printer and phones</td><td>Half a day</td><td>The screens have been tested in software but never on the actual hardware in the Centre. Layout, sound and printing need eyes on the real devices before launch.</td></tr>
+            <tr><td><b>4</b></td><td>Urgency policy per service</td><td>Minutes</td><td>All six are Normal. If Refunds or Collections should be served ahead of general enquiries, that is now a setting rather than a development request.</td></tr>
+            <tr><td><b>5</b></td><td>How long customer identifiers are kept</td><td>Minutes</td><td>Automatic clearing of ID numbers and old activity is built but switched off pending a retention period from the business.</td></tr>
+            <tr><td><b>6</b></td><td>Single sign-on, two-factor, and leaver removal</td><td>Project</td><td>The largest remaining security gap (Section 11). Needs a decision on direction and budget.</td></tr>
+            <tr><td><b>7</b></td><td>SMS to customers on check-in</td><td>Small, external</td><td>The system can text a customer their ticket, but no SMS provider is connected. Needs a provider and an account.</td></tr>
+            <tr><td><b>8</b></td><td>One customer has two Salesforce accounts</td><td>Salesforce team</td><td>Found during testing: one phone number appears on two records, stored in different formats. The system now always picks the same one, but the duplicate should be merged at source.</td></tr>
+          </tbody>
+        </table></div>
+        <div data-callout="success"><svg width="17" height="17"><use href="#i-ok"></use></svg><div><span class="co-t">What is not on this list</span><p>Nothing here blocks the system from running. Items 1 and 3 are the two that should be closed before the Centre relies on it in earnest: one so faults reach a person, the other so nobody discovers a layout problem on the television with a waiting room full of customers.</p></div></div>
+      </section>
+
+      <section id="s-13" style="scroll-margin-top:14px;margin-top:40px;padding-top:32px;border-top:1px solid #ecebea">
+        <div data-eyebrow="">Section 13</div>
+        <h1>Glossary</h1>
+        <div class="tblwrap"><table>
+          <thead><tr><th style="width:190px">Term</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><b>Administrator</b></td><td>The only role that can create or edit staff accounts.</td></tr>
+            <tr><td><b>Check-in</b></td><td>A customer joining the queue. Not the same as a member of staff signing in.</td></tr>
+            <tr><td><b>Closed</b></td><td>A visit that finished normally.</td></tr>
+            <tr><td><b>Counter</b></td><td>The desk a member of staff serves from, shown to the customer when they are called.</td></tr>
+            <tr><td><b>Customer</b></td><td>The person visiting the Centre.</td></tr>
+            <tr><td><b>Executive</b></td><td>The front-line role that calls, serves and closes customer visits.</td></tr>
+            <tr><td><b>General Query (CRM)</b></td><td>The CRM service, tickets beginning <code>C</code>. For registered customers with a unit.</td></tr>
+            <tr><td><b>General Query (Walk-in)</b></td><td>The walk-in service, tickets beginning <code>G</code>. Shares its name with the above — see Section 04.</td></tr>
+            <tr><td><b>No-show</b></td><td>A customer who was called and did not come forward.</td></tr>
+            <tr><td><b>Offline / Online</b></td><td>Whether a member of staff is currently able to receive customers. Separate from being signed in.</td></tr>
+            <tr><td><b>Reception television</b></td><td>The screen in the waiting area. Signs in using the TV display role.</td></tr>
+            <tr><td><b>Rotation</b></td><td>The order deciding whose turn it is to receive the next customer, counted across every service a person covers.</td></tr>
+            <tr><td><b>Service</b></td><td>What the customer came for. One of the six in Section 04.</td></tr>
+            <tr><td><b>Staff workspace</b></td><td>The screen staff use to work the queue.</td></tr>
+            <tr><td><b>Ticket</b></td><td>One customer visit, identified by a ticket number such as <code>C-041</code>.</td></tr>
+            <tr><td><b>TV display</b></td><td>The staff role the reception television signs in with. An account, not a device.</td></tr>
+            <tr><td><b>Urgency</b></td><td>How far ahead a service is routed against the others: Normal, Elevated, High or Urgent.</td></tr>
+            <tr><td><b>Walk-in</b></td><td>A customer with no Salesforce record, or one issued a ticket while Salesforce was unavailable.</td></tr>
+          </tbody>
+        </table></div>
+
+        <div data-callout="success" style="margin-top:22px"><svg width="17" height="17"><use href="#i-ok"></use></svg><div><span class="co-t">End of document</span><p>Samana QMS · Management Overview V1.0 · 22 September 2026. The technical companion is <code>docs/tdd-2026-09-22.html</code>. Questions on anything in Section 12 should go to the Salesforce and development team.</p></div></div>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+(function () {
+  var root = document.getElementById('doc');
+  if (!root) return;
+
+  /* responsive drawer */
+  var nav = document.getElementById('nav'), scrim = document.getElementById('scrim'), btn = document.getElementById('menu');
+  function narrow() { return window.matchMedia('(max-width: 1024px)').matches; }
+  function setOpen(v) {
+    if (nav) nav.setAttribute('data-open', String(v));
+    if (scrim) scrim.setAttribute('data-open', String(v));
+    if (btn) btn.setAttribute('aria-expanded', String(v));
+    document.body.style.overflow = v && narrow() ? 'hidden' : '';
+  }
+  if (btn) btn.addEventListener('click', function () { setOpen(!(nav && nav.getAttribute('data-open') === 'true')); });
+  if (scrim) scrim.addEventListener('click', function () { setOpen(false); });
+  window.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+  window.addEventListener('resize', function () { if (!narrow()) setOpen(false); });
+
+  /* wrap wide tables for small screens */
+  root.querySelectorAll('main table').forEach(function (t) {
+    var p = t.parentElement;
+    if (p && p.classList.contains('tblwrap')) return;
+    var w = document.createElement('div');
+    w.className = 'tblwrap';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+
+  /* contents + scroll spy */
+  var links = Array.prototype.slice.call(root.querySelectorAll('nav a[href^="#s-"]'));
+  var crumb = document.getElementById('crumb');
+  links.forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      var el = document.getElementById(a.getAttribute('href').slice(1));
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 14, behavior: 'smooth' });
+      if (narrow()) setTimeout(function () { setOpen(false); }, 60);
+    });
+  });
+  var secs = Array.prototype.slice.call(root.querySelectorAll('main section[id^="s-"]'));
+  function setActive(id) {
+    links.forEach(function (a) {
+      var on = a.getAttribute('href') === '#' + id;
+      a.setAttribute('data-active', String(on));
+      if (on && crumb) { var l = a.querySelector('span:last-child'); crumb.textContent = l ? l.textContent : ''; }
+    });
+  }
+  if (window.IntersectionObserver) {
+    var io = new IntersectionObserver(function (entries) {
+      var vis = entries.filter(function (e) { return e.isIntersecting; })
+        .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+      if (vis[0]) setActive(vis[0].target.id);
+    }, { rootMargin: '-8% 0px -78% 0px', threshold: 0 });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  if (links[0]) links[0].setAttribute('data-active', 'true');
+
+  /* progress bar */
+  var bar = document.getElementById('prog');
+  function progress() {
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    if (bar) bar.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + '%';
+  }
+  window.addEventListener('scroll', progress, { passive: true });
+  window.addEventListener('resize', progress);
+  progress();
+
+  /* role filter on the permissions table */
+  root.querySelectorAll('[data-rolefilter]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var role = chip.getAttribute('data-role');
+      var chips = Array.prototype.slice.call(root.querySelectorAll('[data-rolefilter]'));
+      var wasOn = chip.getAttribute('data-on') === 'true';
+      chips.forEach(function (c) { c.setAttribute('data-on', 'false'); });
+      var active = wasOn && role !== 'all' ? 'all' : role;
+      chips.forEach(function (c) { if (c.getAttribute('data-role') === active) c.setAttribute('data-on', 'true'); });
+      root.querySelectorAll('#p-roles [data-col]').forEach(function (cell) {
+        var show = active === 'all' || cell.getAttribute('data-col') === active;
+        cell.style.display = show ? '' : 'none';
+      });
+    });
+  });
+
+  /* workflow walkthrough */
+  root.querySelectorAll('[data-play]').forEach(function (play) {
+    var timer = null, scope = play.getAttribute('data-scope'), panel = document.getElementById(scope);
+    if (!panel) return;
+    var steps = Array.prototype.slice.call(panel.querySelectorAll('[data-step]'))
+      .sort(function (a, b) { return +a.dataset.step - +b.dataset.step; });
+    var counter = panel.querySelector('[data-step-label]');
+    function stop() { if (timer) { clearInterval(timer); timer = null; } play.setAttribute('data-on', 'false'); }
+    function reset() { steps.forEach(function (s) { s.style.opacity = '1'; s.style.boxShadow = ''; s.style.transform = 'none'; }); if (counter) counter.textContent = ''; }
+    function apply(idx) {
+      steps.forEach(function (s, k) {
+        if (k === idx) { s.style.opacity = '1'; s.style.boxShadow = '0 0 0 3px #48bb78, 0 6px 18px rgba(46,132,74,.35)'; s.style.transform = 'scale(1.012)'; }
+        else if (k < idx) { s.style.opacity = '1'; s.style.boxShadow = ''; s.style.transform = 'none'; }
+        else { s.style.opacity = '.32'; s.style.boxShadow = ''; s.style.transform = 'none'; }
+      });
+      if (counter) counter.textContent = 'Step ' + (idx + 1) + ' of ' + steps.length;
+      var top = steps[idx].getBoundingClientRect().top;
+      if (top < 80 || top > window.innerHeight - 120)
+        window.scrollTo({ top: steps[idx].getBoundingClientRect().top + window.scrollY - 160, behavior: 'smooth' });
+    }
+    play.addEventListener('click', function () {
+      if (timer) { stop(); reset(); return; }
+      if (!steps.length) return;
+      play.setAttribute('data-on', 'true');
+      var i = 0; apply(0);
+      timer = setInterval(function () {
+        i++;
+        if (i >= steps.length) { stop(); setTimeout(reset, 1100); return; }
+        apply(i);
+      }, 2000);
+    });
+  });
+})();
+</script>
+</body>
+</html>
