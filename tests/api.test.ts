@@ -543,31 +543,19 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
     expect(status.response.status).toBe(200);
     expect(status.result.number).toBe(issue.result.number);
     expect(status.result).not.toHaveProperty('customer_name');
-    // The customer sees their service's board with their own ticket marked, so
-    // they can tell where they stand rather than reading a bare count. It
-    // carries ticket numbers and states only, exactly as the reception screen
-    // already shows the whole waiting room.
-    const queue = status.result.queue as {
-      number: string;
-      status: string;
-      position: number;
-      total: number;
-    }[];
-    expect(Array.isArray(queue)).toBe(true);
-    const mine = queue.find((line) => line.number === issue.result.number);
-    expect(mine, 'the customer must appear in their own queue').toBeTruthy();
-    expect(mine!.position).toBeGreaterThan(0);
-    expect(mine!.total).toBeGreaterThanOrEqual(mine!.position);
-    for (const line of queue) {
-      expect(Object.keys(line).sort()).toEqual([
-        'counter',
-        'number',
-        'position',
-        'status',
-        'total',
-      ]);
-      expect(['waiting', 'called', 'serving']).toContain(line.status);
-    }
+    // The phone answers two questions and no others: what is my number, and
+    // how many people are in front of me. It must not carry a view of the
+    // queue -- the waiting-room television is the board, and other customers'
+    // ticket numbers have no business on a stranger's phone.
+    expect(status.result).not.toHaveProperty('queue');
+    expect(typeof status.result.waiting_ahead).toBe('number');
+    expect(Object.keys(status.result).sort()).toEqual([
+      'counter',
+      'number',
+      'service_name',
+      'status',
+      'waiting_ahead',
+    ]);
   });
   it('disallows customer password creation', async () =>
     expect(

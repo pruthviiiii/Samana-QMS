@@ -302,11 +302,57 @@ export function normalizeLookup(payload: unknown): Customer {
     units,
   };
 }
+/**
+ * The forms one national number might have been stored as, most likely first.
+ *
+ * AccountLookupAPI matches Mobile_Number__c exactly and is not ours to change,
+ * so the number has to be offered in the shapes the data actually holds. In
+ * POD2 most accounts store the national number alone, a few have the UAE code
+ * baked in, and a few carry the trunk zero. The last two entries cover a
+ * foreign number typed with its own country code, where the stored value is
+ * the tail of what was typed.
+ */
+export function mobileVariants(national: string): string[] {
+  const seen = new Set<string>();
+  const add = (value: string) => {
+    if (/^\d{7,15}$/.test(value)) seen.add(value);
+  };
+  add(national);
+  add('0' + national);
+  add('971' + national);
+  if (national.length > 10) {
+    add(national.slice(-10));
+    add(national.slice(-9));
+  }
+  return [...seen];
+}
+
+/**
+ * Finds a customer. For a mobile number this tries each stored form in turn and
+ * stops at the first account found.
+ *
+ * Only an empty result moves on to the next form. Anything thrown -- a timeout,
+ * a 5xx, an open circuit breaker -- propagates immediately, so a Salesforce
+ * that is merely slow costs one request and not five, and reception is offered
+ * the walk-in path as quickly as it was before.
+ */
 export async function lookupCustomer(type: IdentifierType, value: string) {
-  const raw = await sfRequest(
-    APEX_PREFIX + 'AccountLookupAPI?' + new URLSearchParams({ [type]: value }),
-  );
-  return normalizeLookup(raw);
+  const candidates = type === 'mobile' ? mobileVariants(value) : [value];
+  let miss: Customer | null = null;
+  for (const candidate of candidates) {
+    const raw = await sfRequest(
+      APEX_PREFIX +
+        'AccountLookupAPI?' +
+        new URLSearchParams({ [type]: candidate }),
+    );
+    const customer = normalizeLookup(raw);
+    if (customer.registered) return customer;
+    miss ??= customer;
+  }
+  // mobileVariants always yields at least the number it was given, so this is
+  // unreachable rather than a silent empty result.
+  if (!miss) throw new HttpError(500, 'No lookup was attempted.');
+  return miss;
 }
 
 const userSearchSchema = z.object({

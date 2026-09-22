@@ -68,8 +68,12 @@ describe('Check-in', () => {
       document.querySelectorAll('.identity-option'),
     ) as HTMLButtonElement[];
     expect(mobile.getAttribute('aria-pressed')).toBe('true');
-    expect(identifier().placeholder).toBe('971 50 123 4567');
-    await user.type(identifier(), '971500000001');
+    // No country code in the placeholder: the number Salesforce matches on is
+    // the national one, and showing 971 taught customers to type a prefix the
+    // lookup then had to undo.
+    expect(identifier().placeholder).toBe('0501234567');
+    expect(identifier().placeholder).not.toContain('971');
+    await user.type(identifier(), '0501234567');
     await user.click(emiratesId);
     expect(emiratesId.getAttribute('aria-pressed')).toBe('true');
     expect(identifier().value).toBe('');

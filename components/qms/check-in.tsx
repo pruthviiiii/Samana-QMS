@@ -380,8 +380,11 @@ export default function CheckIn({
               autoComplete="off"
               maxLength={type === 'emiratesId' ? 18 : 25}
               placeholder={
+                // The number as it is stored and as a customer knows it: no
+                // country code. Any of 0501234567, 501234567 or 971501234567
+                // reaches the same account (nationalMobile in lib/domain.ts).
                 type === 'mobile'
-                  ? '971 50 123 4567'
+                  ? '0501234567'
                   : type === 'emiratesId'
                     ? '784-XXXX-XXXXXXX-X'
                     : t.passportHint

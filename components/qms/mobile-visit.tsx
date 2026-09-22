@@ -4,29 +4,17 @@ import { CheckCircle2, Clock3, ArrowRight, PhoneCall } from 'lucide-react';
 import { ApiError, api, post } from '@/lib/client';
 import CheckIn from './check-in';
 import type { Ticket } from '@/lib/domain';
-// One line of the queue the customer can see: a ticket number and its state,
-// which is what the reception television already shows the whole waiting room.
-// No name, no unit, nothing that identifies the person holding it.
-interface QueueLine {
-  number: string;
-  status: string;
-  counter: string | null;
-  position: number;
-  total: number;
-}
+// What the phone shows about one visit. It deliberately carries no view of
+// the rest of the queue: the waiting-room television is the board, and putting
+// other people's ticket numbers on a customer's phone tells them nothing they
+// cannot see on the wall while handing them a record of who else was here.
 interface VisitStatus {
   number: string;
   service_name: string;
   status: string;
   counter: string;
   waiting_ahead: number;
-  queue: QueueLine[];
 }
-const LINE_STATUS: Record<string, string> = {
-  serving: 'At the counter',
-  called: 'Called now',
-  waiting: 'Waiting',
-};
 export default function MobileVisit({ statusToken }: { statusToken?: string }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
@@ -77,9 +65,6 @@ export default function MobileVisit({ statusToken }: { statusToken?: string }) {
       active = false;
     };
   }, [statusToken]);
-  // The customer's own line in the window, which carries their place and the
-  // size of the queue. Absent once the visit has ended.
-  const mine = ticket?.queue.find((line) => line.number === ticket.number) ?? null;
   function issued(result: Ticket) {
     const token = (result as Ticket & { public_token: string }).public_token;
     if (token) window.location.assign('/visit/' + token);
@@ -132,18 +117,18 @@ export default function MobileVisit({ statusToken }: { statusToken?: string }) {
                         : 'Visit marked no-show'}
               </div>
               {ticket.status === 'waiting' ? (
-                <p>
-                  Please take a seat.{' '}
-                  {ticket.waiting_ahead === 0 ? (
-                    <>You are next in this queue.</>
-                  ) : (
-                    <>
-                      <strong>{ticket.waiting_ahead}</strong>{' '}
-                      {ticket.waiting_ahead === 1 ? 'ticket is' : 'tickets are'}{' '}
-                      ahead of you in this service queue.
-                    </>
-                  )}
-                </p>
+                // The only thing a waiting customer needs from their phone:
+                // how many people are in front of them. Their own number is
+                // above; everyone else's is on the television, not here.
+                <div className="visit-ahead">
+                  <span>CUSTOMERS AHEAD OF YOU</span>
+                  <strong>{ticket.waiting_ahead}</strong>
+                  <small>
+                    {ticket.waiting_ahead === 0
+                      ? 'You are next. Please stay nearby and watch for your number.'
+                      : 'Please take a seat. Your number will be called and shown on the screen.'}
+                  </small>
+                </div>
               ) : ['called', 'serving'].includes(ticket.status) ? (
                 <div className="mobile-counter">
                   <span>Please proceed to</span>
@@ -157,50 +142,6 @@ export default function MobileVisit({ statusToken }: { statusToken?: string }) {
                   Thank you for visiting Samana. We look forward to seeing you
                   again.
                 </p>
-              )}
-              {ticket.queue.length > 1 && (
-                <div className="visit-queue">
-                  <h3>{ticket.service_name} queue</h3>
-                  <table>
-                    <caption>
-                      Your place is {mine?.position ?? ticket.waiting_ahead + 1}{' '}
-                      of {mine?.total ?? ticket.queue.length}. Ticket numbers
-                      only — no personal details are shown.
-                    </caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Ticket</th>
-                        <th scope="col">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ticket.queue.map((line) => {
-                        const you = line.number === ticket.number;
-                        return (
-                          <tr
-                            key={line.number}
-                            className={you ? 'you' : undefined}
-                            aria-current={you ? 'true' : undefined}
-                          >
-                            <th scope="row">
-                              {line.number}
-                              {you && <span className="you-tag">You</span>}
-                            </th>
-                            <td>
-                              <span className={'badge ' + line.status}>
-                                {LINE_STATUS[line.status] ?? line.status}
-                              </span>
-                              {line.counter &&
-                                ['called', 'serving'].includes(line.status) && (
-                                  <em> · {line.counter}</em>
-                                )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
               )}
               <small>
                 This page updates automatically. Keep this private link to

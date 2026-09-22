@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeIdentifier, csvCell } from '../lib/domain';
+import { normalizeIdentifier, nationalMobile, csvCell } from '../lib/domain';
 import { hashPassword, verifyPassword, needsRehash } from '../lib/security';
-import { normalizeLookup } from '../lib/salesforce';
+import { mobileVariants, normalizeLookup } from '../lib/salesforce';
 import { migrationFile, splitStatements } from '../scripts/sql.mjs';
 describe('Password work factor', () => {
   it('hashes at the current work factor and flags older hashes', async () => {
@@ -14,14 +14,47 @@ describe('Password work factor', () => {
   });
 });
 describe('Customer identifiers', () => {
-  it('normalizes international mobile formatting', () =>
-    expect(normalizeIdentifier('mobile', '+971 (50) 123-4567')).toBe(
-      '971501234567',
-    ));
-  it.each(['123', '+971abc1234567', '971501234567890123'])(
+  // Salesforce keeps the country code in its own field and matches on the
+  // national number, so every way a customer writes one phone must reduce to
+  // the same string. Getting this wrong means one person checking in twice
+  // looks like two strangers, and a registered customer looks like a walk-in.
+  it.each([
+    '529548924',
+    '0529548924',
+    '971529548924',
+    '00971529548924',
+    '+971 52 954 8924',
+    '+971 (52) 954-8924',
+    '971-52-954-8924',
+  ])('reads %s as the same phone', (typed) =>
+    expect(normalizeIdentifier('mobile', typed)).toBe('529548924'),
+  );
+  it('keeps a number that carries no country code as it is', () =>
+    expect(nationalMobile('9876543210')).toBe('9876543210'));
+  it.each(['123', '+971abc', '971501234567890123456'])(
     'rejects invalid mobile %s',
     (value) => expect(() => normalizeIdentifier('mobile', value)).toThrow(),
   );
+  // The Apex matches Mobile_Number__c exactly, so the lookup offers the forms
+  // the data is actually stored in. POD2 holds mostly the bare national
+  // number, some with the UAE code, some with the trunk zero.
+  it('offers the stored shapes of a UAE number, most likely first', () =>
+    expect(mobileVariants('529548924')).toEqual([
+      '529548924',
+      '0529548924',
+      '971529548924',
+    ]));
+  it('adds tail forms only when the number could carry a country code', () => {
+    // Ten digits is already a national number somewhere; slicing it would only
+    // buy a wasted request.
+    expect(mobileVariants('9876543210')).toEqual([
+      '9876543210',
+      '09876543210',
+      '9719876543210',
+    ]);
+    // Twelve digits looks like a country code in front of one.
+    expect(mobileVariants('919876543210')).toContain('9876543210');
+  });
   it('accepts required Emirates ID format', () =>
     expect(normalizeIdentifier('emiratesId', '784-2000-1234567-1')).toBe(
       '784-2000-1234567-1',

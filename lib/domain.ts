@@ -182,19 +182,40 @@ export interface Ticket {
   passport_number?: string | null;
 }
 export const isManager = (role?: Role) => has(MANAGER_ROLES, role);
+/**
+ * One mobile number, however it was typed.
+ *
+ * Salesforce keeps the country code in its own field
+ * (Account.Mobile_Country_Code__c) and the number in Mobile_Number__c, so the
+ * number it matches on is the national one: 529548924, not 971529548924. A
+ * customer may type any of +971 52 954 8924, 00971529548924, 0529548924 or
+ * 529548924 and mean the same phone, so all of them reduce to the same string
+ * here -- which is also what makes two check-ins by one person count as a
+ * duplicate visit rather than two strangers.
+ *
+ * Only the UAE code is stripped. A number kept under another country code is
+ * stored the same way, without it, so a foreign number typed plainly still
+ * matches; one typed with its own country code is handled by the candidates in
+ * lib/salesforce.ts instead of by guessing here which digits are a country.
+ */
+export function nationalMobile(value: string): string {
+  let digits = value.replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  // Guarded by length: a national number is never itself 971 followed by
+  // nothing, and UAE mobiles start 5.
+  if (digits.startsWith('971') && digits.length > 9) digits = digits.slice(3);
+  if (digits.startsWith('0')) digits = digits.slice(1); // trunk prefix
+  if (!/^\d{7,15}$/.test(digits))
+    throw new Error('Enter a valid mobile number (at least 7 digits).');
+  return digits;
+}
+
 export function normalizeIdentifier(
   type: IdentifierType,
   value: string,
 ): string {
   const text = value.trim();
-  if (type === 'mobile') {
-    const digits = text.replace(/[\s()+-]/g, '');
-    if (!/^\d{8,15}$/.test(digits))
-      throw new Error(
-        'Enter a valid mobile number with country code (8–15 digits).',
-      );
-    return digits;
-  }
+  if (type === 'mobile') return nationalMobile(text);
   if (type === 'emiratesId') {
     if (!/^784-\d{4}-\d{7}-\d$/.test(text))
       throw new Error('Use Emirates ID format 784-XXXX-XXXXXXX-X.');

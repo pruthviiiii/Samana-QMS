@@ -1,97 +1,74 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import MobileVisit from '../../components/qms/mobile-visit';
 // The screen a customer watches on their own phone after scanning the QR code.
-// It has to answer one question — where am I in the queue — so these tests pin
-// that the board is shown with their own ticket marked, and that it carries
-// nothing about anybody else beyond what the reception television already
-// shows the whole waiting room.
-interface Line {
-  number: string;
-  status: string;
-  counter: string | null;
-  position: number;
-  total: number;
-}
-function status(overrides: Record<string, unknown> = {}, queue?: Line[]) {
+// It answers two questions -- what is my number, and how many people are in
+// front of me -- and deliberately answers nothing else. The waiting room's
+// television is the board; repeating it here would tell the customer nothing
+// new while putting other visitors' ticket numbers on a stranger's phone.
+function status(overrides: Record<string, unknown> = {}) {
   return {
     number: 'C-014',
     service_name: 'General Query',
     status: 'waiting',
     counter: '',
     waiting_ahead: 2,
-    queue: queue ?? [
-      { number: 'C-012', status: 'serving', counter: 'Counter 3', position: 1, total: 5 },
-      { number: 'C-013', status: 'called', counter: 'Counter 1', position: 2, total: 5 },
-      { number: 'C-014', status: 'waiting', counter: null, position: 3, total: 5 },
-      { number: 'C-015', status: 'waiting', counter: null, position: 4, total: 5 },
-    ],
     ...overrides,
   };
 }
 function mockStatus(payload: unknown) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () =>
-      new Response(JSON.stringify(payload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
     ),
   );
 }
-const board = async () => {
-  const heading = await screen.findByText(/General Query queue/i);
-  return within(heading.closest('.visit-queue') as HTMLElement).getByRole('table');
-};
+const token = () => crypto.randomUUID();
 beforeEach(() => vi.useRealTimers());
 describe("A customer's own visit screen", () => {
-  it('shows the queue as a table with their own ticket marked', async () => {
-    mockStatus(status());
-    render(<MobileVisit statusToken={crypto.randomUUID()} />);
-    const table = await board();
-    const rows = within(table).getAllByRole('row').slice(1); // drop the header
-    expect(rows).toHaveLength(4);
-    expect(within(table).getByText('C-012')).toBeTruthy();
-    expect(within(table).getByText('C-015')).toBeTruthy();
-    // Their own line, and only theirs, is marked.
-    const marked = within(table).getAllByText('You');
-    expect(marked).toHaveLength(1);
-    expect(marked[0].closest('tr')?.textContent).toContain('C-014');
-    expect(marked[0].closest('tr')?.getAttribute('aria-current')).toBe('true');
+  it('shows their ticket number and how many are ahead', async () => {
+    mockStatus(status({ waiting_ahead: 2 }));
+    render(<MobileVisit statusToken={token()} />);
+    expect(await screen.findByText('C-014')).toBeTruthy();
+    expect(screen.getByText('General Query')).toBeTruthy();
+    expect(screen.getByText(/customers ahead of you/i)).toBeTruthy();
+    expect(screen.getByText('2')).toBeTruthy();
   });
-  it('states their place and that nothing personal is shown', async () => {
-    mockStatus(status());
-    render(<MobileVisit statusToken={crypto.randomUUID()} />);
-    const table = await board();
-    const caption = within(table).getByText(/Your place is/i);
-    expect(caption.textContent).toContain('3');
-    expect(caption.textContent).toContain('5');
-    expect(caption.textContent).toMatch(/no personal details/i);
-  });
-  it('names the counter only for a ticket that has been called', async () => {
-    mockStatus(status());
-    render(<MobileVisit statusToken={crypto.randomUUID()} />);
-    const table = await board();
-    const serving = within(table).getByText('C-012').closest('tr') as HTMLElement;
-    expect(serving.textContent).toContain('Counter 3');
-    const waiting = within(table).getByText('C-015').closest('tr') as HTMLElement;
-    expect(waiting.textContent).not.toContain('Counter');
+  it('shows nobody else’s ticket number', async () => {
+    mockStatus(status({ waiting_ahead: 5 }));
+    const { container } = render(<MobileVisit statusToken={token()} />);
+    expect(await screen.findByText('C-014')).toBeTruthy();
+    // The only ticket number anywhere on the page is the customer's own. No
+    // word boundary before the letter: textContent runs adjacent elements
+    // together, so the number arrives glued to the label above it.
+    const numbers = (container.textContent ?? '').match(/[A-Z]-\d{3,}/g) ?? [];
+    expect([...new Set(numbers)]).toEqual(['C-014']);
+    // And no board, table or list of anyone else.
+    expect(container.querySelector('table')).toBeNull();
   });
   it('tells someone at the front of the queue that they are next', async () => {
-    mockStatus(
-      status({ waiting_ahead: 0 }, [
-        { number: 'C-014', status: 'waiting', counter: null, position: 1, total: 2 },
-        { number: 'C-015', status: 'waiting', counter: null, position: 2, total: 2 },
-      ]),
-    );
-    render(<MobileVisit statusToken={crypto.randomUUID()} />);
-    expect(await screen.findByText(/You are next in this queue/i)).toBeTruthy();
+    mockStatus(status({ waiting_ahead: 0 }));
+    render(<MobileVisit statusToken={token()} />);
+    expect(await screen.findByText(/You are next/i)).toBeTruthy();
+    expect(screen.getByText('0')).toBeTruthy();
   });
-  it('drops the board once the visit is over', async () => {
-    mockStatus(status({ status: 'closed', waiting_ahead: 0, queue: [] }));
-    render(<MobileVisit statusToken={crypto.randomUUID()} />);
+  it('sends them to the counter once they are called', async () => {
+    mockStatus(status({ status: 'called', counter: 'Counter 3' }));
+    render(<MobileVisit statusToken={token()} />);
+    expect(await screen.findByText(/It’s your turn/i)).toBeTruthy();
+    expect(screen.getByText(/Counter 3/)).toBeTruthy();
+    // The queue position is irrelevant now that they have been called.
+    expect(screen.queryByText(/ahead of you/i)).toBeNull();
+  });
+  it('closes out cleanly when the visit has ended', async () => {
+    mockStatus(status({ status: 'closed', waiting_ahead: 0 }));
+    render(<MobileVisit statusToken={token()} />);
     expect(await screen.findByText(/Visit completed/i)).toBeTruthy();
-    expect(screen.queryByText(/queue/i)).toBeNull();
+    expect(screen.queryByText(/ahead of you/i)).toBeNull();
   });
 });

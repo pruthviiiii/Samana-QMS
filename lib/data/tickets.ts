@@ -4,7 +4,6 @@ import {
   boardRow,
   countRow,
   one,
-  publicQueueRow,
   publicStatusRow,
   queueStatisticsRow,
   rows,
@@ -110,42 +109,19 @@ export async function board(limit = BOARD_ROWS) {
 }
 
 /**
- * What the private status link shows: the customer's own ticket, and the part
- * of their service's queue around it so they can see where they stand rather
- * than being told only a number. The window is the ten tickets ahead of them,
- * their own, and the four behind, which keeps a busy day's board readable on a
- * phone and bounded on the server.
+ * What the private status link shows: the customer's own ticket and how many
+ * people are in front of it. Nothing about anybody else. The waiting room's
+ * television is the board, and a phone that listed other customers' numbers
+ * would add nothing to what is already on the wall while handing one visitor a
+ * record of who else was there.
+ *
+ * `waiting_ahead` counts only the people genuinely ahead: same service, still
+ * waiting, and checked in earlier.
  */
 export async function publicStatus(token: string) {
   const result = await query(
-    "SELECT number,service_name,status,counter,service_id,day,(SELECT count(*)::int FROM qms.tickets ahead WHERE ahead.service_id=v.service_id AND ahead.status='waiting' AND ahead.created_at<v.created_at) waiting_ahead FROM qms.ticket_view v WHERE public_token=$1 AND (closed_at IS NULL OR closed_at>now()-interval '1 day')",
+    "SELECT number,service_name,status,counter,(SELECT count(*)::int FROM qms.tickets ahead WHERE ahead.service_id=v.service_id AND ahead.status='waiting' AND ahead.created_at<v.created_at) waiting_ahead FROM qms.ticket_view v WHERE public_token=$1 AND (closed_at IS NULL OR closed_at>now()-interval '1 day')",
     [token],
   );
-  if (!result.length) return null;
-  const { service_id, day, ...ticket } = one(publicStatusRow, result, 'public status');
-  const active = ['waiting', 'called', 'serving'].includes(ticket.status);
-  return { ...ticket, queue: active ? await publicQueue(service_id, day, ticket.number) : [] };
-}
-
-/** The queue window described above: ticket numbers and states, no identities. */
-async function publicQueue(
-  serviceId: string,
-  day: string | Date,
-  number: string,
-) {
-  const result = await query(
-    `WITH active AS (
-       SELECT number,status,counter,
-              (row_number() OVER (ORDER BY created_at,id))::int position,
-              (count(*) OVER ())::int total
-         FROM qms.ticket_view
-        WHERE service_id=$1 AND day=$2 AND status IN ('waiting','called','serving')
-     ), anchor AS (SELECT position FROM active WHERE number=$3)
-     SELECT a.number,a.status,a.counter,a.position,a.total
-       FROM active a,anchor
-      WHERE a.position BETWEEN greatest(anchor.position-10,1) AND anchor.position+4
-      ORDER BY a.position`,
-    [serviceId, day, number],
-  );
-  return rows(publicQueueRow, result, 'public queue');
+  return result.length ? one(publicStatusRow, result, 'public status') : null;
 }
