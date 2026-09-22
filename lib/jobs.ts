@@ -1,18 +1,15 @@
 import { config } from './config';
-import { query } from './db';
+import { comments } from './data/events';
+import * as outbox from './data/outbox';
 import { sfRequest } from './salesforce';
 import { HttpError } from './http';
-type Job = {
-  id: string;
-  ticket_id: string;
-  kind: 'sms' | 'salesforce';
-  attempts: number;
-  revision: number;
-  lease_token: string;
-};
+// Delivery of finished visits to Salesforce and of ticket notices to the SMS
+// gateway, from the outbox. Each delivery is claimed with a lease, sent once
+// with an idempotency key, and marked sent or scheduled for a retry with
+// exponential backoff; five failures park it for a person to review.
 export function salesforcePayload(
   ticket: Record<string, unknown>,
-  comments: unknown[],
+  notes: unknown[],
 ) {
   const epoch = (value: unknown) =>
     value instanceof Date
@@ -66,7 +63,7 @@ export function salesforcePayload(
     createdAt: ticket.created_at,
     serviceStartedAt: ticket.started_at,
     completedAt: ticket.closed_at,
-    comments,
+    comments: notes,
   };
 }
 export async function processJobs() {
@@ -75,41 +72,19 @@ export async function processJobs() {
   const gatewayToken = settings.SMS_GATEWAY_TOKEN;
   const smsEnabled = settings.SMS_ENABLED && !!gateway && !!gatewayToken;
   const sfEnabled = settings.SALESFORCE_WRITE_ENABLED;
-  await query(
-    "UPDATE qms.outbox SET status='disabled',last_error=CASE kind WHEN 'sms' THEN 'SMS gateway is not configured or enabled.' ELSE 'Salesforce write-back is disabled pending approval.' END WHERE status='pending' AND ((kind='sms' AND NOT $1) OR (kind='salesforce' AND NOT $2))",
-    [smsEnabled, sfEnabled],
-  );
-  await query(
-    "UPDATE qms.outbox SET status='failed',locked_at=NULL,last_error='Delivery worker stopped during the final attempt. Review before retrying.' WHERE status='processing' AND attempts>=5 AND locked_at<now()-interval '5 minutes'",
-  );
-  await query(
-    "UPDATE qms.outbox SET status='pending',last_error=NULL WHERE status='disabled' AND ((kind='sms' AND $1) OR (kind='salesforce' AND $2))",
-    [smsEnabled, sfEnabled],
-  );
-  const jobs = await query<Job>(
-    `WITH selected AS (SELECT id FROM qms.outbox WHERE ((kind='sms' AND $1) OR (kind='salesforce' AND $2)) AND ((status='pending' AND available_at<=now()) OR (status='processing' AND locked_at<now()-interval '5 minutes')) AND attempts<5 ORDER BY available_at FOR UPDATE SKIP LOCKED LIMIT 10) UPDATE qms.outbox o SET status='processing',locked_at=now(),lease_token=gen_random_uuid(),attempts=attempts+1 FROM selected WHERE o.id=selected.id RETURNING o.*`,
-    [smsEnabled, sfEnabled],
-  );
+  await outbox.reconcileEnabled(smsEnabled, sfEnabled);
+  const jobs = await outbox.claim(smsEnabled, sfEnabled);
   let sent = 0;
   for (const job of jobs) {
     try {
-      const [ticket] = await query<Record<string, unknown> | undefined>(
-        `SELECT v.*,u.sf_id agent_sf_id,u.email agent_email,l.customer->>'email' customer_email FROM qms.ticket_view v LEFT JOIN qms.users u ON u.id=v.assigned_to JOIN qms.lookups l ON l.id=v.lookup_id WHERE v.id=$1`,
-        [job.ticket_id],
-      );
+      const ticket = await outbox.ticketForDelivery(job.ticket_id);
       if (!ticket) throw new Error('The ticket for this delivery no longer exists.');
       let reference = '';
       if (job.kind === 'sms') {
-        if (
-          ticket.identifier_type !== 'mobile' ||
-          !ticket.customer_id ||
-          typeof ticket.mobile !== 'string' ||
-          !ticket.mobile
-        )
+        if (ticket.identifier_type !== 'mobile' || !ticket.customer_id || !ticket.mobile)
           throw new Error('SMS eligibility changed.');
-        const url = new URL(gateway as string);
-        const message = `SAMANA: Your ticket ${String(ticket.number)} for ${String(ticket.service_name)} is ready. Follow your visit: ${settings.APP_ORIGIN}/visit/${String(ticket.public_token)}`;
-        const response = await fetch(url, {
+        const message = `SAMANA: Your ticket ${ticket.number} for ${ticket.service_name} is ready. Follow your visit: ${settings.APP_ORIGIN}/visit/${String(ticket.public_token)}`;
+        const response = await fetch(new URL(gateway as string), {
           method: 'POST',
           headers: {
             Authorization: 'Bearer ' + gatewayToken,
@@ -122,7 +97,7 @@ export async function processJobs() {
             message,
             idempotencyKey: job.id,
           }),
-          redirect: 'manual', // workerd rejects 'error'; 3xx fails the ok check below
+          redirect: 'manual', // a 3xx fails the ok check below
           signal: AbortSignal.timeout(15000),
         });
         if (!response.ok) throw new Error('SMS gateway rejected the request.');
@@ -134,13 +109,10 @@ export async function processJobs() {
           throw new Error('SMS gateway reported failure.');
         reference = result.id || '';
       } else {
-        const comments = await query(
-          "SELECT details->>'comment' body,u.name \"byName\",e.created_at at FROM qms.events e LEFT JOIN qms.users u ON u.id=e.actor_id WHERE ticket_id=$1 AND nullif(details->>'comment','') IS NOT NULL ORDER BY e.id",
-          [job.ticket_id],
-        );
+        const notes = await comments(job.ticket_id);
         const result = (await sfRequest('/services/apexrest/api/QMSTicketAPI', {
           method: 'POST',
-          body: JSON.stringify(salesforcePayload(ticket, comments)),
+          body: JSON.stringify(salesforcePayload(ticket, notes)),
         })) as { isSuccess?: boolean; statusCode?: number; recordId?: string };
         if (
           result.isSuccess !== true ||
@@ -151,24 +123,18 @@ export async function processJobs() {
           throw new Error('Salesforce did not accept the ticket payload.');
         reference = result.recordId;
       }
-      await query(
-        "UPDATE qms.outbox SET status=CASE WHEN revision=$2 THEN 'sent' ELSE 'pending' END,locked_at=NULL,lease_token=NULL,last_error=NULL,provider_reference=$3,attempts=CASE WHEN revision=$2 THEN attempts ELSE 0 END,available_at=now() WHERE id=$1 AND lease_token=$4",
-        [job.id, job.revision, reference, job.lease_token],
-      );
+      await outbox.complete(job.id, job.revision, reference, job.lease_token);
       sent++;
     } catch (error) {
-      await query(
-        "UPDATE qms.outbox SET status=CASE WHEN revision<>$3 THEN 'pending' WHEN attempts>=5 THEN 'failed' ELSE 'pending' END,attempts=CASE WHEN revision<>$3 THEN 0 ELSE attempts END,available_at=now()+make_interval(secs=>least(3600,power(2,attempts)::int*15)),locked_at=NULL,lease_token=NULL,last_error=$2 WHERE id=$1 AND lease_token=$4",
-        [
-          job.id,
-          job.kind === 'sms'
-            ? 'SMS delivery failed. Check gateway configuration.'
-            : error instanceof HttpError
-              ? error.message
-              : 'Salesforce did not confirm a saved record. Check the integration contract.',
-          job.revision,
-          job.lease_token,
-        ],
+      await outbox.fail(
+        job.id,
+        job.revision,
+        job.kind === 'sms'
+          ? 'SMS delivery failed. Check gateway configuration.'
+          : error instanceof HttpError
+            ? error.message
+            : 'Salesforce did not confirm a saved record. Check the integration contract.',
+        job.lease_token,
       );
     }
   }

@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import { query } from '../db';
+import { record } from '../data/events';
 export const uuid = z.uuid();
-export const userColumns =
-  'id,username,name,email,role,sf_id,manager_sf_id,services,online,last_seen,counter,enabled,must_change_password';
 export const passwordSchema = z
   .string()
   .min(14, 'Use at least 14 characters.')
@@ -16,15 +14,12 @@ export const salesforceUserId = z
 // wrong password; the work factor matches real hashes.
 export const dummyHash =
   'pbkdf2$600000$0123456789abcdef$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+/** Records an activity-log event; details never carry a customer identifier. */
 export const audit = (
   actor: string | null,
   action: string,
   details?: Record<string, unknown>,
-) =>
-  query(
-    'INSERT INTO qms.events(actor_id,action,details) VALUES($1,$2,$3::jsonb)',
-    [actor, action, JSON.stringify(details ?? {})],
-  );
+) => record(actor, action, details ?? {});
 // The route table's access groups are the domain's role groups; there is no
 // second list to keep in step.
 export {

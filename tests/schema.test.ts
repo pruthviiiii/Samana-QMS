@@ -2,8 +2,8 @@ import { beforeAll, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { query } from '../lib/db';
 import { snapshot } from '../scripts/schema-snapshot.mjs';
-import { userColumns } from '../lib/api/shared';
-import { ticketColumns } from '../lib/operations';
+import { ticketColumns } from '../lib/data/tickets';
+import { userSelect } from '../lib/data/users';
 let live = '';
 let committed = '';
 beforeAll(async () => {
@@ -26,7 +26,8 @@ describe('Schema snapshot', () => {
   });
   it('contains every column the API selects by name', () => {
     const users = live.split('-- table qms.users')[1].split('\n-- ')[0];
-    for (const column of userColumns.split(','))
+    // The columns the Prisma client selects for a signed-in account.
+    for (const column of Object.keys(userSelect))
       expect(users, column).toContain(`  ${column} `);
     const view = live.split('-- view qms.ticket_view')[1].split('\n-- ')[0];
     for (const column of ticketColumns.split(','))

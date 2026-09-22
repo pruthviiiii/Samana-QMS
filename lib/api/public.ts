@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { config } from '../config';
+import { routeDue } from '../data/functions';
+import { failedCount } from '../data/outbox';
+import { schedulerHealthy, workerLastRun } from '../data/system';
+import { publicStatus } from '../data/tickets';
 import { query } from '../db';
 import { HttpError, body, json } from '../http';
 import { processJobs } from '../jobs';
@@ -32,12 +36,8 @@ export const publicRoutes = [
     publicRoute,
     'Scheduler heartbeat; 503 when the routing tick is stale',
     async () => {
-      const [worker] = await query<{ updated_at: string }>(
-        "SELECT updated_at FROM qms.system_state WHERE key='worker'",
-      );
-      const lastRun = worker?.updated_at ?? null;
-      const healthy =
-        !!lastRun && Date.now() - new Date(lastRun).getTime() < 90000;
+      const lastRun = await workerLastRun();
+      const healthy = schedulerHealthy(lastRun);
       return json(
         { status: healthy ? 'ready' : 'stale', lastRun },
         healthy ? 200 : 503,
@@ -53,16 +53,10 @@ export const publicRoutes = [
     publicRoute,
     'One signal for uptime monitors; 503 while anything needs a person',
     async () => {
-      const [state] = await query<{ last_run: string | null; failed: number }>(
-        "SELECT (SELECT updated_at FROM qms.system_state WHERE key='worker') last_run,(SELECT count(*)::int FROM qms.outbox WHERE status='failed') failed",
-      );
+      const [lastRun, failed] = await Promise.all([workerLastRun(), failedCount()]);
       const problems: string[] = [];
-      if (
-        !state.last_run ||
-        Date.now() - new Date(state.last_run).getTime() > 90000
-      )
-        problems.push('scheduler_stale');
-      if (state.failed > 0) problems.push('outbox_failed:' + state.failed);
+      if (!schedulerHealthy(lastRun)) problems.push('scheduler_stale');
+      if (failed > 0) problems.push('outbox_failed:' + failed);
       if (salesforcePaused()) problems.push('salesforce_paused');
       // The first administrator's password must leave the host once used;
       // in production its presence pages the monitor instead of relying on a
@@ -74,7 +68,7 @@ export const publicRoutes = [
         {
           status: problems.length ? 'alert' : 'ready',
           problems,
-          lastRun: state.last_run,
+          lastRun,
         },
         problems.length ? 503 : 200,
       );
@@ -86,10 +80,10 @@ export const publicRoutes = [
     workerRoute,
     'Scheduler tick: routing, outbox delivery and retention',
     async () => {
-      const result = await query('SELECT qms.route_due() checked');
+      const checked = await routeDue();
       const jobs = await processJobs();
       const retention = await applyRetention();
-      return json({ routing: result[0], jobs, retention });
+      return json({ routing: { checked }, jobs, retention });
     },
   ),
   define(
@@ -109,13 +103,9 @@ export const publicRoutes = [
     publicRoute,
     'Minimal ticket status for the private link',
     async ({ params }) => {
-      const token = uuid.parse(params.token);
-      const [ticket] = await query(
-        "SELECT number,service_name,status,counter,(SELECT count(*)::int FROM qms.tickets ahead WHERE ahead.service_id=v.service_id AND ahead.status='waiting' AND ahead.created_at<v.created_at) waiting_ahead FROM qms.ticket_view v WHERE public_token=$1 AND (closed_at IS NULL OR closed_at>now()-interval '1 day')",
-        [token],
-      );
+      const ticket = await publicStatus(uuid.parse(params.token));
       if (!ticket)
-        throw new HttpError(404, 'Ticket link has expired or was not found.');
+        throw new HttpError(404, 'Ticket link has expired or was not found.', 'TICKET_NOT_FOUND');
       return json(ticket);
     },
   ),

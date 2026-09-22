@@ -1,13 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { proxy } from '../proxy';
-// The proxy runs before every request. These tests pin the browser policy it
-// sets: a fresh nonce per request, no inline scripts allowed, hidden paths
-// refused, and transport security only when the site is served over https.
-const at = (path: string) => proxy(new NextRequest('http://qms.test' + path));
+// The web tier's proxy runs before every request. These tests pin the browser
+// policy it sets on pages, how it forwards /api to the API service, and that a
+// client cannot smuggle the address header the API trusts.
+const at = (path: string, headers: Record<string, string> = {}) =>
+  proxy(new NextRequest('http://qms.test' + path, { headers }));
 const policy = (response: Response) =>
   response.headers.get('content-security-policy') ?? '';
-describe('Browser security policy', () => {
+afterEach(() => vi.unstubAllEnvs());
+describe('Browser security policy on pages', () => {
   it('mints a different nonce for every request and allows scripts only by it', () => {
     const first = policy(at('/'));
     const second = policy(at('/'));
@@ -39,6 +41,7 @@ describe('Browser security policy', () => {
   it('refuses hidden paths but not the well-known directory', () => {
     expect(at('/.git/config').status).toBe(404);
     expect(at('/queue/.env').status).toBe(404);
+    expect(at('/api/.env').status).toBe(404);
     expect(at('/%2e%2e/.hidden').status).toBe(404);
     expect(at('/.well-known/security.txt').status).not.toBe(404);
     expect(at('/queue').status).not.toBe(404);
@@ -51,6 +54,40 @@ describe('Browser security policy', () => {
     expect(at('/').headers.get('strict-transport-security')).toBeNull();
     vi.stubEnv('APP_ORIGIN', 'https://qms.test');
     expect(at('/').headers.get('strict-transport-security')).toContain('max-age=31536000');
-    vi.unstubAllEnvs();
+  });
+});
+describe('Forwarding /api to the API service', () => {
+  it('rewrites every /api path, with its query string, to the configured API', () => {
+    vi.stubEnv('API_URL', 'http://api.internal:3001');
+    const response = at('/api/queue?page=2&status=all');
+    expect(response.headers.get('x-middleware-rewrite')).toBe(
+      'http://api.internal:3001/api/queue?page=2&status=all',
+    );
+  });
+  it('accepts a host:port address, as private-network hosts hand it out', () => {
+    vi.stubEnv('API_URL', 'samana-qms-api:10000');
+    expect(at('/api/health').headers.get('x-middleware-rewrite')).toBe(
+      'http://samana-qms-api:10000/api/health',
+    );
+  });
+  it('answers 503 with a stable code when the API address is missing', async () => {
+    vi.stubEnv('API_URL', '');
+    const response = at('/api/health');
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: 'API_NOT_CONFIGURED' });
+  });
+  it('passes on the address its edge appended and never one the client sent', () => {
+    vi.stubEnv('API_URL', 'http://api.internal:3001');
+    const trusted = at('/api/queue', {
+      'x-forwarded-for': '198.51.100.7, 203.0.113.9',
+      'x-client-address': '10.0.0.1',
+    });
+    expect(trusted.headers.get('x-middleware-request-x-client-address')).toBe('203.0.113.9');
+    const forged = at('/api/queue', { 'x-client-address': '10.0.0.1' });
+    expect(forged.headers.get('x-middleware-request-x-client-address')).toBeNull();
+  });
+  it('does not put a page policy on API responses', () => {
+    vi.stubEnv('API_URL', 'http://api.internal:3001');
+    expect(at('/api/health').headers.get('content-security-policy')).toBeNull();
   });
 });

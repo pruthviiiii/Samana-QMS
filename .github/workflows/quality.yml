@@ -20,6 +20,7 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm run build
       - run: npm run build:worker
+      - run: npm run build:api
   database-tests:
     # The full suite runs against a PostgreSQL 18 container started inside the
     # workflow, so every pull request and push is tested on a fresh database

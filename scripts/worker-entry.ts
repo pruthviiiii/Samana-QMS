@@ -1,6 +1,8 @@
 import { assertConfig } from '../lib/config';
-import { closeDb, query } from '../lib/db';
+import { routeDue } from '../lib/data/functions';
+import { closeDb } from '../lib/db';
 import { processJobs } from '../lib/jobs';
+import { closePrisma } from '../lib/prisma';
 import { applyRetention } from '../lib/retention';
 // Two independent cadences, because they have different deadlines.
 //
@@ -45,10 +47,7 @@ log('scheduler_started', {
   deliveryIntervalMs: DELIVERY_INTERVAL,
 });
 const routing = every(ROUTING_INTERVAL, 'scheduler', async () => {
-  const [row] = await query<{ checked: number }>(
-    'SELECT qms.route_due() checked',
-  );
-  log('scheduler_tick', { checked: row?.checked ?? 0 });
+  log('scheduler_tick', { checked: await routeDue() });
 });
 const delivery = every(DELIVERY_INTERVAL, 'delivery', async () => {
   const result = await processJobs();
@@ -67,5 +66,6 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const)
     log('scheduler_stopping', { signal });
   });
 await Promise.all([routing, delivery]);
+await closePrisma();
 await closeDb();
 log('scheduler_stopped');

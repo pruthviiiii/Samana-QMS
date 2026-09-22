@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QMS Final Architecture</title>
+<meta name="description" content="The final production architecture of Samana QMS: a separate API service, a web tier with no credentials, Prisma as the typed data layer, and the proofs behind each claim.">
+<style>
+  :root {
+    --ink: #17181a; --muted: #5a5d63; --line: #d5d7da; --rule: #17181a;
+    --closed: #14622f; --closed-bg: #e7f3ea;
+    --kept: #5f1a63; --kept-bg: #f4e7f4;
+    --ops: #3d4046; --ops-bg: #ebecee;
+    --new: #0a4f8f; --new-bg: #e4eef8;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 15px; }
+  body { margin: 0 auto; padding: 32px 20px; max-width: 1040px; color: var(--ink); background: #fff; line-height: 1.5; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1 { font-size: 1.85rem; line-height: 1.2; margin: 0 0 6px; }
+  h2 { font-size: 1.22rem; margin: 30px 0 8px; padding-top: 9px; border-top: 2px solid var(--rule); }
+  h3 { font-size: 1rem; margin: 18px 0 5px; }
+  p { margin: 8px 0; }
+  .meta { color: var(--muted); font-size: .9rem; margin: 0 0 18px; }
+  .lead { border-left: 4px solid var(--rule); padding: 10px 16px; margin: 16px 0; background: #f7f7f8; }
+  .lead p:first-child { margin-top: 0; } .lead p:last-child { margin-bottom: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 14px; font-size: .88rem; }
+  caption { caption-side: top; text-align: left; font-weight: 600; padding: 2px 0 6px; font-size: .95rem; }
+  th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+  thead th { background: #f0f1f2; font-weight: 600; }
+  td.n, th.n { white-space: nowrap; }
+  table.tiers td:nth-child(1), table.tiers th:nth-child(1) { width: 16%; }
+  table.tiers td:nth-child(2), table.tiers th:nth-child(2) { width: 22%; }
+  table.tiers td:nth-child(3), table.tiers th:nth-child(3) { width: 24%; }
+  table.score td:nth-child(1), table.score th:nth-child(1) { width: 4%; }
+  table.score td:nth-child(2), table.score th:nth-child(2) { width: 26%; }
+  table.score td:nth-child(3), table.score td:nth-child(4), table.score th:nth-child(3), table.score th:nth-child(4) { width: 8%; text-align: right; }
+  table.dims td:nth-child(1), table.dims th:nth-child(1) { width: 28%; }
+  table.dims td:nth-child(2), table.dims td:nth-child(3), table.dims th:nth-child(2), table.dims th:nth-child(3) { width: 8%; text-align: right; }
+  table.change td:nth-child(1), table.change th:nth-child(1) { width: 26%; }
+  table.change td:nth-child(3), table.change th:nth-child(3) { width: 24%; }
+  table.kept td:nth-child(1), table.kept th:nth-child(1) { width: 24%; }
+  table.kept td:nth-child(2), table.kept th:nth-child(2) { width: 24%; }
+  table.proof td:nth-child(1), table.proof th:nth-child(1) { width: 24%; }
+  table.proof td:nth-child(3), table.proof th:nth-child(3) { width: 28%; }
+  table.log td:nth-child(1), table.log th:nth-child(1) { width: 9%; }
+  table.log td:nth-child(2), table.log th:nth-child(2) { width: 8%; }
+  .tag { display: inline-block; font-size: .76rem; font-weight: 600; padding: 1px 7px; border-radius: 9px; white-space: nowrap; }
+  .closed { color: var(--closed); background: var(--closed-bg); }
+  .kept { color: var(--kept); background: var(--kept-bg); }
+  .ops { color: var(--ops); background: var(--ops-bg); }
+  .new { color: var(--new); background: var(--new-bg); }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: .86em; background: #f2f3f4; padding: 0 3px; border-radius: 3px; }
+  pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: .82rem; background: #f2f3f4; padding: 8px 10px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
+  .kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
+  .kpi div { border: 1px solid var(--line); padding: 8px 11px; }
+  .kpi b { display: block; font-size: 1.35rem; line-height: 1.15; }
+  .kpi span { color: var(--muted); font-size: .82rem; }
+  .small { color: var(--muted); font-size: .85rem; }
+  @media print {
+    html { font-size: 10.2px; }
+    body { padding: 0; max-width: none; }
+    h1, h2, h3 { break-after: avoid; break-inside: avoid; }
+    thead { display: table-header-group; }
+    tr, pre { break-inside: avoid; }
+    .lead, .kpi, caption { break-inside: avoid; break-after: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+  @page { size: A4; margin: 15mm 13mm; }
+</style>
+</head>
+<body>
+
+<h1>Samana QMS: final production architecture</h1>
+<p class="meta">22 September 2026 · Third and final report of the day · Code at commit {{COMMIT}} · Written for management, engineering, and whoever reviews this next</p>
+
+<div class="lead">
+  <p><b>The system now has the architecture the external review asked for, built properly rather than bolted on.</b> The API is its own service, unreachable from the internet. The web tier serves screens and holds no credential of any kind. Prisma is the master description of the data and the typed client for every record, and the queue engine's rules stay in PostgreSQL behind typed, validated calls. Every one of those statements is enforced by a test, not by a convention.</p>
+  <p>Two of the review's prescriptions were declined a second time, on evidence: rewriting the queue rules in application code, and using Prisma to run migrations. Section 5 gives the reasons and what each would cost. The rest of the review's document is now satisfied line by line, and the one part of §03 that was a genuine code fault, results asserted rather than checked, is closed.</p>
+</div>
+
+<div class="kpi">
+  <div><b>3</b><span>services: web tier, private API, scheduler</span></div>
+  <div><b>0</b><span>credentials on the internet-facing tier</span></div>
+  <div><b>203</b><span>automated tests across 19 files, two runtimes</span></div>
+  <div><b>13</b><span>tables described by Prisma, pinned by a drift test</span></div>
+  <div><b>1</b><span>real defect the new data tests caught before production</span></div>
+  <div><b>85</b><span>overall score, from 82 this morning and 69 on 21 September</span></div>
+</div>
+
+<h2>1. The architecture</h2>
+<table class="tiers">
+  <thead><tr><th>Tier</th><th>Process</th><th>Holds</th><th>Talks to</th></tr></thead>
+  <tbody>
+  <tr><td><b>Browser</b></td><td>Staff screens, TVs, customers' phones</td><td>A first-party session cookie</td><td>One origin only: the web tier. It never learns the API's address.</td></tr>
+  <tr><td><b>Web tier</b></td><td>Next.js standalone server (<code>dist-node</code>)</td><td>Its origin and the API's private address. No database, Salesforce or signing credential.</td><td>Serves pages with a per-request nonce policy; forwards every <code>/api</code> request to the API over the private network, adding the client address its own edge appended as <code>x-client-address</code>.</td></tr>
+  <tr><td><b>API service</b></td><td>Plain Node HTTP server hosting the declared route table (<code>dist-api</code>)</td><td>The database and Salesforce credentials, the signing secrets, the Prisma client, the connection pool, the change listener</td><td>PostgreSQL and Salesforce. Not reachable from outside: a Render private service, an unpublished container in Compose.</td></tr>
+  <tr><td><b>Scheduler</b></td><td>Node worker (<code>dist-worker</code>)</td><td>The same database and integration settings, copied from the API</td><td>PostgreSQL directly, on two timers: routing every 15 seconds, deliveries and retention on their own cadence. Salesforce and SMS for deliveries.</td></tr>
+  <tr><td><b>Database</b></td><td>PostgreSQL 14 or newer, any server</td><td>Tables described by <code>prisma/schema.prisma</code>; the queue engine's functions, triggers and partial indexes, described by <code>db/schema.sql</code></td><td>Both descriptions are generated from the migrated database and each has a test that fails when it goes stale.</td></tr>
+  </tbody>
+</table>
+<p>One request, end to end: the browser posts to <code>/api/tickets</code> on the web origin with its cookie; the proxy refuses hidden paths, sets <code>x-client-address</code> and rewrites the request to the API's private address; the API checks the origin, the session and the role from the route table's declaration, validates the body, calls <code>qms.issue_ticket</code> through a typed wrapper, validates the returned row against its schema, and answers with a request id; the database raises the change notification that the API relays to every open screen.</p>
+
+<h2>2. The reviewer's document, read against this code</h2>
+<p>"Literal" is how much of what the reviewer wrote is now true of the code, including their prescriptions. "Outcome" is how much of what they were trying to achieve is achieved. Weighted by their own severity labels. The morning's figures were 73 and 84.</p>
+<table class="score">
+  <thead><tr><th>§</th><th>Reviewer's headline</th><th>Literal</th><th>Outcome</th><th>What stands now</th></tr></thead>
+  <tbody>
+  <tr><td class="n">02</td><td>There is no backend</td><td>95</td><td>98</td><td>A separate, private API service hosts the route table; the web tier forwards to it and holds nothing. Only the reviewer's wish for a separate deploy schedule per tier is met partially: the tiers deploy as separate services from one repository.</td></tr>
+  <tr><td class="n">03</td><td>No Prisma, no database layer</td><td>80</td><td>88</td><td>Prisma is the master description and the typed client for records; every raw result is validated, so "trust me, it's a T" is gone. Rules stay in PostgreSQL by decision (section 5).</td></tr>
+  <tr><td class="n">04</td><td>Migrations compound it</td><td>80</td><td>90</td><td>Checksums, one current definition, tested parser, and now a second generated description of the data. Forward-only by policy; Prisma Migrate declined (section 5).</td></tr>
+  <tr><td class="n">05</td><td>Not built on Next.js</td><td>100</td><td>100</td><td>Next.js 16.3.5, and now used only for what it is good at: the screens.</td></tr>
+  <tr><td class="n">06</td><td>Neon serverless</td><td>90</td><td>95</td><td>Standard driver, one pool per process, every connection pinned to UTC; runs on the company server today.</td></tr>
+  <tr><td class="n">07</td><td>One queue, many people</td><td>80</td><td>90</td><td>Push, plain errors, 45-second presence. Lock kept and measured.</td></tr>
+  <tr><td class="n">08</td><td>Roles from nowhere</td><td>70</td><td>75</td><td>One definition shared by server and browser; validated ids; audited sign-in. No SSO or MFA: an IT decision.</td></tr>
+  <tr><td class="n">09</td><td>No consistent standard</td><td>88</td><td>88</td><td>Server, web and data layers each in their own place with a boundary test. The shell's size and three stylesheets remain.</td></tr>
+  <tr><td class="n">10</td><td>How a customer is given to staff</td><td>20</td><td>30</td><td>Business decisions, unchanged: five routing questions with recommendations await the managers.</td></tr>
+  <tr><td class="n">11</td><td>Screen by screen</td><td>90</td><td>92</td><td>29 of 33 fixed, 2 not defects, 2 need devices.</td></tr>
+  <tr><td class="n">12</td><td>Idle load</td><td>90</td><td>95</td><td>2,300 queries a minute at rest is about 330.</td></tr>
+  <tr><td class="n">13</td><td>Salesforce and audit</td><td>95</td><td>95</td><td>Walk-in fallback, breaker, reuse, sign-in and presence audited, history exported.</td></tr>
+  <tr><td></td><td><b>Weighted overall</b></td><td><b>80</b></td><td><b>85</b></td><td></td></tr>
+  </tbody>
+</table>
+<table class="dims">
+  <caption>Architecture scores, out of 100, before and after this round</caption>
+  <thead><tr><th>Dimension</th><th>Morning</th><th>Now</th><th>What moved it</th></tr></thead>
+  <tbody>
+  <tr><td>Back end</td><td>86</td><td>90</td><td>Its own service; typed data layer; validated raw results; one pool for both access styles.</td></tr>
+  <tr><td>Database</td><td>90</td><td>92</td><td>Two generated descriptions pinned by tests; UTC on every connection.</td></tr>
+  <tr><td>Security</td><td>86</td><td>90</td><td>No credential on the internet-facing tier; the API has no public address; client address cannot be forged.</td></tr>
+  <tr><td>API design</td><td>84</td><td>86</td><td>Wire behaviour proven over real HTTP: JSON on every error, request ids, size and content-type limits.</td></tr>
+  <tr><td>Testing</td><td>82</td><td>86</td><td>Server, data-layer and drift suites; a real defect caught.</td></tr>
+  <tr><td>Operations</td><td>84</td><td>86</td><td>Three images, three services, the API runs the migrations; bounded graceful shutdown.</td></tr>
+  <tr><td>Maintainability</td><td>80</td><td>84</td><td>Handlers read as intent; SQL lives in one folder.</td></tr>
+  <tr><td>Front end</td><td>76</td><td>76</td><td>Unchanged this round.</td></tr>
+  <tr><td>Observability</td><td>68</td><td>70</td><td>Per-service start and shutdown events; still no metrics or tracing.</td></tr>
+  <tr><td><b>Overall</b></td><td><b>82</b></td><td><b>85</b></td><td></td></tr>
+  </tbody>
+</table>
+
+<h2>3. What changed in this round</h2>
+<table class="change">
+  <thead><tr><th>Change</th><th>What it is</th><th>Enforced by</th></tr></thead>
+  <tbody>
+  <tr><td><b>API service</b> <span class="tag new">New</span></td><td><code>server/api.ts</code> hosts the unchanged route table on a plain Node HTTP server, validates its configuration before it listens, and drains its connections on stop. Built to one file by <code>npm run build:api</code>.</td><td><code>tests/server.test.ts</code> over real HTTP: health, JSON errors, origin refusal, session requirement, body caps, no server banner or stack trace.</td></tr>
+  <tr><td><b>Web tier without credentials</b> <span class="tag new">New</span></td><td>The in-process API route is deleted. The proxy forwards <code>/api</code> to <code>API_URL</code>; the web tier's configuration is its origin and that address, and it refuses to start without them.</td><td><code>tests/boundary.test.ts</code>: nothing under <code>app/</code>, <code>components/</code>, <code>proxy.ts</code> or <code>instrumentation.ts</code> imports a server module; only <code>server/handler.ts</code> imports the route table.</td></tr>
+  <tr><td><b>Client address</b> <span class="tag new">New</span></td><td>The proxy deletes any <code>x-client-address</code> a client sent and sets it from the address the edge appended; the API trusts that header alone.</td><td><code>tests/proxy.test.ts</code>: forwarded address passed, forged one dropped, query strings preserved, host:port accepted.</td></tr>
+  <tr><td><b>Prisma data layer</b> <span class="tag new">New</span></td><td><code>prisma/schema.prisma</code> introspected from the database, including the partial unique index that stops an agent holding two live customers. The generated client serves records in <code>lib/data/</code>: sessions, staff, the activity log, notices, lookups, deliveries, services, queue membership. Ids that are bigints travel as strings; dates as ISO strings.</td><td><code>tests/prisma-schema.test.ts</code> re-introspects and fails on any difference; <code>tests/data.test.ts</code> covers each repository.</td></tr>
+  <tr><td><b>Validated raw results</b> <span class="tag new">New</span></td><td>Every function call and view read is parsed against a schema in <code>lib/data/rows.ts</code>; a missing or retyped column fails with the query and row named.</td><td><code>tests/data.test.ts</code>: a row from the view and the same row as JSON both pass; a broken row names the query.</td></tr>
+  <tr><td><b>One pool, pinned to UTC</b> <span class="tag new">New</span></td><td>The Prisma client runs over the same <code>pg</code> pool as the raw queries through the driver adapter, and every connection sets <code>timezone=UTC</code>.</td><td>The regression test described in section 4.</td></tr>
+  <tr><td><b>Deployment</b> <span class="tag ops">Operations</span></td><td>Three images in the Dockerfile, three services in Compose (only the web tier publishes a port), three services in the Render Blueprint with the secrets on the API service and the migrations in its pre-deploy step.</td><td>Documented in <code>docs/render.md</code>, including the one-time Blueprint sync an existing deployment needs.</td></tr>
+  </tbody>
+</table>
+
+<h2>4. The defect the new tests found</h2>
+<p>This is the part of the round most worth a reader's attention, because it is the argument for the data-layer tests in one paragraph. When the Prisma client was first wired in, a new test inserted a session that had expired one second earlier and asked the client for it. The client returned it. Investigation showed that on a database whose session time zone is Asia/Dubai, as the company server's is, the client read every <code>timestamptz</code> four hours late and sent every Date parameter four hours early. Sessions would have stayed valid four hours past expiry, the two-minute lookup reuse window would have been wrong, and every time in the activity log would have shown four hours late. The raw <code>pg</code> path was unaffected, which is why nothing earlier had caught it.</p>
+<p>The fix is the correct one rather than a patch: every pooled connection now sets its time zone to UTC, which is what the Prisma client assumes and what the raw queries never depended on, because every calendar-day rule in the SQL names Asia/Dubai explicitly. A probe run through the same client before and after shows the read-back timestamp moving from four hours off to identical, and the expired session moving from found to not found. A regression test asserts the session time zone is UTC and that a timestamp read through the client equals the same timestamp read raw.</p>
+
+<h2>5. Kept by decision, and why</h2>
+<table class="kept">
+  <thead><tr><th>Decision</th><th>What the reviewer wanted</th><th>Why it stands</th></tr></thead>
+  <tbody>
+  <tr><td>The queue rules stay in PostgreSQL functions</td><td>Business logic in TypeScript, reached through Prisma</td><td>Issuing a ticket numbers it, inserts it, routes it and raises the change notification as one indivisible step, and calling a customer must guarantee no two agents hold the same ticket. Those guarantees come from one advisory lock and a partial unique index inside the database. Rebuilt in application code they would need interactive transactions with row locks in every path that touches the queue, five to ten round trips per action instead of one, and the lock held several times longer, which is the opposite of what §07 asked for. Three to four weeks and a downgrade in both safety and throughput. The rules are now reached through typed wrappers with validated results, which is the part of the complaint that was about code quality rather than location.</td></tr>
+  <tr><td>Migrations stay as checksummed SQL files</td><td>Prisma Migrate</td><td>Prisma's schema language cannot express the functions, triggers or the partial indexes the engine depends on, so Prisma Migrate would describe less than the SQL does and generate migrations that omit the engine. Prisma describes the result of the migrations instead, and a test proves the description matches. Nothing the reviewer complained about in §04 (rewritten rules, no checksums, untested parser) depends on which tool applies the files; all three are closed.</td></tr>
+  <tr><td>Web and API in one repository</td><td>Independent deploy schedules</td><td>They are separate services with separate build commands and separate images; either can be redeployed alone. A second repository would add a shared-types package and a release coordination problem for one developer and one product. The extraction into another repository is mechanical if a second team arrives.</td></tr>
+  <tr><td>Three stylesheets, app shell at about 1,000 lines</td><td>One styling system, smaller components</td><td>Unchanged this round and stated as such. The provably dead blocks were removed this morning; the remaining overlaps change what customers see and are a design decision.</td></tr>
+  </tbody>
+</table>
+
+<h2>6. Proofs</h2>
+<table class="proof">
+  <thead><tr><th>Claim</th><th>Evidence</th><th>How to repeat</th></tr></thead>
+  <tbody>
+  <tr><td>Nothing regressed</td><td>203 tests pass across 19 files in two runtimes; type check and lint clean; three builds succeed; coverage thresholds hold (41.9% lines over the server, data layer, proxy and screens).</td><td><code>npm run typecheck &amp;&amp; npm run lint &amp;&amp; npm run test:coverage &amp;&amp; npm run build &amp;&amp; npm run build:api &amp;&amp; npm run build:worker</code></td></tr>
+  <tr><td>The three services work together</td><td>The 30-step smoke test now runs through the web tier to the API service and the scheduler: all 30 steps passed (health and alerts, sign-in, forced password change, presence, Salesforce sandbox probe, QR invite, guest session and lookup, idempotent issue, public status, call, TV board, stale version refused, start, offline-mid-service refused, close, history, receipt, reports and CSV, audit, walk-in, paging validation, 404s, headers, sign-out), and a live change was delivered over the event stream through the proxy, which proves the forwarding path streams</td><td>Smoke script against the built artefacts, three processes</td></tr>
+  <tr><td>The web tier cannot reach the database</td><td>No file in the web tier imports a server module, by test; the web configuration schema has no database field; the web image installs no database driver into a code path that runs.</td><td><code>tests/boundary.test.ts</code>, <code>tests/config.test.ts</code></td></tr>
+  <tr><td>The API behaves correctly on the wire</td><td>Health with request id and no caching; 404 as JSON; 403 <code>BAD_ORIGIN</code> before the body is read; 401 <code>NOT_SIGNED_IN</code> on every staff route; 413 and 415 on oversized and non-JSON bodies; no server banner or stack trace.</td><td><code>tests/server.test.ts</code></td></tr>
+  <tr><td>Both data descriptions match the database</td><td>Re-introspection equals the committed Prisma schema; the SQL snapshot equals the migrated database; every model is a table and every table a model; the partial unique index is described as partial.</td><td><code>tests/prisma-schema.test.ts</code>, <code>tests/schema.test.ts</code></td></tr>
+  <tr><td>The time-zone defect is closed</td><td>Probe before: client read 15:42Z for a value the database held as 11:42Z and returned an expired session. Probe after: identical timestamps, expired session not found.</td><td><code>tests/data.test.ts</code> "reads timestamps as the database holds them"</td></tr>
+  <tr><td>Pages hydrate through the web tier</td><td>Served through the proxy: 15 script tags, 15 carrying the request nonce, none without; a headless browser rendered the login form with zero policy violations; the API answered health and a JSON 404 through the same path.</td><td>Built web tier on one port forwarding to the built API on another; Microsoft Edge headless with console logging</td></tr>
+  <tr><td>The forwarded client address drives the per-address limit</td><td>Twenty-one sign-in attempts with a different username each, from one edge address: twenty refused as wrong, the twenty-first limited by address. A client that set <code>x-client-address</code> itself stayed in the same budget; a different edge address had its own.</td><td>Proof script against the built web tier and API with <code>TRUSTED_CLIENT_IP_HEADER=x-client-address</code></td></tr>
+  <tr><td>Throughput is unchanged by the split</td><td>200 simultaneous check-ins in 1.6 s, the routing sweep at 186 ms with 200 waiting and 20 agents online, 600 parallel agent actions at a median of 28 ms, on a quiet machine; the same order as this morning's 1.3 s, 96 to 214 ms and 23 ms.</td><td><code>node --env-file=.env.test scripts/load-check.mjs 20 200 20</code></td></tr>
+  <tr><td>The browser policy survives the split</td><td>Pages still carry a per-request nonce with no inline allowance, and API responses carry no page policy.</td><td><code>tests/proxy.test.ts</code></td></tr>
+  </tbody>
+</table>
+
+<h2>7. Deploying it</h2>
+<p><b>Render.</b> The Blueprint now declares three services. An existing deployment must sync the Blueprint once after this commit reaches <code>main</code>: Render creates the private API service, asks for the secrets once (they move from the web service to the API), and wires the API's private address into the web tier. Between the deploy of the web tier and that sync, the web tier answers every API call with <code>503 API_NOT_CONFIGURED</code>, so sync straight after the push. The steps are in <code>docs/render.md</code>.</p>
+<p><b>Your own server.</b> <code>docker compose up -d</code> builds the three images and starts them on one private network; only the web tier publishes a port, on the loopback address, for a TLS reverse proxy to front. The API never needs a public address.</p>
+<p><b>Any Node host.</b> Three processes from three artefacts: <code>node dist-api/api.mjs</code>, <code>node dist-node/standalone/server.js</code> with <code>API_URL</code> pointing at the first, and <code>node dist-worker/worker.mjs</code>.</p>
+
+<h2>8. What remains</h2>
+<table class="kept">
+  <thead><tr><th>Item</th><th>Type</th><th>Owner</th></tr></thead>
+  <tbody>
+  <tr><td>Routing policy: cross-service fairness, new-member position, cap on uncalled assignments, owner-first threshold, priority flag; then a settings page for the agreed knobs</td><td><span class="tag kept">Decision</span></td><td>CRM and Collection managers, Product</td></tr>
+  <tr><td>Retention periods; single sign-on or multi-factor; HR-linked offboarding</td><td><span class="tag kept">Decision</span></td><td>Product, IT</td></tr>
+  <tr><td>Production PostgreSQL server with backups and a rehearsed restore; production Salesforce org and integration user; production secrets; uptime monitor on the alert endpoint; device acceptance</td><td><span class="tag ops">Operations</span></td><td>IT, Salesforce team, CRM team</td></tr>
+  <tr><td>If production serves several branches: a branch column, one lock and numbering per branch, change events scoped per branch</td><td>Engineering, three to five days, before a multi-branch launch</td><td>Developer</td></tr>
+  <tr><td>Component tests for the remaining screens; one stylesheet; metrics and tracing</td><td>Engineering, not blocking</td><td>Developer</td></tr>
+  </tbody>
+</table>
+
+<h2>9. How the next reviewer verifies this</h2>
+<pre>git clone https://github.com/pruthviiiii/Samana-QMS.git &amp;&amp; cd Samana-QMS &amp;&amp; npm ci
+# any PostgreSQL 14+: create samana_qms_test; put its URL in .env.test with
+# APP_ORIGIN=http://qms.test, SESSION_COOKIE_SECURE=false, API_URL=http://127.0.0.1:3001
+node --env-file=.env.test scripts/migrate.mjs
+npm run typecheck &amp;&amp; npm run lint &amp;&amp; npm run test:coverage
+npm run build &amp;&amp; npm run build:api &amp;&amp; npm run build:worker
+# boundary: grep -rn "lib/db\|lib/prisma\|lib/api'" app components proxy.ts instrumentation.ts   (nothing)
+# drift:    npx prisma db pull --print --url "$DATABASE_URL" | diff - prisma/schema.prisma      (empty)
+# wire:     node --env-file=.env.test dist-api/api.mjs &amp; curl -i localhost:3001/api/health</pre>
+
+<h2>10. Change log</h2>
+<table class="log">
+  <thead><tr><th>Commit</th><th>Date</th><th>Scope</th></tr></thead>
+  <tbody>
+  <tr><td class="n">2341d2a</td><td class="n">22 Sep</td><td>Architecture review change set described; report stamped</td></tr>
+  <tr><td class="n">{{COMMIT}}</td><td class="n">22 Sep</td><td>API extracted into its own private service on a Node HTTP host; web tier reduced to screens and a forwarding proxy with no credentials; client address carried as x-client-address; Prisma 7 schema introspected and pinned by a drift test; typed data layer in lib/data with validated raw results; one UTC-pinned pool shared by the Prisma client and raw queries; time-zone defect found and fixed with a regression test; server, data-layer, configuration and proxy tests; three build artefacts, Compose services and Render services; documentation and runbooks</td></tr>
+  </tbody>
+</table>
+<p class="small">Companion documents: <code>docs/review-response-2026-09-22.html</code> (response to the first review), <code>docs/architecture-review-2026-09-22.html</code> (the morning's review), <code>docs/review-checklist-2026-09-21.md</code> sections I and J, <code>docs/requirements.md</code> decisions, <code>docs/render.md</code>, <code>.env.example</code>, and the design document "Samana QMS – Demo Flow and Technical Design".</p>
+
+</body>
+</html>

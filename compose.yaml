@@ -1,40 +1,55 @@
 name: samana-qms
-# Web and scheduler only; DATABASE_URL in .env points at your PostgreSQL
-# server (a host on the same machine is reachable as host.docker.internal).
+# Three services on one private network. Only the web tier publishes a port;
+# it forwards /api to the API service, which is the only process besides the
+# scheduler that holds the database and integration credentials. DATABASE_URL
+# in .env points at your PostgreSQL server (a host on the same machine is
+# reachable as host.docker.internal).
+x-hardened: &hardened
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
 services:
   web:
+    <<: *hardened
     build:
       context: .
       target: web
+    # No env_file: the web tier gets exactly three settings and no secret.
+    environment:
+      NODE_ENV: production
+      APP_ORIGIN: ${APP_ORIGIN}
+      API_URL: http://api:3001
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+  api:
+    <<: *hardened
+    build:
+      context: .
+      target: api
     env_file: .env
     environment:
       NODE_ENV: production
-      SESSION_COOKIE_SECURE: "true"
-    ports:
-      - "127.0.0.1:3000:3000"
-    restart: unless-stopped
-    init: true
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop: [ALL]
+      API_PORT: "3001"
+      # The web tier sets x-client-address from the address its edge appended.
+      TRUSTED_CLIENT_IP_HEADER: x-client-address
+    expose:
+      - "3001"
   scheduler:
+    <<: *hardened
     build:
       context: .
       target: worker
     env_file: .env
     environment:
       NODE_ENV: production
-    restart: unless-stopped
-    init: true
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop: [ALL]
     healthcheck:
       test: ["CMD", "node", "--input-type=module", "-e", "import pg from 'pg';const c=new pg.Client({connectionString:process.env.DATABASE_URL});await c.connect();const r=await c.query(\"SELECT updated_at>now()-interval '90 seconds' ok FROM qms.system_state WHERE key='worker'\");await c.end();process.exit(r.rows[0]?.ok?0:1)"]
       interval: 30s

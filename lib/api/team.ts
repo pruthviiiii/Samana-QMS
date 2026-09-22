@@ -1,17 +1,12 @@
 import { z } from 'zod';
-import { query } from '../db';
+import { saveUser, setQueueMember } from '../data/functions';
+import { directory, queueMembership } from '../data/users';
 import { HttpError, body, json, rateLimit } from '../http';
 import { hashPassword } from '../security';
 import { SERVICES, SERVICE_IDS, STAFF_ROLES } from '../domain';
 import { searchUsers } from '../salesforce';
 import { define, roles } from '../router';
-import {
-  MANAGERS,
-  passwordSchema,
-  salesforceUserId,
-  userColumns,
-  uuid,
-} from './shared';
+import { MANAGERS, passwordSchema, salesforceUserId, uuid } from './shared';
 const memberSchema = z.object({
   username: z
     .string()
@@ -31,23 +26,23 @@ const memberSchema = z.object({
 });
 async function saveMember(
   id: string | null,
-  actor: string,
+  actorId: string,
   input: z.infer<typeof memberSchema>,
 ) {
-  await query('SELECT qms.save_user($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)', [
+  await saveUser({
     id,
-    actor,
-    input.username.toLowerCase(),
-    input.name,
-    input.role,
-    input.sfId || null,
-    input.managerSfId || null,
-    input.services,
-    input.counter,
-    input.enabled,
-    input.password ? await hashPassword(input.password) : null,
-    input.email ? input.email.trim().toLowerCase() : null,
-  ]);
+    actorId,
+    username: input.username.toLowerCase(),
+    name: input.name,
+    role: input.role,
+    sfId: input.sfId || null,
+    managerSfId: input.managerSfId || null,
+    services: input.services,
+    counter: input.counter,
+    enabled: input.enabled,
+    passwordHash: input.password ? await hashPassword(input.password) : null,
+    email: input.email ? input.email.trim().toLowerCase() : null,
+  });
   return json({ ok: true });
 }
 const membership =
@@ -61,11 +56,8 @@ const membership =
   }) => {
     const serviceId = z.enum(SERVICE_IDS).parse(params.service);
     const userId = uuid.parse(params.user);
-    const [result] = await query<{ services: string[] }>(
-      'SELECT qms.set_queue_member($1,$2,$3,$4) services',
-      [serviceId, userId, member, user.id],
-    );
-    return json({ ok: true, services: result.services });
+    const services = await setQueueMember(serviceId, userId, member, user.id);
+    return json({ ok: true, services });
   };
 export const teamRoutes = [
   define(
@@ -73,12 +65,7 @@ export const teamRoutes = [
     'team',
     roles(...MANAGERS),
     'Staff directory with active ticket counts',
-    async () =>
-      json({
-        users: await query(
-          `SELECT ${userColumns},(SELECT count(*)::int FROM qms.tickets t WHERE t.assigned_to=u.id AND t.status IN ('waiting','called','serving')) active_tickets FROM qms.users u WHERE role<>'customer' ORDER BY role,name`,
-        ),
-      }),
+    async () => json({ users: await directory() }),
   ),
   define(
     'POST',
@@ -108,17 +95,7 @@ export const teamRoutes = [
     'queues',
     roles(...MANAGERS),
     'Queue membership per service and the eligible staff',
-    async () => {
-      const [members, eligible] = await Promise.all([
-        query(
-          "SELECT u.id,u.name,u.role,u.online,u.last_seen,u.enabled,u.counter,s.id service_id FROM qms.services s JOIN qms.users u ON s.id=ANY(u.services) WHERE u.role IN ('admin','hod','manager','agent') ORDER BY s.department,s.name,u.name",
-        ),
-        query(
-          "SELECT id,name,role,enabled FROM qms.users WHERE role IN ('admin','hod','manager','agent') ORDER BY name",
-        ),
-      ]);
-      return json({ services: SERVICES, members, eligible });
-    },
+    async () => json({ services: SERVICES, ...(await queueMembership()) }),
   ),
   define(
     'PUT',
@@ -148,7 +125,7 @@ export const teamRoutes = [
         .min(3, 'Enter at least 3 characters to search.')
         .max(100)
         .parse(url.searchParams.get('q') ?? '');
-      if (!q) throw new HttpError(400, 'Enter a search term.');
+      if (!q) throw new HttpError(400, 'Enter a search term.', 'INVALID_INPUT');
       return json({ users: await searchUsers(q) });
     },
   ),

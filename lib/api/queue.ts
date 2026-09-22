@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { query } from '../db';
+import { setPresence } from '../data/functions';
+import { markRead } from '../data/notifications';
+import { board } from '../data/tickets';
 import { body, json } from '../http';
 import { queue } from '../operations';
 import { checkinLink } from '../public-access';
@@ -28,11 +30,7 @@ export const queueRoutes = [
     'Go online or offline and set the counter',
     async ({ request, user }) => {
       const input = presenceSchema.parse(await body(request));
-      await query('SELECT qms.set_presence($1,$2,$3)', [
-        user.id,
-        input.online,
-        input.counter ?? null,
-      ]);
+      await setPresence(user.id, input.online, input.counter ?? null);
       return json({ ok: true });
     },
     presenceSchema,
@@ -52,10 +50,7 @@ export const queueRoutes = [
     'Mark notifications as read',
     async ({ request, user }) => {
       const input = notificationsSchema.parse(await body(request));
-      await query(
-        'UPDATE qms.notifications SET read_at=now() WHERE user_id=$1 AND id=ANY($2::bigint[])',
-        [user.id, input.ids],
-      );
+      await markRead(user.id, input.ids);
       return json({ ok: true });
     },
     notificationsSchema,
@@ -65,15 +60,6 @@ export const queueRoutes = [
     'display',
     roles(...MANAGERS, 'display'),
     'TV board data: called and serving tickets and the waiting count',
-    async () => {
-      // The board shows one featured ticket and six more; fetch exactly that.
-      const tickets = await query(
-        "SELECT number,service_name,department,status,counter,called_at FROM qms.ticket_view WHERE status IN ('called','serving') ORDER BY called_at DESC LIMIT 7",
-      );
-      const [waiting] = await query(
-        "SELECT count(*)::int total FROM qms.tickets WHERE status='waiting'",
-      );
-      return json({ tickets, waiting: waiting.total });
-    },
+    async () => json(await board()),
   ),
 ];

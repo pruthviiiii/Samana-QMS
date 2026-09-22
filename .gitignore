@@ -59,3 +59,7 @@ tmp/
 **/venv/
 
 .vinext/
+
+# Generated Prisma client and API bundle
+lib/generated/
+dist-api/

@@ -15,8 +15,8 @@ export default defineConfig({
   test: {
     coverage: {
       provider: 'v8',
-      include: ['lib/**/*.ts', 'components/qms/**/*.{ts,tsx}', 'proxy.ts'],
-      exclude: ['lib/openapi.ts'],
+      include: ['lib/**/*.ts', 'server/**/*.ts', 'components/qms/**/*.{ts,tsx}', 'proxy.ts'],
+      exclude: ['lib/openapi.ts', 'lib/generated/**'],
       reporter: ['text-summary', 'lcov'],
       reportsDirectory: 'coverage',
       // Measured on 22 September 2026 over lib/, components/qms/ and proxy.ts.

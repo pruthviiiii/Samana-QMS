@@ -1,6 +1,6 @@
 # SAMANA QMS
 
-React application for customer QR check-in, staff-issued tickets, executive workstations, HOD/manager operations, and reception TVs. Built with TypeScript, Next.js, PostgreSQL (any server; Neon hosted it during the review), and server-side Salesforce APIs. Official SAMANA Ocean Pearl, Ocean Bay, and Rome imagery and logos are bundled locally; provenance is in `public/images/sources.json` and `public/images/redesign-sources.json`. Manrope and Cormorant Garamond fonts are self-hosted with their OFL licenses.
+Customer QR check-in, staff-issued tickets, executive workstations, HOD/manager operations and reception TVs. Three services: a Next.js web tier that serves the screens and holds no credential, a private API service that hosts the route table with Prisma as the typed data layer over PostgreSQL (any server; Neon hosted it during the review), and a scheduler. Salesforce is reached only from the API and the scheduler. Official SAMANA Ocean Pearl, Ocean Bay, and Rome imagery and logos are bundled locally; provenance is in `public/images/sources.json` and `public/images/redesign-sources.json`. Manrope and Cormorant Garamond fonts are self-hosted with their OFL licenses.
 
 ## Current delivery
 
@@ -15,20 +15,21 @@ The implementation includes the BRD's 21 functional requirements, subject to the
 Node.js 22.13+ and npm are required. The local `.env` already contains the supplied connection settings and a generated initial administrator password. It is ignored by Git. For another installation, copy `.env.example` to `.env` and configure it.
 
 ```sh
-npm ci
+npm ci                    # also generates the Prisma client (postinstall)
 npm run db:migrate
 npm run db:bootstrap
-npm run build:worker
-npm run worker
+npm run build:api
+npm run api               # the API service on API_PORT (default 3001)
 ```
 
-In a second terminal:
+In a second terminal the scheduler, and in a third the web tier:
 
 ```sh
-npm run dev
+npm run build:worker && npm run worker
+npm run dev               # forwards /api to API_URL from .env
 ```
 
-Open the exact URL printed by the server. Set `APP_ORIGIN` to that origin. The session cookie's Secure flag must agree with the origin's scheme: a local `http://` setup needs `SESSION_COOKIE_SECURE=false`, and an `https://` deployment uses `true` (the default). Every setting is validated once at start (`lib/config.ts`); a wrong or missing value stops the server with a message naming the variable, and `.env.example` documents each rule. No credentials are embedded in browser code.
+Open the exact URL printed by the web server. Set `APP_ORIGIN` to that origin and `API_URL` to where the API listens (`http://127.0.0.1:3001` locally). The session cookie's Secure flag must agree with the origin's scheme: a local `http://` setup needs `SESSION_COOKIE_SECURE=false`, and an `https://` deployment uses `true` (the default). Every setting is validated once at start (`lib/config.ts`); a wrong or missing value stops the server with a message naming the variable, and `.env.example` documents each rule. No credentials are embedded in browser code.
 
 Sign in using `BOOTSTRAP_USERNAME` (currently `admin`) and `BOOTSTRAP_PASSWORD` from the local `.env`. Change the temporary password when prompted. Bootstrap never overwrites an existing administrator. Remove the bootstrap password from a production host after provisioning.
 
@@ -52,7 +53,7 @@ The app talks standard PostgreSQL (14 or newer) over the normal wire protocol; n
    Repeat with `samana_qms_test` if you want to run the test suite there.
 2. Put the owner string in `.env` as `DATABASE_URL` (`postgresql://qms_owner:<password>@<host>:5432/samana_qms`; add `?sslmode=verify-full` only when the server uses TLS) and run `npm run db:migrate` and `npm run db:bootstrap`.
 3. Run `npm run db:app-role`. It creates the restricted `qms_app` role and prints the string to use as `DATABASE_URL`; move the owner string to `MIGRATE_DATABASE_URL`.
-4. Build and start: `npm run build`, `npm run build:worker`, then `npm start` and `npm run worker` in two terminals, or `docker compose up -d`.
+4. Build and start: `npm run build`, `npm run build:api`, `npm run build:worker`, then `npm run api`, `npm start` and `npm run worker` in three terminals, or `docker compose up -d`.
 
 Moving data from one server to another is one `pg_dump` of `samana_qms` and one restore; the migration ledger travels with it.
 
@@ -70,14 +71,16 @@ Moving data from one server to another is one `pg_dump` of `samana_qms` and one 
 ## Production build and self-hosting
 
 ```sh
-npm run build             # Standalone Node server in dist-node/standalone (build:node is an alias)
-npm run build:worker      # Independent 15-second scheduler
+npm run build             # Web tier: standalone Node server in dist-node/standalone (build:node is an alias)
+npm run build:api         # API service in dist-api/api.mjs (regenerates the Prisma client first)
+npm run build:worker      # Scheduler in dist-worker/worker.mjs
+node --env-file=.env dist-api/api.mjs
 node --env-file=.env dist-node/standalone/server.js
 ```
 
 The build runs in place and writes `.next`; the script validates the destination before replacing only the generated `dist-node` directory. Next.js keeps `next dev` output separately under `.next/dev`, so a running development server is unaffected. Keep the source workspace on a normal local disk if OneDrive sync locking affects development.
 
-Docker Compose defines separate unprivileged web and scheduler services. Docker was not installed in this workstation, so the Node artifacts were built and exercised here but the container build still needs execution on the deployment host.
+Docker Compose defines three unprivileged services on one private network: `web` publishes port 3000 and receives only `APP_ORIGIN` and `API_URL`; `api` is reachable only from the other containers and holds the credentials; `scheduler` runs the tick. Only the web tier is exposed, so the database and Salesforce credentials never sit on an internet-facing process. Docker was not installed in this workstation, so the Node artifacts were built and exercised here but the container build still needs execution on the deployment host.
 
 ```sh
 docker compose build
@@ -86,11 +89,11 @@ docker compose run --rm scheduler node scripts/bootstrap.mjs
 docker compose up -d
 ```
 
-Configure `.env` on the server with an HTTPS `APP_ORIGIN`, `SESSION_COOKIE_SECURE=true`, strong independent `QR_SIGNING_SECRET` and `WORKER_SECRET`, and the PostgreSQL connection string (`?sslmode=verify-full` for a TLS host). Put a TLS reverse proxy in front of web's loopback port 3000. Do not expose the database credentials or scheduler bearer secret to clients. Secrets are omitted from the image context.
+Configure `.env` on the server with an HTTPS `APP_ORIGIN`, `SESSION_COOKIE_SECURE=true`, strong independent `QR_SIGNING_SECRET` and `WORKER_SECRET`, and the PostgreSQL connection string (`?sslmode=verify-full` for a TLS host). Put a TLS reverse proxy in front of web's loopback port 3000; the API never needs a public address. The web tier forwards the client address its edge appended as `x-client-address`, and the API is configured to trust that header alone (`TRUSTED_CLIENT_IP_HEADER=x-client-address`). Secrets are omitted from the image context.
 
 Connect the app as the restricted `qms_app` role created by `npm run db:app-role`, and keep the owner connection string in `MIGRATE_DATABASE_URL` for migrations. `RETENTION_IDENTIFIER_DAYS` and `RETENTION_EVENT_DAYS` switch on anonymisation of closed tickets and purging of old audit events once a retention period is agreed. `GET /api/health/alerts` is the one address an uptime monitor should page on. Tickets left waiting from a previous day are marked no-show two hours after issue, and a number still on the floor from yesterday is never reissued today.
 
-The web app is a standard Next.js standalone server, so any Node host works; Render is the reference deployment in `render.yaml`. The scheduler runs as a direct database worker everywhere (Docker, Render, `npm run worker`): routing tick, outbox delivery and retention every 15 seconds. `POST /api/jobs/run` with `Authorization: Bearer WORKER_SECRET` remains for hosts that can only run a cron-style caller. Live screen updates use server-sent events fed by PostgreSQL `NOTIFY`; a host that buffers streaming responses degrades gracefully to polling. The listener needs one session that stays on a real server connection: on Neon it uses the direct endpoint even when `DATABASE_URL` is the pooled one, and behind a PgBouncer in transaction mode that one connection must bypass the pooler.
+The web tier is a standard Next.js standalone server and the API is a plain Node HTTP server (`server/api.ts`), so any Node host works; Render is the reference deployment in `render.yaml`, with the API as a private service. The scheduler runs as a direct database worker everywhere (Docker, Render, `npm run worker`): routing tick, outbox delivery and retention every 15 seconds. `POST /api/jobs/run` with `Authorization: Bearer WORKER_SECRET` remains for hosts that can only run a cron-style caller. Live screen updates use server-sent events fed by PostgreSQL `NOTIFY`; a host that buffers streaming responses degrades gracefully to polling. The listener needs one session that stays on a real server connection: on Neon it uses the direct endpoint even when `DATABASE_URL` is the pooled one, and behind a PgBouncer in transaction mode that one connection must bypass the pooler.
 
 ## SMS and Salesforce write-back
 
@@ -114,4 +117,4 @@ CI checks types, lint, the unit and browser tests, dependency audit and both bui
 
 ## Operations
 
-See [operations](docs/operations.md) for schema ownership, monitoring, recovery, retention, and release procedure. Backend logic uses parameterized SQL and database transactions; the browser never talks directly to PostgreSQL or Salesforce. No sample customer records are seeded into the app database.
+See [operations](docs/operations.md) for schema ownership, monitoring, recovery, retention, and release procedure. The data layer is `prisma/schema.prisma`, introspected from the database and pinned by a test, with the generated client for records and typed, row-validated calls into the PostgreSQL functions that hold the queue rules (`lib/data/`). The browser never talks to PostgreSQL, Salesforce or the API service directly; everything goes through the web tier. No sample customer records are seeded into the app database.

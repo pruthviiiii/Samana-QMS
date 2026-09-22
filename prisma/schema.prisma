@@ -1,0 +1,223 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../lib/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["qms"]
+}
+
+model counters {
+  day        DateTime @db.Date
+  service_id String
+  value      Int
+  services   services @relation(fields: [service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([day, service_id])
+  @@schema("qms")
+}
+
+model events {
+  id         BigInt   @id @default(autoincrement())
+  ticket_id  String?  @db.Uuid
+  actor_id   String?  @db.Uuid
+  action     String
+  details    Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users?   @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tickets    tickets? @relation(fields: [ticket_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([action, id(sort: Desc)], map: "events_action")
+  @@index([created_at], map: "events_created")
+  @@index([ticket_id, created_at], map: "events_ticket")
+  @@schema("qms")
+}
+
+model lookups {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor_id         String    @db.Uuid
+  identifier_type  String
+  identifier_value String
+  customer         Json
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at       DateTime  @default(dbgenerated("(now() + '00:15:00'::interval)")) @db.Timestamptz(6)
+  users            users     @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tickets          tickets[]
+
+  @@index([identifier_type, identifier_value, created_at(sort: Desc)], map: "lookups_identifier")
+  @@schema("qms")
+}
+
+model migrations {
+  name       String   @id
+  applied_at DateTime @default(now()) @db.Timestamptz(6)
+  checksum   String?
+
+  @@schema("qms")
+}
+
+model notifications {
+  id         BigInt    @id @default(autoincrement())
+  user_id    String    @db.Uuid
+  ticket_id  String    @db.Uuid
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  read_at    DateTime? @db.Timestamptz(6)
+  tickets    tickets   @relation(fields: [ticket_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([user_id, id(sort: Desc)], map: "notifications_unread", where: raw("(read_at IS NULL)"))
+  @@schema("qms")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model outbox {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id          String    @db.Uuid
+  kind               String
+  status             String    @default("pending")
+  attempts           Int       @default(0)
+  available_at       DateTime  @default(now()) @db.Timestamptz(6)
+  locked_at          DateTime? @db.Timestamptz(6)
+  last_error         String?
+  provider_reference String?
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  revision           Int       @default(1)
+  lease_token        String?   @db.Uuid
+  tickets            tickets   @relation(fields: [ticket_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([ticket_id, kind])
+  @@index([status, available_at], map: "outbox_ready")
+  @@schema("qms")
+}
+
+model rate_limits {
+  key          String   @id
+  window_start DateTime @db.Timestamptz(6)
+  count        Int
+
+  @@schema("qms")
+}
+
+model round_robin {
+  service_id    String
+  user_id       String   @db.Uuid
+  last_assigned DateTime @default(now()) @db.Timestamptz(6)
+  position      BigInt   @default(autoincrement())
+  services      services @relation(fields: [service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users         users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([service_id, user_id])
+  @@schema("qms")
+}
+
+model services {
+  id          String        @id
+  name        String
+  department  String
+  prefix      String        @unique
+  counters    counters[]
+  round_robin round_robin[]
+  tickets     tickets[]
+
+  @@schema("qms")
+}
+
+model sessions {
+  token_hash String   @id
+  user_id    String   @db.Uuid
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([expires_at], map: "sessions_expiry")
+  @@schema("qms")
+}
+
+model system_state {
+  key        String   @id
+  value      Json
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("qms")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tickets {
+  id                               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  number                           String
+  day                              DateTime        @db.Date
+  sequence                         Int
+  request_id                       String          @unique @db.Uuid
+  lookup_id                        String          @db.Uuid
+  service_id                       String
+  status                           String          @default("waiting")
+  customer_id                      String?
+  customer_name                    String
+  mobile                           String?
+  emirates_id                      String?
+  passport_number                  String?
+  identifier_type                  String
+  unit_id                          String?
+  unit_name                        String?
+  project_name                     String?
+  booking_number                   String?
+  owner_sf_id                      String?
+  manager_sf_id                    String?
+  assigned_to                      String?         @unique(map: "one_active_service_per_agent", where: raw("((status = ANY (ARRAY['called'::text, 'serving'::text])) AND (assigned_to IS NOT NULL))")) @db.Uuid
+  assigned_at                      DateTime?       @db.Timestamptz(6)
+  routing_reason                   String          @default("awaiting_agent")
+  escalated                        Boolean         @default(false)
+  created_by                       String          @db.Uuid
+  created_at                       DateTime        @default(now()) @db.Timestamptz(6)
+  called_at                        DateTime?       @db.Timestamptz(6)
+  started_at                       DateTime?       @db.Timestamptz(6)
+  closed_at                        DateTime?       @db.Timestamptz(6)
+  comments                         String?
+  version                          Int             @default(1)
+  public_token                     String          @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  events                           events[]
+  notifications                    notifications[]
+  outbox                           outbox[]
+  users_tickets_assigned_toTousers users?          @relation("tickets_assigned_toTousers", fields: [assigned_to], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_tickets_created_byTousers  users           @relation("tickets_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lookups                          lookups         @relation(fields: [lookup_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  services                         services        @relation(fields: [service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([day, service_id, sequence])
+  @@index([assigned_to, status], map: "tickets_assigned")
+  @@index([closed_at], map: "tickets_closed_at", where: raw("(closed_at IS NOT NULL)"))
+  @@index([created_at], map: "tickets_created")
+  @@index([service_id, status, created_at], map: "tickets_queue")
+  @@schema("qms")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model users {
+  id                                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username                           String          @unique
+  name                               String
+  role                               String          @default("agent")
+  password_hash                      String?
+  sf_id                              String?         @unique
+  manager_sf_id                      String?
+  services                           String[]        @default([])
+  online                             Boolean         @default(false)
+  last_seen                          DateTime?       @db.Timestamptz(6)
+  counter                            String          @default("")
+  enabled                            Boolean         @default(true)
+  must_change_password               Boolean         @default(true)
+  created_at                         DateTime        @default(now()) @db.Timestamptz(6)
+  email                              String?
+  events                             events[]
+  lookups                            lookups[]
+  notifications                      notifications[]
+  round_robin                        round_robin[]
+  sessions                           sessions[]
+  tickets_tickets_assigned_toTousers tickets?        @relation("tickets_assigned_toTousers")
+  tickets_tickets_created_byTousers  tickets[]       @relation("tickets_created_byTousers")
+
+  @@schema("qms")
+}

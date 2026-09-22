@@ -2,7 +2,7 @@
 
 Every issue raised by the external code review (Samana-QMS-Code-Review.pdf), by the internal architecture review and by the production-path note, with its current state. A ticked box means the change is in the repository and covered by the checks in "Verification" below. An open box names who has to decide or act.
 
-**Ticked: 68 of 86** (updated 22 September 2026, after the architecture review in section I). Of the 16 open boxes, 14 need a business decision or an operator outside the code, and 2 are frontend work not started (one styling system, browser tests). Every item the external review raised that is a code defect is closed and tested; the point-by-point response is `docs/review-response-2026-09-22.html` (PDF beside it).
+**Ticked: 76 of 96** (updated 22 September 2026, after sections I and J). Of the 16 open boxes, 14 need a business decision or an operator outside the code, and 2 are frontend work not started (one styling system, browser tests). Every item the external review raised that is a code defect is closed and tested; the point-by-point response is `docs/review-response-2026-09-22.html` (PDF beside it).
 
 ## A. Security and access
 
@@ -96,6 +96,21 @@ A second, stricter pass over the code as an enterprise architect would read it. 
 - [ ] The application role may execute every function, including retention and the routing tick. Kept: the scheduler runs as the same role by design, and a third credential for two functions adds operational surface for little gain. Revisit if the worker ever gets its own role.
 - [ ] Three stylesheets. See section D; the provably dead blocks are gone, the rest is a design decision.
 
+## J. Separate backend service and Prisma data layer, 22 September 2026
+
+The two prescriptions of the external review that had been declined on cost grounds, adopted at the sponsor's request and done properly.
+
+- [x] The API is its own service (`server/api.ts`): a plain Node HTTP server hosting the same declared route table, built to `dist-api/api.mjs`. The Next.js API route is gone; `server/handler.ts` is the only importer of the route table and a test pins that. `tests/server.test.ts` exercises it over real HTTP.
+- [x] The web tier serves screens only and forwards `/api` to the API over the private network (`proxy.ts`). It holds no database or integration credential; its configuration is two values, and a test proves it cannot import a server module.
+- [x] The API is not reachable from the internet: a Render private service, an unpublished container in Compose. The browser keeps one origin, so cookies stay first-party and the origin check is unchanged.
+- [x] The client address travels as `x-client-address`, set by the web tier from the address its edge appended and never from the client; the API trusts that header alone for per-address limits. Tested in `tests/proxy.test.ts`.
+- [x] Prisma 7 is the master description of the data (`prisma/schema.prisma`, introspected from the migrated database, including the partial indexes) and the typed client for records: staff, sessions, the activity log, notices, lookups, deliveries, services, queue membership (`lib/data/`). `tests/prisma-schema.test.ts` fails when the schema goes stale.
+- [x] The queue engine's functions are reached through typed wrappers and every raw result is validated row by row (`lib/data/functions.ts`, `lib/data/rows.ts`); the "trust me, it's a T" assertion the review pointed at is gone.
+- [x] One connection pool per process serves both the Prisma client and the raw queries; every connection is pinned to UTC. That pin fixed a real defect the new data tests exposed: on a server whose session zone is Asia/Dubai, the Prisma client read timestamps four hours late and compared parameters four hours early, so an expired session would have stayed valid for four more hours. Regression test in `tests/data.test.ts`.
+- [x] Three build artefacts (web, api, worker), three Compose services, three Render services with the secrets on the API service; the scheduler copies them from there.
+- [ ] Rules moved out of PostgreSQL into TypeScript. Not done, by decision: issuing, routing and calling must be single indivisible steps guaranteed by the database, and an application-side rewrite would hold the lock several times longer per action. Defended in `docs/architecture-final-2026-09-22.html`.
+- [ ] Prisma Migrate as the migration tool. Not done, by decision: its schema language cannot express the functions, triggers and partial indexes the engine depends on, so it would describe less than the SQL files do.
+
 ## E. Build, CI and deployment
 
 - [x] CI no longer references the deleted `tests/groups.test.ts`; the database-free unit tests are listed explicitly. `.github/workflows/quality.yml`.
@@ -147,6 +162,19 @@ No box, because nothing needed changing:
 | `qms_app` role on both databases | reads and function calls work, `CREATE TABLE` denied |
 | Standalone server against the test database | health 200 with request id, unknown view 404, hidden path 404, CSP and frame headers present, unauthenticated API 401, POST without Origin 403, sign-in 200, event stream forbidden until the temporary password is changed, then `listening: true` and a `users` change delivered |
 | Local PostgreSQL 18 server (Windows service, port 5432) | `qms_owner` and both databases created; production data copied with `pg_dump`/`pg_restore`; `samana_qms_test` migrated from scratch produces a schema identical to `db/schema.sql`; `qms_app` role applied; 141 tests pass; end-to-end smoke test through the built web server and worker: health, alerts 200, sign-in, forced password change, presence, Salesforce sandbox probe connected, QR invite, guest session, guest lookup, ticket issue (idempotent), public status, call, TV board, stale version 409, start, offline-mid-service 409, close with note, history, receipt, reports JSON and CSV, audit, walk-in lookup, live `users` event, paging 400, 404s, security headers, sign-out |
+
+## Verification run on 22 September 2026, after the split into three services
+
+| Check | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run lint` | clean |
+| `npm run test:coverage` (server and browser projects) | 203 passed across 19 files; thresholds hold at statements 40.3%, branches 35.6%, functions 33.0%, lines 41.9% |
+| `npm run build`, `npm run build:api`, `npm run build:worker` | all three artefacts built; the API bundle leaves pg, @prisma/client, @prisma/adapter-pg, @hono/node-server and zod external |
+| `tests/server.test.ts` | the API over real HTTP: health with request id, JSON 404, 403 BAD_ORIGIN before the body, 401 on staff routes, 413 and 415 on bad bodies, no banner or stack trace |
+| `tests/prisma-schema.test.ts` | re-introspection equals the committed schema; every model is a table and every table a model; the partial unique index is described as partial |
+| `tests/data.test.ts` | row validation names the query and row; sessions, login candidates, activity log, notices and guest creation through the Prisma client; timestamps identical through both paths on a UTC-pinned connection |
+| End-to-end smoke test, three processes | all 30 steps pass through the web tier to the API; a live change delivered over the event stream through the proxy |
+| Time-zone defect | found by the new tests (expired session returned, timestamps four hours off on an Asia/Dubai server); fixed by pinning every connection to UTC; probe identical before and after the fix; regression test added |
 
 ## Verification run on 22 September 2026, after the architecture review
 

@@ -11,8 +11,7 @@ vi.mock('../lib/salesforce', async (original) => ({
   lookupCustomer: lookup,
   searchUsers: search,
 }));
-import { GET, POST, PUT, PATCH, DELETE } from '../app/api/[...path]/route';
-const handlers: Record<string, typeof GET> = { GET, POST, PUT, PATCH, DELETE };
+import { handle } from '../server/handler';
 const prefix = 'api-test-' + crypto.randomUUID().slice(0, 8);
 const password = 'Synthetic-API-Test-Password-24';
 let adminCookie = '';
@@ -47,7 +46,7 @@ async function send(
   data?: unknown,
   cookie = adminCookie,
 ) {
-  const response = await handlers[method](request(path, method, data, cookie));
+  const response = await handle(request(path, method, data, cookie));
   const result = (await response.json()) as Record<string, unknown>;
   return { response, result };
 }
@@ -218,7 +217,7 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
   it('rejects cross-origin state changes', async () =>
     expect(
       (
-        await PUT(
+        await handle(
           request(
             'presence',
             'PUT',
@@ -230,7 +229,7 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
       ).status,
     ).toBe(403));
   it('rejects invalid JSON', async () => {
-    const r = await PUT(
+    const r = await handle(
       new Request('http://qms.test/api/presence', {
         method: 'PUT',
         headers: {
@@ -244,7 +243,7 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
     expect(r.status).toBe(400);
   });
   it('rejects oversized request bodies', async () => {
-    const r = await PUT(
+    const r = await handle(
       request('presence', 'PUT', { padding: 'x'.repeat(33000) }, adminCookie),
     );
     expect(r.status).toBe(413);
@@ -748,7 +747,7 @@ describe('Audit trail, walk-ins and error messages', () => {
       "INSERT INTO qms.outbox(ticket_id,kind,status,attempts) VALUES($1,'sms','failed',5) ON CONFLICT(ticket_id,kind) DO UPDATE SET status='failed'",
       [t.id],
     );
-    const alert = await handlers.GET(request('health/alerts'));
+    const alert = await handle(request('health/alerts'));
     expect(alert.status).toBe(503);
     const body = (await alert.json()) as { status: string; problems: string[] };
     expect(body.status).toBe('alert');
@@ -763,7 +762,7 @@ describe('Audit trail, walk-ins and error messages', () => {
       await query("DELETE FROM qms.outbox WHERE ticket_id=$1 AND kind='sms'", [
         t.id,
       ]);
-    const after = await handlers.GET(request('health/alerts'));
+    const after = await handle(request('health/alerts'));
     expect(after.status).toBe(others === 0 ? 200 : 503);
   });
   it('pages the monitor while the bootstrap password is still on a production host', async () => {
@@ -775,7 +774,7 @@ describe('Audit trail, walk-ins and error messages', () => {
     vi.stubEnv('APP_ORIGIN', 'https://qms.test');
     resetConfigForTests();
     try {
-      const alert = await handlers.GET(request('health/alerts'));
+      const alert = await handle(request('health/alerts'));
       const body = (await alert.json()) as { problems: string[] };
       expect(alert.status).toBe(503);
       expect(body.problems).toContain('bootstrap_password_present');
@@ -785,12 +784,12 @@ describe('Audit trail, walk-ins and error messages', () => {
     }
   });
   it('exports reports without identifiers unless asked, and records the choice', async () => {
-    const plain = await handlers.GET(
+    const plain = await handle(
       request('reports?format=csv', 'GET', undefined, adminCookie),
     );
     expect(plain.status).toBe(200);
     expect((await plain.text()).split('\r\n')[0]).not.toContain('emirates_id');
-    const full = await handlers.GET(
+    const full = await handle(
       request('reports?format=csv&identifiers=true', 'GET', undefined, adminCookie),
     );
     expect((await full.text()).split('\r\n')[0]).toContain('emirates_id');
@@ -801,7 +800,7 @@ describe('Audit trail, walk-ins and error messages', () => {
     expect(event.details.identifiers).toBe(true);
   });
   it('exports the audit trail as CSV and records the export', async () => {
-    const csv = await handlers.GET(
+    const csv = await handle(
       request('audit?format=csv&action=login', 'GET', undefined, adminCookie),
     );
     expect(csv.status).toBe(200);

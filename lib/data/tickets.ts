@@ -1,0 +1,88 @@
+import { query } from '../db';
+import { prisma } from '../prisma';
+import {
+  boardRow,
+  countRow,
+  one,
+  publicStatusRow,
+  queueStatisticsRow,
+  rows,
+  serviceCountRow,
+  ticketRow,
+} from './rows';
+// Reads of tickets. Anything that joins the ticket with its service and agent
+// goes through qms.ticket_view, which the Prisma schema does not model (views
+// are outside its language), so those reads are raw SQL parsed against
+// ./rows.ts. Plain counts and record lookups use the Prisma client.
+
+/** One ticket with its service and agent, optionally only if this person may see it. */
+export async function detail(id: string, restrictTo: string | null) {
+  const result = await query(
+    'SELECT * FROM qms.ticket_view WHERE id=$1 AND ($2::uuid IS NULL OR assigned_to=$2 OR created_by=$2)',
+    [id, restrictTo],
+  );
+  return result.length ? one(ticketRow, result, 'ticket detail') : null;
+}
+
+export interface QueueFilter {
+  assignedTo: string | null;
+  search: string;
+  department: string;
+  status: string; // 'active' | 'all' | a status
+  offset: number;
+  limit: number;
+}
+const queueWhere = `($1::uuid IS NULL OR assigned_to=$1) AND ($2='' OR number ILIKE '%'||$2||'%' OR customer_name ILIKE '%'||$2||'%' OR unit_name ILIKE '%'||$2||'%') AND ($3='' OR department=$3) AND (($4='active' AND status IN ('waiting','called','serving')) OR $4='all' OR status=$4)`;
+export const ticketColumns =
+  'id,number,service_id,department,service_name,status,customer_name,customer_id,unit_id,unit_name,project_name,booking_number,assigned_to,assigned_name,counter,created_at,assigned_at,called_at,started_at,closed_at,routing_reason,comments,version,identifier_type';
+
+/** A page of the live queue in service order: serving, called, waiting, then closed. */
+export async function queuePage(filter: QueueFilter) {
+  const params = [filter.assignedTo, filter.search, filter.department, filter.status];
+  const [list, count] = await Promise.all([
+    query(
+      `SELECT ${ticketColumns} FROM qms.ticket_view WHERE ${queueWhere} ORDER BY CASE status WHEN 'serving' THEN 0 WHEN 'called' THEN 1 WHEN 'waiting' THEN 2 ELSE 3 END,created_at LIMIT $5 OFFSET $6`,
+      [...params, filter.limit, filter.offset],
+    ),
+    query(`SELECT count(*)::integer total FROM qms.ticket_view WHERE ${queueWhere}`, params),
+  ]);
+  return { tickets: rows(ticketRow, list, 'queue page'), total: one(countRow, count, 'queue count').total };
+}
+
+/** Headline numbers, for everyone or for one agent's own tickets. */
+export async function statistics(assignedTo: string | null) {
+  const result = await query(
+    `SELECT count(*) FILTER(WHERE status='waiting')::int waiting,count(*) FILTER(WHERE status IN ('called','serving'))::int serving,count(*) FILTER(WHERE status='closed' AND day=(now() AT TIME ZONE 'Asia/Dubai')::date)::int completed,coalesce(round(avg(extract(epoch from coalesce(called_at,closed_at,now())-created_at)/60) FILTER(WHERE day=(now() AT TIME ZONE 'Asia/Dubai')::date AND status<>'no_show')::numeric,1),0)::float avg_wait,count(*) FILTER(WHERE status='waiting' AND assigned_to IS NULL)::int unassigned FROM qms.tickets WHERE ($1::uuid IS NULL OR assigned_to=$1)`,
+    [assignedTo],
+  );
+  return one(queueStatisticsRow, result, 'queue statistics');
+}
+
+/** Every service with its waiting and serving counts. */
+export async function serviceCounts(assignedTo: string | null) {
+  const result = await query(
+    `SELECT s.*,count(t.id) FILTER(WHERE t.status='waiting')::int waiting,count(t.id) FILTER(WHERE t.status IN ('called','serving'))::int serving FROM qms.services s LEFT JOIN qms.tickets t ON t.service_id=s.id AND ($1::uuid IS NULL OR t.assigned_to=$1) GROUP BY s.id ORDER BY s.department,s.name`,
+    [assignedTo],
+  );
+  return rows(serviceCountRow, result, 'service counts');
+}
+
+/** The reception TV: one featured ticket and six more, plus the waiting count. */
+export async function board() {
+  const [list, waiting] = await Promise.all([
+    query(
+      "SELECT number,service_name,department,status,counter,called_at FROM qms.ticket_view WHERE status IN ('called','serving') ORDER BY called_at DESC LIMIT 7",
+    ),
+    prisma().tickets.count({ where: { status: 'waiting' } }),
+  ]);
+  return { tickets: rows(boardRow, list, 'display board'), waiting };
+}
+
+/** What the private status link shows: the ticket and how many are ahead of it. */
+export async function publicStatus(token: string) {
+  const result = await query(
+    "SELECT number,service_name,status,counter,(SELECT count(*)::int FROM qms.tickets ahead WHERE ahead.service_id=v.service_id AND ahead.status='waiting' AND ahead.created_at<v.created_at) waiting_ahead FROM qms.ticket_view v WHERE public_token=$1 AND (closed_at IS NULL OR closed_at>now()-interval '1 day')",
+    [token],
+  );
+  return result.length ? one(publicStatusRow, result, 'public status') : null;
+}

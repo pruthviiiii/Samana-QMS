@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { config } from './config';
-import { query } from './db';
+import { schedulerHealthy, workerLastRun } from './data/system';
 import { HttpError } from './http';
 import type { Customer, IdentifierType, Unit } from './domain';
 
@@ -403,9 +403,7 @@ async function probeSalesforce(): Promise<Probe> {
 export async function integrationHealth() {
   const { connected, userSearchAvailable, error } = await probeSalesforce();
   const settings = config();
-  const [worker] = await query<{ updated_at: string }>(
-    "SELECT updated_at FROM qms.system_state WHERE key='worker'",
-  );
+  const lastRun = await workerLastRun();
   return {
     database: { connected: true },
     // The first administrator's password must not stay on a running host.
@@ -425,10 +423,6 @@ export async function integrationHealth() {
       configured: !!settings.SMS_GATEWAY_URL && !!settings.SMS_GATEWAY_TOKEN,
       enabled: settings.SMS_ENABLED,
     },
-    worker: {
-      lastRun: worker?.updated_at || null,
-      healthy:
-        !!worker && Date.now() - new Date(worker.updated_at).getTime() < 90000,
-    },
+    worker: { lastRun, healthy: schedulerHealthy(lastRun) },
   };
 }

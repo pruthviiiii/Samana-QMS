@@ -1,14 +1,18 @@
 import { NextResponse, type NextRequest } from 'next/server';
-// Runs before every request (Next.js "proxy", formerly middleware): refuses
-// hidden paths and sets the browser security headers on every response.
+// Runs before every request to the web tier. Three jobs:
 //
-// The script policy is nonce based. A fresh nonce is minted per request, put
-// on the response policy and passed to the renderer on the request, which
-// Next.js uses to mark its own inline bootstrap script; 'strict-dynamic' then
-// covers the chunks that script loads. Nothing else may execute, so an
-// injected inline script is refused by the browser even if it reaches the page.
-// This is why the pages render dynamically: a prerendered page would carry a
-// nonce from build time that no longer matches.
+// 1. Refuse hidden paths.
+// 2. Forward /api to the API service. The browser only ever talks to this
+//    origin, so cookies stay first-party and the origin check on every state
+//    change keeps working; the API itself is not reachable from outside. The
+//    address the edge appended to x-forwarded-for travels on as
+//    x-client-address, which the API trusts for per-address limits; a client
+//    cannot forge it because this tier always overwrites it.
+// 3. Set the browser security headers on every page. The script policy is
+//    nonce based: a fresh nonce per request, 'strict-dynamic' for the chunks
+//    it loads, and no inline allowance, so an injected script is refused by
+//    the browser. Pages therefore render per request (app/layout.tsx).
+const API_PREFIX = '/api';
 export function proxy(request: NextRequest) {
   let pathname: string;
   try {
@@ -22,6 +26,28 @@ export function proxy(request: NextRequest) {
   const hidden = pathname
     .split('/')
     .some((part) => part.startsWith('.') && part !== '.well-known');
+  if (hidden) return new NextResponse('Not found', { status: 404 });
+  if (pathname === API_PREFIX || pathname.startsWith(API_PREFIX + '/')) {
+    const api = process.env.API_URL;
+    if (!api)
+      return NextResponse.json(
+        {
+          error: 'The API service is not configured on this host.',
+          code: 'API_NOT_CONFIGURED',
+        },
+        { status: 503, headers: { 'Cache-Control': 'no-store' } },
+      );
+    const target = new URL(
+      pathname + request.nextUrl.search,
+      /^https?:\/\//.test(api) ? api : 'http://' + api,
+    );
+    const headers = new Headers(request.headers);
+    headers.delete('x-client-address');
+    const forwarded = request.headers.get('x-forwarded-for');
+    const client = forwarded?.split(',').pop()?.trim();
+    if (client) headers.set('x-client-address', client);
+    return NextResponse.rewrite(target, { request: { headers } });
+  }
   const production = process.env.NODE_ENV === 'production';
   const nonce = btoa(crypto.randomUUID());
   const policy = [
@@ -42,9 +68,7 @@ export function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('content-security-policy', policy);
-  const response = hidden
-    ? new NextResponse('Not found', { status: 404 })
-    : NextResponse.next({ request: { headers: requestHeaders } });
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('Content-Security-Policy', policy);
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');

@@ -1,9 +1,11 @@
 import { ZodError } from 'zod';
 import { config } from './config';
+import { one, rateLimitRow } from './data/rows';
+import { findSessionUser } from './data/users';
 import { query } from './db';
 import { HttpError, ruleError } from './errors';
 import { sha256 } from './security';
-import type { User, Role } from './domain';
+import type { Role } from './domain';
 export { HttpError } from './errors';
 export function json(
   data: unknown,
@@ -54,15 +56,13 @@ export function sameOrigin(request: Request) {
   if (!origin || origin !== config().APP_ORIGIN)
     throw new HttpError(403, 'Request origin is not allowed.', 'BAD_ORIGIN');
 }
+const SESSION_COOKIE = /(?:^|;\s*)qms_session=([a-f0-9]{64})(?:;|$)/;
+export const sessionToken = (request: Request) =>
+  request.headers.get('cookie')?.match(SESSION_COOKIE)?.[1] ?? null;
 export async function requireUser(request: Request, roles?: Role[]) {
-  const token = request.headers
-    .get('cookie')
-    ?.match(/(?:^|;\s*)qms_session=([a-f0-9]{64})(?:;|$)/)?.[1];
+  const token = sessionToken(request);
   if (!token) throw new HttpError(401, 'Please sign in.', 'NOT_SIGNED_IN');
-  const [user] = await query<User>(
-    'SELECT u.id,u.username,u.name,u.role,u.sf_id,u.manager_sf_id,u.services,u.online,u.last_seen,u.counter,u.enabled,u.must_change_password FROM qms.sessions s JOIN qms.users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.enabled=true',
-    [await sha256(token)],
-  );
+  const user = await findSessionUser(await sha256(token));
   if (!user)
     throw new HttpError(
       401,
@@ -161,7 +161,7 @@ export async function endpoint(
  * together can never open two windows and double the budget.
  */
 export async function rateLimit(key: string, limit = 10, windowSeconds = 300) {
-  const [row] = await query<{ count: number }>(
+  const result = await query(
     `INSERT INTO qms.rate_limits(key,window_start,count) VALUES($1,now(),1)
      ON CONFLICT(key) DO UPDATE SET
        count = CASE WHEN qms.rate_limits.window_start > now()-make_interval(secs=>$2) THEN qms.rate_limits.count+1 ELSE 1 END,
@@ -169,7 +169,7 @@ export async function rateLimit(key: string, limit = 10, windowSeconds = 300) {
      RETURNING count`,
     [key, windowSeconds],
   );
-  if (row.count > limit)
+  if (one(rateLimitRow, result, 'rate limit').count > limit)
     throw new HttpError(
       429,
       'Too many attempts. Please try again later.',

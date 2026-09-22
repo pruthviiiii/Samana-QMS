@@ -1,12 +1,17 @@
-# Render Blueprint for Samana QMS.
-#   samana-qms            web app (standalone Node build of the Next.js app)
+# Render Blueprint for Samana QMS: three services.
+#   samana-qms            web tier (standalone Node build of the Next.js app).
+#                         Serves the screens and forwards /api to the API
+#                         service. Holds no database or integration credential.
+#   samana-qms-api        API service (private: reachable only from the other
+#                         services). Hosts the route table, the Prisma client
+#                         and the database pool; runs migrations before it starts.
 #   samana-qms-scheduler  background worker: routing tick, outbox delivery and
-#                         retention every 15 s, directly against the database
+#                         retention, directly against the database.
 # Spec: https://render.com/docs/blueprint-spec
 #
-# Secrets (sync: false) are entered once in the Render dashboard and never live in git.
-# The scheduler copies the database URL and the Salesforce, SMS and retention
-# settings from the web service, so both run the same integration configuration.
+# Secrets (sync: false) are entered once, on the API service, and never live in
+# git. The scheduler copies its database and integration settings from the API
+# service; the web tier receives only the API's private address.
 # DATABASE_URL is the restricted qms_app role (scripts/create-app-role.mjs);
 # MIGRATE_DATABASE_URL is the owner string the pre-deploy migration runs with.
 
@@ -18,14 +23,38 @@ services:
     plan: starter
     branch: main
     buildCommand: npm ci --include=dev && npm run build:node
-    preDeployCommand: node scripts/migrate.mjs
     startCommand: node dist-node/standalone/server.js
+    # Health goes through the proxy to the API, so it proves the whole chain.
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: "22"
       - key: NODE_ENV
         value: production
+      - key: APP_ORIGIN
+        value: https://samana-qms.onrender.com
+      # The API's private host:port; the web tier adds http:// itself.
+      - key: API_URL
+        fromService:
+          type: pserv
+          name: samana-qms-api
+          property: hostport
+
+  - type: pserv
+    name: samana-qms-api
+    runtime: node
+    region: frankfurt
+    plan: starter
+    branch: main
+    buildCommand: npm ci --include=dev && npm run build:api
+    preDeployCommand: node scripts/migrate.mjs
+    startCommand: node dist-api/api.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Render assigns PORT; the service listens on it.
       - key: APP_ORIGIN
         value: https://samana-qms.onrender.com
       - key: SESSION_COOKIE_SECURE
@@ -50,10 +79,10 @@ services:
         generateValue: true
       - key: QR_SIGNING_SECRET
         generateValue: true
-      # Render's proxy appends the client address to x-forwarded-for; the app
-      # keys per-address limits on that last entry.
+      # The web tier forwards the address Render's edge appended as
+      # x-client-address; the API keys per-address limits on it.
       - key: TRUSTED_CLIENT_IP_HEADER
-        value: x-forwarded-for
+        value: x-client-address
       # Retention stays off (empty) until a period is agreed; see docs/operations.md.
       - key: RETENTION_IDENTIFIER_DAYS
         value: ""
@@ -70,8 +99,7 @@ services:
     region: frankfurt
     plan: starter
     branch: main
-    # Direct database mode: no HTTP hop and no shared secret between the two
-    # services. The worker needs the same integration settings as the web app.
+    # Direct database mode: no HTTP hop and no shared secret between services.
     buildCommand: npm ci --include=dev && npm run build:worker
     startCommand: node dist-worker/worker.mjs
     envVars:
@@ -79,53 +107,57 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      - key: APP_ORIGIN
+        value: https://samana-qms.onrender.com
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
       - key: DATABASE_URL
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: DATABASE_URL
       - key: SALESFORCE_INSTANCE_URL
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: SALESFORCE_INSTANCE_URL
       - key: SALESFORCE_CLIENT_ID
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: SALESFORCE_CLIENT_ID
       - key: SALESFORCE_CLIENT_SECRET
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: SALESFORCE_CLIENT_SECRET
       - key: SALESFORCE_API_VERSION
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: SALESFORCE_API_VERSION
       - key: SALESFORCE_WRITE_ENABLED
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: SALESFORCE_WRITE_ENABLED
       - key: SMS_ENABLED
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: SMS_ENABLED
       - key: SMS_SENDER
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: SMS_SENDER
       - key: RETENTION_IDENTIFIER_DAYS
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: RETENTION_IDENTIFIER_DAYS
       - key: RETENTION_EVENT_DAYS
         fromService:
-          type: web
-          name: samana-qms
+          type: pserv
+          name: samana-qms-api
           envVarKey: RETENTION_EVENT_DAYS

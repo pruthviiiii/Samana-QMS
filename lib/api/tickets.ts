@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { query } from '../db';
+import { issueTicket, ticketAction } from '../data/functions';
+import * as lookups from '../data/lookups';
 import { HttpError, body, json, rateLimit } from '../http';
 import { normalizeIdentifier, SERVICE_IDS, type Customer } from '../domain';
 import { lookupCustomer } from '../salesforce';
@@ -54,10 +55,10 @@ export const ticketRoutes = [
       try {
         value = normalizeIdentifier(input.type, input.value);
       } catch (e) {
-        throw new HttpError(400, (e as Error).message);
+        throw new HttpError(400, (e as Error).message, 'INVALID_INPUT');
       }
       if (input.walkIn && user.role === 'customer')
-        throw new HttpError(403, 'Please ask reception for help.');
+        throw new HttpError(403, 'Please ask reception for help.', 'FORBIDDEN');
       let customer: Customer;
       let reused = false;
       if (input.walkIn) customer = walkInCustomer();
@@ -65,21 +66,15 @@ export const ticketRoutes = [
         // The same identifier looked up again within two minutes (a retry or
         // a second screen) reuses the registered snapshot instead of asking
         // Salesforce twice.
-        const [recent] = await query<{ customer: Customer }>(
-          "SELECT customer FROM qms.lookups WHERE identifier_type=$1 AND identifier_value=$2 AND created_at>now()-interval '2 minutes' AND (customer->>'registered')::boolean ORDER BY created_at DESC LIMIT 1",
-          [input.type, value],
-        );
+        const recent = await lookups.recentRegistered(input.type, value);
         if (recent) {
-          customer = recent.customer;
+          customer = recent;
           reused = true;
         } else customer = await lookupCustomer(input.type, value);
       }
       if (input.type === 'emiratesId') customer.emiratesId = value;
       if (input.type === 'passportNumber') customer.passportNumber = value;
-      const [lookup] = await query<{ id: string; expires_at: string }>(
-        'INSERT INTO qms.lookups(actor_id,identifier_type,identifier_value,customer) VALUES($1,$2,$3,$4::jsonb) RETURNING id,expires_at',
-        [user.id, input.type, value, JSON.stringify(customer)],
-      );
+      const lookup = await lookups.create(user.id, input.type, value, customer);
       await audit(user.id, 'customer_lookup', {
         type: input.type,
         registered: customer.registered,
@@ -88,7 +83,7 @@ export const ticketRoutes = [
       });
       return json({
         lookupId: lookup.id,
-        expiresAt: lookup.expires_at,
+        expiresAt: lookup.expiresAt,
         customer:
           user.role === 'customer' ? publicCustomer(customer) : customer,
       });
@@ -102,22 +97,14 @@ export const ticketRoutes = [
     'Issue a ticket from a lookup; idempotent by requestId',
     async ({ request, user }) => {
       const input = issueSchema.parse(await body(request));
-      const [result] = await query<{ ticket: unknown }>(
-        'SELECT qms.issue_ticket($1,$2,$3,$4,$5) ticket',
-        [
-          input.lookupId,
-          input.serviceId,
-          input.unitId,
-          input.requestId,
-          user.id,
-        ],
-      );
-      return json(
-        user.role === 'customer'
-          ? receipt(result.ticket as Record<string, unknown>)
-          : result.ticket,
-        201,
-      );
+      const ticket = await issueTicket({
+        lookupId: input.lookupId,
+        serviceId: input.serviceId,
+        unitId: input.unitId,
+        requestId: input.requestId,
+        actorId: user.id,
+      });
+      return json(user.role === 'customer' ? receipt(ticket) : ticket, 201);
     },
     issueSchema,
   ),
@@ -129,13 +116,7 @@ export const ticketRoutes = [
     async ({ params, user }) => {
       const details = await ticketDetail(user, uuid.parse(params.id));
       return json(
-        user.role === 'customer'
-          ? {
-              ticket: receipt(
-                details.ticket as unknown as Record<string, unknown>,
-              ),
-            }
-          : details,
+        user.role === 'customer' ? { ticket: receipt(details.ticket) } : details,
       );
     },
   ),
@@ -146,9 +127,7 @@ export const ticketRoutes = [
     'Printable receipt for a ticket',
     async ({ params, user }) => {
       const details = await ticketDetail(user, uuid.parse(params.id));
-      return json({
-        ticket: receipt(details.ticket as unknown as Record<string, unknown>),
-      });
+      return json({ ticket: receipt(details.ticket) });
     },
   ),
   define(
@@ -159,18 +138,15 @@ export const ticketRoutes = [
     async ({ request, params, user }) => {
       const id = uuid.parse(params.id);
       const input = actionSchema.parse(await body(request));
-      const [result] = await query<{ ticket: unknown }>(
-        'SELECT qms.ticket_action($1,$2,$3,$4,$5,$6) ticket',
-        [
-          id,
-          input.action,
-          user.id,
-          input.version,
-          input.comment || null,
-          input.targetId || null,
-        ],
-      );
-      return json(result.ticket);
+      const ticket = await ticketAction({
+        ticketId: id,
+        action: input.action,
+        actorId: user.id,
+        version: input.version,
+        comment: input.comment || null,
+        targetId: input.targetId || null,
+      });
+      return json(ticket);
     },
     actionSchema,
   ),

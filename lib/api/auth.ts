@@ -1,10 +1,18 @@
 import { z } from 'zod';
-import { query } from '../db';
+import { changePassword, issueSession, setPresence } from '../data/functions';
+import {
+  loginCandidates,
+  passwordHashOf,
+  rehashPassword,
+  revokeSession,
+  userById,
+} from '../data/users';
 import {
   HttpError,
   body,
   json,
   sessionCookie,
+  sessionToken,
   rateLimit,
   clientRateLimit,
 } from '../http';
@@ -15,9 +23,9 @@ import {
   randomToken,
   sha256,
 } from '../security';
-import { SERVICES, type User } from '../domain';
+import { SERVICES } from '../domain';
 import { define, publicRoute, sessionRoute } from '../router';
-import { audit, dummyHash, passwordSchema, userColumns } from './shared';
+import { audit, dummyHash, passwordSchema } from './shared';
 const loginSchema = z.object({
   username: z.string().trim().min(1).max(254),
   password: z.string().min(1).max(128),
@@ -39,54 +47,39 @@ export const authRoutes = [
       await clientRateLimit(request, 'login', 20, 300);
       await rateLimit('login:global', 120, 60);
       await rateLimit('login:' + (await sha256(username)), 8, 300);
-      const candidates = await query<
-        User & { password_hash: string; username_match: boolean }
-      >(
-        // Two rows detect ambiguous usernames or emails without choosing a user.
-        'SELECT u.*,lower(u.username)=$1 username_match FROM qms.users u WHERE u.enabled=true AND (lower(u.username)=$1 OR lower(u.email)=$1) ORDER BY username_match DESC LIMIT 2',
-        [username],
-      );
-      const usernameMatches = candidates.filter((c) => c.username_match);
+      // Two rows detect ambiguous usernames or emails without choosing a user.
+      const candidates = await loginCandidates(username);
+      const usernameMatches = candidates.filter((c) => c.usernameMatch);
       // A unique username takes precedence. Ambiguous usernames never fall back.
-      const u =
+      const found =
         usernameMatches.length === 1
           ? usernameMatches[0]
           : usernameMatches.length === 0 && candidates.length === 1
             ? candidates[0]
             : undefined;
       // Username and email are aliases for one account and share one budget.
-      if (u) await rateLimit('login-account:' + u.id, 8, 300);
+      if (found) await rateLimit('login-account:' + found.user.id, 8, 300);
       // Hash even unknown accounts to avoid fast username enumeration.
       const valid = await verifyPassword(
         input.password,
-        u?.password_hash || dummyHash,
+        found?.passwordHash || dummyHash,
       );
-      if (!u || !valid) {
+      if (!found || !found.passwordHash || !valid) {
         // Failed attempts are audited without the typed identifier, which may
         // be a password entered in the wrong field.
-        await audit(u?.id ?? null, 'login_failed', {
-          reason: u ? 'password' : candidates.length ? 'ambiguous' : 'unknown',
+        await audit(found?.user.id ?? null, 'login_failed', {
+          reason: found ? 'password' : candidates.length ? 'ambiguous' : 'unknown',
         });
-        throw new HttpError(401, 'Incorrect username or password.');
+        throw new HttpError(401, 'Incorrect username or password.', 'BAD_CREDENTIALS');
       }
       const token = randomToken();
-      const [session] = await query<{ issued: boolean }>(
-        'SELECT qms.issue_session($1,$2,$3) issued',
-        [u.id, u.password_hash, await sha256(token)],
-      );
-      if (!session.issued)
-        throw new HttpError(401, 'Your account changed. Please sign in again.');
+      if (!(await issueSession(found.user.id, found.passwordHash, await sha256(token))))
+        throw new HttpError(401, 'Your account changed. Please sign in again.', 'ACCOUNT_CHANGED');
       // Transparently upgrade hashes created with an older work factor.
-      if (needsRehash(u.password_hash))
-        await query(
-          'UPDATE qms.users SET password_hash=$2 WHERE id=$1 AND password_hash=$3',
-          [u.id, await hashPassword(input.password), u.password_hash],
-        );
-      await audit(u.id, 'login');
-      const [user] = await query(
-        `SELECT ${userColumns} FROM qms.users WHERE id=$1`,
-        [u.id],
-      );
+      if (needsRehash(found.passwordHash))
+        await rehashPassword(found.user.id, found.passwordHash, await hashPassword(input.password));
+      await audit(found.user.id, 'login');
+      const user = await userById(found.user.id);
       return json({ user }, 200, { 'Set-Cookie': sessionCookie(token) });
     },
     loginSchema,
@@ -104,18 +97,13 @@ export const authRoutes = [
     sessionRoute,
     'Sign out and revoke the session',
     async ({ request, user }) => {
-      const token = request.headers
-        .get('cookie')
-        ?.match(/(?:^|;\s*)qms_session=([a-f0-9]{64})(?:;|$)/)?.[1];
-      if (token)
-        await query('DELETE FROM qms.sessions WHERE token_hash=$1', [
-          await sha256(token),
-        ]);
+      const token = sessionToken(request);
+      if (token) await revokeSession(await sha256(token));
       if (user.role !== 'customer') await audit(user.id, 'logout');
       // Ending authentication is always allowed. Keep active service ownership
       // intact; the separate presence action still guards against abandonment.
       try {
-        await query('SELECT qms.set_presence($1,false)', [user.id]);
+        await setPresence(user.id, false);
       } catch {
         console.info(JSON.stringify({ event: 'logout_presence_unchanged' }));
       }
@@ -129,29 +117,23 @@ export const authRoutes = [
     'Change the password; other sessions are signed out',
     async ({ request, user }) => {
       if (user.role === 'customer')
-        throw new HttpError(403, 'Customer visits cannot set passwords.');
+        throw new HttpError(403, 'Customer visits cannot set passwords.', 'FORBIDDEN');
       const input = passwordChangeSchema.parse(await body(request));
       await rateLimit('password:' + user.id, 5, 300);
-      const [u] = await query<{ password_hash: string }>(
-        'SELECT password_hash FROM qms.users WHERE id=$1',
-        [user.id],
-      );
-      if (!(await verifyPassword(input.currentPassword, u.password_hash)))
-        throw new HttpError(400, 'Current password is incorrect.');
+      const currentHash = await passwordHashOf(user.id);
+      if (!currentHash || !(await verifyPassword(input.currentPassword, currentHash)))
+        throw new HttpError(400, 'Current password is incorrect.', 'BAD_CREDENTIALS');
       if (input.currentPassword === input.newPassword)
-        throw new HttpError(400, 'Choose a different password.');
+        throw new HttpError(400, 'Choose a different password.', 'INVALID_INPUT');
       const token = randomToken();
-      const [changed] = await query<{ changed: boolean }>(
-        'SELECT qms.change_password($1,$2,$3,$4) changed',
-        [
-          user.id,
-          u.password_hash,
-          await hashPassword(input.newPassword),
-          await sha256(token),
-        ],
+      const changed = await changePassword(
+        user.id,
+        currentHash,
+        await hashPassword(input.newPassword),
+        await sha256(token),
       );
-      if (!changed.changed)
-        throw new HttpError(409, 'Your account changed. Please sign in again.');
+      if (!changed)
+        throw new HttpError(409, 'Your account changed. Please sign in again.', 'ACCOUNT_CHANGED');
       return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(token) });
     },
     passwordChangeSchema,
