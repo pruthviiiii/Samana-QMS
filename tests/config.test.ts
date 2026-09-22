@@ -13,6 +13,7 @@ const keys = [
   'APP_ORIGIN',
   'API_URL',
   'API_PORT',
+  'API_PROXY_TOKEN',
   'PORT',
   'NODE_ENV',
   'SESSION_COOKIE_SECURE',
@@ -117,6 +118,12 @@ describe('API and scheduler configuration', () => {
   });
   it('treats an empty value as unset, the way hosting dashboards do', () =>
     expect(load({ QR_SIGNING_SECRET: '' }).QR_SIGNING_SECRET).toBeUndefined());
+  it('accepts a proxy token of a sensible length and refuses a short one', () => {
+    expect(load({ API_PROXY_TOKEN: 'a-proxy-token-for-the-test-suite' }).API_PROXY_TOKEN).toBe(
+      'a-proxy-token-for-the-test-suite',
+    );
+    expect(() => load({ API_PROXY_TOKEN: 'short' })).toThrow(/API_PROXY_TOKEN/);
+  });
   it('refuses a signing secret that is too short to be one', () =>
     expect(() => load({ QR_SIGNING_SECRET: 'short' })).toThrow(
       /QR_SIGNING_SECRET/,
@@ -157,6 +164,7 @@ describe('Web tier configuration', () => {
     const value = webConfig();
     expect(value.API_URL).toBe('http://api.internal:3001');
     expect(Object.keys(value).sort()).toEqual(['API_URL', 'APP_ORIGIN', 'NODE_ENV']);
+    expect(value.API_PROXY_TOKEN).toBeUndefined();
   });
   it('accepts host:port as private-network hosts hand it out', () => {
     stub({ APP_ORIGIN: 'https://qms.test', API_URL: 'samana-qms-api:10000' });
@@ -165,6 +173,12 @@ describe('Web tier configuration', () => {
   it('refuses to start without the API address', () => {
     stub({ APP_ORIGIN: 'https://qms.test' });
     expect(() => webConfig()).toThrow(/API_URL/);
+  });
+  it('carries the proxy token when given and refuses a short one', () => {
+    stub({ APP_ORIGIN: 'https://qms.test', API_URL: 'api:10000', API_PROXY_TOKEN: 'a-proxy-token-for-the-test-suite' });
+    expect(webConfig().API_PROXY_TOKEN).toBe('a-proxy-token-for-the-test-suite');
+    stub({ APP_ORIGIN: 'https://qms.test', API_URL: 'api:10000', API_PROXY_TOKEN: 'short' });
+    expect(() => webConfig()).toThrow(/API_PROXY_TOKEN/);
   });
   it('refuses an API address that is not one', () => {
     stub({ APP_ORIGIN: 'https://qms.test', API_URL: 'not a url at all' });

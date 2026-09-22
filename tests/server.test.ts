@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { resetConfigForTests } from '../lib/config';
 import type { AddressInfo } from 'node:net';
 import { serve, type ServerType } from '@hono/node-server';
 import { handle } from '../server/handler';
@@ -69,6 +70,25 @@ describe('API service over HTTP', () => {
       body: 'invite=x',
     });
     expect(notJson.status).toBe(415);
+  });
+  it('serves only the web tier when a proxy token is configured, except readiness', async () => {
+    vi.stubEnv('API_PROXY_TOKEN', 'a-proxy-token-for-the-test-suite');
+    resetConfigForTests();
+    try {
+      const direct = await fetch(base + '/api/queue');
+      expect(direct.status).toBe(401);
+      expect(await direct.json()).toMatchObject({ code: 'NOT_VIA_WEB_TIER' });
+      const wrong = await fetch(base + '/api/queue', { headers: { 'x-internal-token': 'not-the-token' } });
+      expect((await wrong.json()).code).toBe('NOT_VIA_WEB_TIER');
+      const viaWeb = await fetch(base + '/api/queue', { headers: { 'x-internal-token': 'a-proxy-token-for-the-test-suite' } });
+      expect(viaWeb.status).toBe(401);
+      expect((await viaWeb.json()).code).toBe('NOT_SIGNED_IN');
+      const readiness = await fetch(base + '/api/health');
+      expect(readiness.status).toBe(200);
+    } finally {
+      vi.unstubAllEnvs();
+      resetConfigForTests();
+    }
   });
   it('does not identify the server software or leak stack traces', async () => {
     const response = await fetch(base + '/api/nothing-here');

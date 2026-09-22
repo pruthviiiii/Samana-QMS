@@ -1,19 +1,29 @@
 # Render Blueprint for Samana QMS: three services.
 #   samana-qms            web tier (standalone Node build of the Next.js app).
 #                         Serves the screens and forwards /api to the API
-#                         service. Holds no database or integration credential.
-#   samana-qms-api        API service (private: reachable only from the other
-#                         services). Hosts the route table, the Prisma client
-#                         and the database pool; runs migrations before it starts.
+#                         service over Render's private network. Holds no
+#                         database or integration credential.
+#   samana-qms-api        API service. Hosts the route table, the Prisma client
+#                         and the database pool; runs migrations before it
+#                         starts. It is a web service so that it works on every
+#                         workspace plan, but it accepts only requests that
+#                         carry API_PROXY_TOKEN, which the web tier adds to
+#                         everything it forwards, so its public address is
+#                         usable by nobody else. On a workspace that allows
+#                         private services, change its type to pserv and the
+#                         two fromService references below to type: pserv.
 #   samana-qms-scheduler  background worker: routing tick, outbox delivery and
 #                         retention, directly against the database.
 # Spec: https://render.com/docs/blueprint-spec
 #
 # Secrets (sync: false) are entered once, on the API service, and never live in
 # git. The scheduler copies its database and integration settings from the API
-# service; the web tier receives only the API's private address.
+# service; the web tier receives only the API's private address and the token.
 # DATABASE_URL is the restricted qms_app role (scripts/create-app-role.mjs);
 # MIGRATE_DATABASE_URL is the owner string the pre-deploy migration runs with.
+# A Blueprint sync never deletes variables removed from this file: after the
+# first sync of this layout, remove the old database and Salesforce values
+# from the web service by hand.
 
 services:
   - type: web
@@ -33,14 +43,19 @@ services:
         value: production
       - key: APP_ORIGIN
         value: https://samana-qms.onrender.com
-      # The API's private host:port; the web tier adds http:// itself.
+      # The API's private host:port on Render's network; the web tier adds http://.
       - key: API_URL
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           property: hostport
+      - key: API_PROXY_TOKEN
+        fromService:
+          type: web
+          name: samana-qms-api
+          envVarKey: API_PROXY_TOKEN
 
-  - type: pserv
+  - type: web
     name: samana-qms-api
     runtime: node
     region: frankfurt
@@ -49,6 +64,8 @@ services:
     buildCommand: npm ci --include=dev && npm run build:api
     preDeployCommand: node scripts/migrate.mjs
     startCommand: node dist-api/api.mjs
+    # Readiness is the one path the API answers without the token.
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -59,6 +76,8 @@ services:
         value: https://samana-qms.onrender.com
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      - key: API_PROXY_TOKEN
+        generateValue: true
       - key: DATABASE_URL
         sync: false
       - key: MIGRATE_DATABASE_URL
@@ -113,51 +132,51 @@ services:
         value: "true"
       - key: DATABASE_URL
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: DATABASE_URL
       - key: SALESFORCE_INSTANCE_URL
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: SALESFORCE_INSTANCE_URL
       - key: SALESFORCE_CLIENT_ID
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: SALESFORCE_CLIENT_ID
       - key: SALESFORCE_CLIENT_SECRET
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: SALESFORCE_CLIENT_SECRET
       - key: SALESFORCE_API_VERSION
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: SALESFORCE_API_VERSION
       - key: SALESFORCE_WRITE_ENABLED
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: SALESFORCE_WRITE_ENABLED
       - key: SMS_ENABLED
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: SMS_ENABLED
       - key: SMS_SENDER
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: SMS_SENDER
       - key: RETENTION_IDENTIFIER_DAYS
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: RETENTION_IDENTIFIER_DAYS
       - key: RETENTION_EVENT_DAYS
         fromService:
-          type: pserv
+          type: web
           name: samana-qms-api
           envVarKey: RETENTION_EVENT_DAYS

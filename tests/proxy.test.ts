@@ -86,6 +86,17 @@ describe('Forwarding /api to the API service', () => {
     const forged = at('/api/queue', { 'x-client-address': '10.0.0.1' });
     expect(forged.headers.get('x-middleware-request-x-client-address')).toBeNull();
   });
+  it('adds the proxy token when it has one and drops any a client sent', () => {
+    vi.stubEnv('API_URL', 'http://api.internal:3001');
+    vi.stubEnv('API_PROXY_TOKEN', 'a-proxy-token-for-the-test-suite');
+    const forwarded = at('/api/queue', { 'x-internal-token': 'forged' });
+    expect(forwarded.headers.get('x-middleware-request-x-internal-token')).toBe(
+      'a-proxy-token-for-the-test-suite',
+    );
+    vi.stubEnv('API_PROXY_TOKEN', '');
+    const without = at('/api/queue', { 'x-internal-token': 'forged' });
+    expect(without.headers.get('x-middleware-request-x-internal-token')).toBeNull();
+  });
   it('does not put a page policy on API responses', () => {
     vi.stubEnv('API_URL', 'http://api.internal:3001');
     expect(at('/api/health').headers.get('content-security-policy')).toBeNull();

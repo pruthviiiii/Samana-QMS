@@ -70,6 +70,14 @@ const serverSchema = z
       .string()
       .min(16, 'WORKER_SECRET must be at least 16 characters')
       .optional(),
+    // When set, the API accepts only requests that carry this token in
+    // x-internal-token, which the web tier adds to everything it forwards. It
+    // makes a public API address unusable by anyone but the web tier; on a
+    // private network it is defence in depth.
+    API_PROXY_TOKEN: z
+      .string()
+      .min(16, 'API_PROXY_TOKEN must be at least 16 characters')
+      .optional(),
     BOOTSTRAP_PASSWORD: z.string().optional(),
     // Salesforce.
     SALESFORCE_INSTANCE_URL: https
@@ -148,6 +156,11 @@ const webSchema = z.object({
     .min(1, 'API_URL is required: the address of the API service')
     .transform((value) => (/^https?:\/\//.test(value) ? value : 'http://' + value))
     .pipe(z.url({ error: 'API_URL must be a URL or host:port' })),
+  // Sent as x-internal-token on every forwarded request when the API requires it.
+  API_PROXY_TOKEN: z
+    .string()
+    .min(16, 'API_PROXY_TOKEN must be at least 16 characters')
+    .optional(),
 });
 
 export type Config = z.infer<typeof serverSchema>;
@@ -228,6 +241,7 @@ export function assertWebConfig(): WebConfig {
       nodeEnv: value.NODE_ENV,
       appOrigin: value.APP_ORIGIN,
       apiUrl: value.API_URL,
+      proxyToken: !!value.API_PROXY_TOKEN,
     }),
   );
   return value;

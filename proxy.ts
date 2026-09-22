@@ -43,9 +43,13 @@ export function proxy(request: NextRequest) {
     );
     const headers = new Headers(request.headers);
     headers.delete('x-client-address');
+    headers.delete('x-internal-token');
     const forwarded = request.headers.get('x-forwarded-for');
     const client = forwarded?.split(',').pop()?.trim();
     if (client) headers.set('x-client-address', client);
+    // The token that makes the API's address usable only through this tier.
+    const token = process.env.API_PROXY_TOKEN;
+    if (token) headers.set('x-internal-token', token);
     return NextResponse.rewrite(target, { request: { headers } });
   }
   const production = process.env.NODE_ENV === 'production';
