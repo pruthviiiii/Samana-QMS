@@ -67,7 +67,7 @@
 <body>
 
 <h1>Samana QMS: architecture review, and what was changed</h1>
-<p class="meta">22 September 2026 · Second review, read as an enterprise architect · Code at commit 7486861 · Written for management, engineering, and whoever reviews this next</p>
+<p class="meta">22 September 2026 · Second review, read as an enterprise architect · Code at commit 78705c2 · Written for management, engineering, and whoever reviews this next</p>
 
 <div class="lead">
   <p><b>Verdict: production-ready, and now defensible line by line.</b> This is a stricter pass than the external review of 21 September. It read every server module, the data hooks, the workspace shell, the schema and the tests, and judged them against enterprise practice rather than against the earlier review's list. It found 15 things worth changing in the application and 2 in the Salesforce client. All 17 are done, each with a test or a measured proof, and the decisions kept on purpose are defended below with their cost of reversal.</p>
@@ -193,7 +193,7 @@ npm run build &amp;&amp; npm run build:worker
   <thead><tr><th>Commit</th><th>Date</th><th>Scope</th></tr></thead>
   <tbody>
   <tr><td class="n">7486861</td><td class="n">22 Sep</td><td>Response to the first review, with the defence section</td></tr>
-  <tr><td class="n">7486861</td><td class="n">22 Sep</td><td>This review: configuration boundary and boot validation; nonce script policy with per-request rendering; migration 016 (four indexes, atomic limiter); scheduler on two cadences with shutdown; typed errors with stable codes and 500 semantics; Salesforce probe cache and breaker narrowing; role groups shared by both sides; framework router; refs in effects; dead rules removed; display session kept; browser test project, configuration and policy suites, lifecycle scenario isolated, coverage thresholds in CI; 91 dead stylesheet blocks removed with proof; timers extracted from the shell</td></tr>
+  <tr><td class="n">78705c2</td><td class="n">22 Sep</td><td>This review: configuration boundary and boot validation; nonce script policy with per-request rendering; migration 016 (four indexes, atomic limiter); scheduler on two cadences with shutdown; typed errors with stable codes and 500 semantics; Salesforce probe cache and breaker narrowing; role groups shared by both sides; framework router; refs in effects; dead rules removed; display session kept; browser test project, configuration and policy suites, lifecycle scenario isolated, coverage thresholds in CI; 91 dead stylesheet blocks removed with proof; timers extracted from the shell</td></tr>
   </tbody>
 </table>
 <p class="small">Companion documents: <code>docs/review-response-2026-09-22.html</code> (the response to the first review), <code>docs/review-checklist-2026-09-21.md</code> section I, <code>docs/requirements.md</code> decisions, <code>.env.example</code>, and the design document "Samana QMS – Demo Flow and Technical Design".</p>
