@@ -8,6 +8,13 @@ import {
   vi,
 } from 'vitest';
 import { query } from '../lib/db';
+import { resetConfigForTests } from '../lib/config';
+// Settings are validated once and cached, so a test that switches an
+// integration on asks for them to be read again.
+const setEnv = (name: string, value: string) => {
+  vi.stubEnv(name, value);
+  resetConfigForTests();
+};
 const sf = vi.hoisted(() => vi.fn());
 vi.mock('../lib/salesforce', () => ({ sfRequest: sf }));
 import { processJobs, salesforcePayload } from '../lib/jobs';
@@ -54,8 +61,8 @@ beforeAll(async () => {
   ticketId = t.ticket.id;
 });
 beforeEach(() => {
-  vi.stubEnv('SALESFORCE_WRITE_ENABLED', 'false');
-  vi.stubEnv('SMS_ENABLED', 'false');
+  setEnv('SALESFORCE_WRITE_ENABLED', 'false');
+  setEnv('SMS_ENABLED', 'false');
   fixtureRequests = 0;
   sf.mockReset();
   sf.mockRejectedValue(
@@ -64,7 +71,7 @@ beforeEach(() => {
 });
 
 async function prepareSalesforceDelivery(response: Record<string, unknown>) {
-  vi.stubEnv('SALESFORCE_WRITE_ENABLED', 'true');
+  setEnv('SALESFORCE_WRITE_ENABLED', 'true');
   sf.mockImplementation(async (path: string, options?: RequestInit) => {
     if (typeof options?.body !== 'string')
       throw new Error('Salesforce fixture expects a serialized JSON payload.');
@@ -105,12 +112,13 @@ afterAll(async () => {
     if (userId) await query('DELETE FROM qms.users WHERE id=$1', [userId]);
   } finally {
     vi.unstubAllEnvs();
+    resetConfigForTests();
   }
 });
 describe('External delivery safeguards', { concurrent: false }, () => {
   it('never claims Salesforce or SMS work while those integrations are disabled', async () => {
-    vi.stubEnv('SALESFORCE_WRITE_ENABLED', 'false');
-    vi.stubEnv('SMS_ENABLED', 'false');
+    setEnv('SALESFORCE_WRITE_ENABLED', 'false');
+    setEnv('SMS_ENABLED', 'false');
     await query(
       "UPDATE qms.outbox SET status='processing',attempts=1,locked_at=now()-interval '6 minutes' WHERE ticket_id=$1",
       [ticketId],

@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Maximize, Volume2, VolumeX, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/client';
+import { ApiError, api } from '@/lib/client';
 import { useLive } from './use-live';
 type DisplayTicket = {
   number: string;
@@ -57,7 +57,7 @@ export default function TVDisplay() {
       if (stopped.current) return;
       // An expired sign-in cannot heal itself: say so instead of blaming the
       // network, and stop asking.
-      if ((e as Error & { status?: number }).status === 401) {
+      if ((e as ApiError).status === 401) {
         stopped.current = true;
         setExpired(true);
         setError('');

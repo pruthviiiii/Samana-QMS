@@ -1,3 +1,4 @@
+import { config } from './config';
 import { query } from './db';
 import { sfRequest } from './salesforce';
 import { HttpError } from './http';
@@ -69,11 +70,11 @@ export function salesforcePayload(
   };
 }
 export async function processJobs() {
-  const smsEnabled =
-    process.env.SMS_ENABLED === 'true' &&
-    !!process.env.SMS_GATEWAY_URL &&
-    !!process.env.SMS_GATEWAY_TOKEN;
-  const sfEnabled = process.env.SALESFORCE_WRITE_ENABLED === 'true';
+  const settings = config();
+  const gateway = settings.SMS_GATEWAY_URL;
+  const gatewayToken = settings.SMS_GATEWAY_TOKEN;
+  const smsEnabled = settings.SMS_ENABLED && !!gateway && !!gatewayToken;
+  const sfEnabled = settings.SALESFORCE_WRITE_ENABLED;
   await query(
     "UPDATE qms.outbox SET status='disabled',last_error=CASE kind WHEN 'sms' THEN 'SMS gateway is not configured or enabled.' ELSE 'Salesforce write-back is disabled pending approval.' END WHERE status='pending' AND ((kind='sms' AND NOT $1) OR (kind='salesforce' AND NOT $2))",
     [smsEnabled, sfEnabled],
@@ -92,10 +93,11 @@ export async function processJobs() {
   let sent = 0;
   for (const job of jobs) {
     try {
-      const [ticket] = await query<Record<string, unknown>>(
+      const [ticket] = await query<Record<string, unknown> | undefined>(
         `SELECT v.*,u.sf_id agent_sf_id,u.email agent_email,l.customer->>'email' customer_email FROM qms.ticket_view v LEFT JOIN qms.users u ON u.id=v.assigned_to JOIN qms.lookups l ON l.id=v.lookup_id WHERE v.id=$1`,
         [job.ticket_id],
       );
+      if (!ticket) throw new Error('The ticket for this delivery no longer exists.');
       let reference = '';
       if (job.kind === 'sms') {
         if (
@@ -105,20 +107,18 @@ export async function processJobs() {
           !ticket.mobile
         )
           throw new Error('SMS eligibility changed.');
-        const url = new URL(process.env.SMS_GATEWAY_URL!);
-        if (url.protocol !== 'https:')
-          throw new Error('SMS gateway requires HTTPS.');
-        const message = `SAMANA: Your ticket ${String(ticket.number)} for ${String(ticket.service_name)} is ready. Follow your visit: ${process.env.APP_ORIGIN}/visit/${String(ticket.public_token)}`;
+        const url = new URL(gateway as string);
+        const message = `SAMANA: Your ticket ${String(ticket.number)} for ${String(ticket.service_name)} is ready. Follow your visit: ${settings.APP_ORIGIN}/visit/${String(ticket.public_token)}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: {
-            Authorization: 'Bearer ' + process.env.SMS_GATEWAY_TOKEN,
+            Authorization: 'Bearer ' + gatewayToken,
             'Content-Type': 'application/json',
             'Idempotency-Key': job.id,
           },
           body: JSON.stringify({
             to: ticket.mobile,
-            sender: process.env.SMS_SENDER || 'SAMANA',
+            sender: settings.SMS_SENDER || 'SAMANA',
             message,
             idempotencyKey: job.id,
           }),

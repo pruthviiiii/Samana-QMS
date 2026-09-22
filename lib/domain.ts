@@ -39,6 +39,40 @@ export const STAFF_ROLES = [
   'reception',
   'display',
 ] as const;
+// Role groups, defined once and used by both sides: the API route table
+// declares access with them (lib/api/shared.ts) and the workspace decides what
+// to show with them, so a role can never mean one thing on the server and
+// another in the browser.
+/** Everyone who works inside the staff workspace. */
+export const WORKSPACE_ROLES = [
+  'admin',
+  'hod',
+  'manager',
+  'agent',
+  'reception',
+] as const satisfies readonly Role[];
+/** Roles that can hold and serve a customer. */
+export const SERVING_ROLES = [
+  'admin',
+  'hod',
+  'manager',
+  'agent',
+] as const satisfies readonly Role[];
+/** Roles that oversee other people's work. */
+export const MANAGER_ROLES = ['admin', 'hod', 'manager'] as const satisfies readonly Role[];
+/** Roles that may display the rotating check-in QR code. */
+export const QR_ROLES = [
+  'admin',
+  'hod',
+  'manager',
+  'reception',
+  'display',
+] as const satisfies readonly Role[];
+const has = (list: readonly Role[], role: Role | undefined) =>
+  !!role && list.includes(role);
+export const isWorkspaceRole = (role?: Role) => has(WORKSPACE_ROLES, role);
+export const isServingRole = (role?: Role) => has(SERVING_ROLES, role);
+export const canShowCheckinQr = (role?: Role) => has(QR_ROLES, role);
 export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Administrator',
   hod: 'Head of Department',
@@ -124,8 +158,7 @@ export interface Ticket {
   emirates_id?: string | null;
   passport_number?: string | null;
 }
-export const isManager = (role: Role) =>
-  ['admin', 'hod', 'manager'].includes(role);
+export const isManager = (role?: Role) => has(MANAGER_ROLES, role);
 export function normalizeIdentifier(
   type: IdentifierType,
   value: string,
@@ -149,13 +182,6 @@ export function normalizeIdentifier(
     throw new Error('Enter a valid passport number (4–20 letters or digits).');
   return passport;
 }
-export function smsEligible(
-  type: IdentifierType,
-  registered: boolean,
-  mobile: string | null,
-) {
-  return type === 'mobile' && registered && !!mobile;
-}
 export function minutesBetween(start: string, end?: string | null) {
   return Math.max(
     0,
@@ -176,18 +202,4 @@ export function csvCell(value: unknown) {
           : (JSON.stringify(value) ?? '');
   if (/^[=+\-@\t\r\n]/.test(s)) s = "'" + s;
   return '"' + s.replaceAll('"', '""') + '"';
-}
-export function canTransition(
-  from: TicketStatus,
-  to: TicketStatus,
-  manager = false,
-) {
-  return (
-    (to === 'called' && from === 'waiting') ||
-    (to === 'serving' && from === 'called') ||
-    (to === 'closed' &&
-      (from === 'serving' ||
-        (manager && ['waiting', 'called'].includes(from)))) ||
-    (to === 'no_show' && from === 'called')
-  );
 }

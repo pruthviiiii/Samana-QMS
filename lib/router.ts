@@ -1,4 +1,5 @@
 import type { ZodType } from 'zod';
+import { config } from './config';
 import { HttpError, requireUser, sameOrigin } from './http';
 import { sha256 } from './security';
 import type { Role, User } from './domain';
@@ -82,7 +83,7 @@ export async function dispatch(routes: Route[], request: Request) {
     sameOrigin(request);
   let user = anonymous;
   if (route.auth.kind === 'worker') {
-    const secret = process.env.WORKER_SECRET;
+    const secret = config().WORKER_SECRET;
     const token = request.headers.get('authorization')?.replace(/^Bearer /, '');
     if (!secret || !token || (await sha256(token)) !== (await sha256(secret)))
       throw new HttpError(401, 'Unauthorized.');

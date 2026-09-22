@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { config } from '../config';
 import { query } from '../db';
 import { HttpError, body, json } from '../http';
 import { processJobs } from '../jobs';
@@ -66,10 +67,8 @@ export const publicRoutes = [
       // The first administrator's password must leave the host once used;
       // in production its presence pages the monitor instead of relying on a
       // README instruction.
-      if (
-        process.env.NODE_ENV === 'production' &&
-        process.env.BOOTSTRAP_PASSWORD
-      )
+      const settings = config();
+      if (settings.NODE_ENV === 'production' && settings.BOOTSTRAP_PASSWORD)
         problems.push('bootstrap_password_present');
       return json(
         {

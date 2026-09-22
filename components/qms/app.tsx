@@ -8,6 +8,7 @@ import {
   lazy,
   Suspense,
 } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { ViewBoundary } from './view-boundary';
 import {
@@ -46,13 +47,21 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { api, post, send } from '@/lib/client';
-import { type User, isManager, roleLabel } from '@/lib/domain';
+import { ApiError, api, post, send } from '@/lib/client';
+import {
+  type User,
+  canShowCheckinQr,
+  isManager,
+  isServingRole,
+  isWorkspaceRole,
+  roleLabel,
+} from '@/lib/domain';
 import CheckIn from './check-in';
 import TicketDetail from './ticket-detail';
 import Login from './login';
 import QueueTable from './queue-table';
 import { useQueue } from './use-queue';
+import { useAutoClear, useCheckinLink, useHeartbeat } from './use-workspace';
 import { ServicePulse, QueueBoard, QueueSkeleton } from './experience';
 import {
   Command,
@@ -80,15 +89,18 @@ const viewNames: Record<string, string> = {
   checkin: 'Customer check-in',
   audit: 'Activity log',
 };
-const STAFF = ['admin', 'hod', 'manager', 'agent', 'reception'];
 export default function QmsApp({
   initialView = 'overview',
 }: {
   initialView?: string;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  // The address is the view. Next.js keeps the two in step, including the
+  // browser's back and forward buttons, so there is no history listener here.
+  const view = pathname === '/' ? 'overview' : pathname.slice(1).split('/')[0] || initialView;
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
-  const [view, setView] = useState(initialView);
   const [toast, setToast] = useState('');
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
@@ -98,7 +110,6 @@ export default function QmsApp({
   const [selected, setSelected] = useState<string | null>(null);
   const [issueOpen, setIssueOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
-  const [qr, setQr] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -126,15 +137,11 @@ export default function QmsApp({
       document.removeEventListener('pointerdown', outside);
     };
   }, []);
-  const manager = user ? isManager(user.role) : false;
-  const canShowQr =
-    !!user &&
-    ['admin', 'hod', 'manager', 'reception', 'display'].includes(user.role);
-  const serviceStaff =
-    !!user && ['admin', 'hod', 'manager', 'agent'].includes(user.role);
-  const canIssue = !!user && STAFF.includes(user.role);
-  const queueEnabled =
-    !!user && !user.must_change_password && STAFF.includes(user.role);
+  const manager = isManager(user?.role);
+  const canShowQr = canShowCheckinQr(user?.role);
+  const serviceStaff = isServingRole(user?.role);
+  const canIssue = isWorkspaceRole(user?.role);
+  const queueEnabled = canIssue && !user?.must_change_password;
   const { data, error, loading, updated, live, refresh, setError } = useQueue({
     enabled: queueEnabled,
     params: {
@@ -164,63 +171,30 @@ export default function QmsApp({
         window.location.replace('/check-in');
         return;
       }
-      if (result.user.role === 'display') setView('display');
+      if (result.user.role === 'display' && view !== 'display')
+        router.replace('/display');
     } catch (e) {
-      const status = (e as Error & { status?: number }).status;
-      if (status !== 401) setError((e as Error).message);
+      if ((e as ApiError).status !== 401) setError((e as Error).message);
       setUser(null);
     } finally {
       setChecking(false);
     }
-  }, [setError]);
+  }, [setError, router, view]);
   useEffect(() => {
     void refreshIdentity();
   }, [refreshIdentity]);
-  useEffect(() => {
-    if (!user?.online || !serviceStaff || user.must_change_password) return;
-    const heartbeat = () =>
-      send('PUT', 'presence', { online: true }).catch(() =>
-        setError('Unable to update your availability. Check your connection.'),
-      );
-    void heartbeat();
-    // Every 15 s; the database treats an agent silent for 45 s as gone.
-    const id = setInterval(heartbeat, 15000);
-    return () => clearInterval(id);
-  }, [user?.online, user?.must_change_password, serviceStaff, setError]);
-  useEffect(() => {
-    if (!toast) return;
-    const id = setTimeout(() => setToast(''), 7000);
-    return () => clearTimeout(id);
-  }, [toast]);
-  useEffect(() => {
-    if (!qrOpen) return;
-    let active = true;
-    const load = () =>
-      api<{ url: string }>('checkin-link')
-        .then((x) => {
-          if (active) setQr(x.url);
-        })
-        .catch((e) => setError(e.message));
-    void load();
-    const timer = setInterval(load, 120000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [qrOpen, setError]);
+  useHeartbeat(
+    !!user?.online && serviceStaff && !user.must_change_password,
+    setError,
+  );
+  useAutoClear(toast, setToast);
+  const qr = useCheckinLink(qrOpen, setError);
   function navigate(next: string) {
-    setView(next);
     setMenuOpen(false);
     setCommandOpen(false);
     setPage(1);
-    window.history.pushState(null, '', next === 'overview' ? '/' : '/' + next);
+    router.push(next === 'overview' ? '/' : '/' + next);
   }
-  useEffect(() => {
-    const back = () =>
-      setView(window.location.pathname.split('/')[1] || 'overview');
-    window.addEventListener('popstate', back);
-    return () => window.removeEventListener('popstate', back);
-  }, []);
   async function presence() {
     if (!user) return;
     // Going online is the natural moment to ask for desktop notifications.

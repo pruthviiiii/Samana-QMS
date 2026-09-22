@@ -15,7 +15,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts tests/routes.test.ts tests/openapi.test.ts
+      - run: npx vitest run --project server tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts tests/routes.test.ts tests/openapi.test.ts tests/config.test.ts tests/proxy.test.ts
+      - run: npx vitest run --project browser
       - run: npm audit --audit-level=high
       - run: npm run build
       - run: npm run build:worker
@@ -54,4 +55,4 @@ jobs:
           WORKER_SECRET: ci-synthetic-worker-key
         run: |
           node scripts/migrate.mjs
-          npm test
+          npm run test:coverage

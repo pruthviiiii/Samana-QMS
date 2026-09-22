@@ -1,3 +1,4 @@
+import { config } from './config';
 import { randomToken, sha256 } from './security';
 import { transaction } from './db';
 import type { Customer } from './domain';
@@ -11,9 +12,13 @@ import {
 } from './http';
 const encoder = new TextEncoder();
 async function signature(value: string) {
-  const secret = process.env.QR_SIGNING_SECRET;
+  const secret = config().QR_SIGNING_SECRET;
   if (!secret)
-    throw new HttpError(503, 'Mobile check-in has not been configured.');
+    throw new HttpError(
+      503,
+      'Mobile check-in has not been configured.',
+      'QR_NOT_CONFIGURED',
+    );
   const key = await crypto.subtle.importKey(
     'raw',
     encoder.encode(secret),
@@ -33,8 +38,7 @@ export async function checkinLink() {
   const expires = Math.floor(Date.now() / 1000) + 300;
   const payload = `checkin.${expires}`;
   const token = payload + '.' + (await signature(payload));
-  const origin = process.env.APP_ORIGIN;
-  if (!origin) throw new HttpError(503, 'App origin is not configured.');
+  const origin = config().APP_ORIGIN;
   return {
     url: origin + '/check-in?invite=' + token,
     expiresAt: new Date(expires * 1000).toISOString(),
@@ -57,7 +61,16 @@ export async function startGuest(request: Request, invite: string) {
     );
   try {
     const existing = await requireUser(request);
-    if (existing.role !== 'display') return json({ ok: true });
+    // A signed-in person keeps their session. A reception TV must keep its
+    // own: opening the check-in link there would otherwise sign the screen
+    // out and leave the waiting room blank.
+    if (existing.role === 'display')
+      throw new HttpError(
+        409,
+        'This screen is signed in as a display. Please scan the QR code with a phone.',
+        'DISPLAY_SESSION',
+      );
+    return json({ ok: true });
   } catch (e) {
     if (!(e instanceof HttpError) || e.status !== 401) throw e;
   }

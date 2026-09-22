@@ -1239,10 +1239,7 @@ tbody tr:hover {
   padding: 17px 0;
   gap: 22px;
 }
-.detail-label {
-  font-size: 11px;
-  color: #8b957e;
-}
+
 .detail-grid strong {
   font-size: 12px;
   color: #44523b;
@@ -1296,17 +1293,12 @@ tbody tr:hover {
 .timeline h3 {
   font-size: 13px;
 }
-.timeline-item strong {
-  font-size: 12px;
-}
+
 .timeline-item p {
   font-size: 11px;
   line-height: 1.7;
 }
-.timeline-item small {
-  font-size: 10px;
-  color: #9aa28c;
-}
+
 .detail-disclosure {
   border-top: 1px solid #e3e8d9;
   padding-top: 15px;
@@ -2245,9 +2237,7 @@ textarea {
     align-items: flex-start;
     gap: 6px;
   }
-  .floor-services button > i {
-    margin-top: 5px;
-  }
+
   .floor-services button > svg {
     display: none;
   }
@@ -2562,9 +2552,7 @@ textarea {
     min-height: 131px;
     border-radius: 12px;
   }
-  .stat-card .stat-label {
-    font-size: 11px;
-  }
+
   .stat-card > strong {
     font-size: 33px;
     margin: 12px 0 7px;
@@ -2679,12 +2667,7 @@ textarea {
   .floor-services button > svg {
     display: none;
   }
-  .floor-services strong {
-    font-size: 11px;
-  }
-  .floor-services small {
-    font-size: 9px;
-  }
+
   .floor-clear {
     font-size: 9px;
     line-height: 1.6;
@@ -2801,10 +2784,7 @@ textarea {
     flex-direction: column;
     gap: 5px;
   }
-  .mobile-navigation .nav-item {
-    font-size: 13px;
-    min-height: 46px;
-  }
+
   .mobile-nav-tools {
     display: flex;
     flex-direction: column;
@@ -3004,9 +2984,7 @@ textarea {
     margin-top: 24px;
     padding-top: 21px;
   }
-  .login-help p {
-    font-size: 10px;
-  }
+
   .login-form-panel footer {
     margin-top: 29px;
     font-size: 9px;

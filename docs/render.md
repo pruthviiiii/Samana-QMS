@@ -39,6 +39,16 @@ Other settings in the Blueprint: `TRUSTED_CLIENT_IP_HEADER=x-forwarded-for` turn
 per-address rate limits using the address Render's proxy appends; `RETENTION_IDENTIFIER_DAYS`
 and `RETENTION_EVENT_DAYS` stay empty (keep everything) until a retention period is agreed.
 
+Both services validate every setting when they start (`lib/config.ts`). A deploy with a
+missing or contradictory value fails at boot with a message naming the variable, so it never
+serves traffic half configured. The two rules most likely to bite: `SESSION_COOKIE_SECURE`
+must be `true` when `APP_ORIGIN` is `https://` (it is, in the Blueprint), and switching
+`SMS_ENABLED` or `SALESFORCE_WRITE_ENABLED` on requires the matching connection values.
+
+Every page renders per request. The browser policy allows scripts only by a nonce minted for
+that request, so a prerendered page would carry a stale nonce; this costs a server render per
+page load and buys a policy that refuses injected scripts outright.
+
 ## First run
 
 `DATABASE_URL` can point at any PostgreSQL server Render can reach over the network (a

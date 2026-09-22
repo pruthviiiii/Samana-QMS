@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Clock3, ArrowRight, PhoneCall } from 'lucide-react';
-import { api, post } from '@/lib/client';
+import { ApiError, api, post } from '@/lib/client';
 import CheckIn from './check-in';
 import type { Ticket } from '@/lib/domain';
 export default function MobileVisit({ statusToken }: { statusToken?: string }) {
@@ -41,7 +41,7 @@ export default function MobileVisit({ statusToken }: { statusToken?: string }) {
             if (!active) return;
             setError(e.message);
             // A dead link stays dead; stop asking.
-            if ((e as Error & { status?: number }).status === 404) stop();
+            if ((e as ApiError).status === 404) stop();
           });
       void load();
       timer = setInterval(load, 5000);

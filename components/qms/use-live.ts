@@ -6,8 +6,12 @@ import { useEffect, useRef, useState } from 'react';
 // its own polling interval. Returns whether live updates are active.
 export function useLive(enabled: boolean, onChange: () => void) {
   const [live, setLive] = useState(false);
+  // Mirrored in an effect rather than during render: the subscription is set
+  // up once, and a discarded render must not write to a ref.
   const latest = useRef(onChange);
-  latest.current = onChange;
+  useEffect(() => {
+    latest.current = onChange;
+  });
   useEffect(() => {
     if (!enabled || typeof EventSource === 'undefined') return;
     const source = new EventSource('/api/events');

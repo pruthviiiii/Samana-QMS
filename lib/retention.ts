@@ -1,19 +1,15 @@
+import { config } from './config';
 import { query } from './db';
 // Retention is a policy the organisation sets, not a default the code picks.
 // RETENTION_IDENTIFIER_DAYS anonymises the customer's name and identifiers on
 // tickets closed longer ago than that; RETENTION_EVENT_DAYS deletes older
-// audit events. Unset or 0 keeps everything. The scheduler tick applies the
-// policy at most once an hour (the throttle lives in qms.apply_retention).
-function days(name: string) {
-  const value = process.env[name];
-  return value && /^\d{1,5}$/.test(value) && Number(value) > 0
-    ? Number(value)
-    : null;
-}
+// audit events. Unset keeps everything. The scheduler applies the policy at
+// most once an hour (the throttle lives in qms.apply_retention).
 export function retentionPolicy() {
+  const settings = config();
   return {
-    identifierDays: days('RETENTION_IDENTIFIER_DAYS'),
-    eventDays: days('RETENTION_EVENT_DAYS'),
+    identifierDays: settings.RETENTION_IDENTIFIER_DAYS ?? null,
+    eventDays: settings.RETENTION_EVENT_DAYS ?? null,
   };
 }
 export async function applyRetention() {

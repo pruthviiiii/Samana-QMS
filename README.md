@@ -28,7 +28,7 @@ In a second terminal:
 npm run dev
 ```
 
-Open the exact URL printed by the server. Set `APP_ORIGIN` to that origin. Local HTTP requires `SESSION_COOKIE_SECURE=false`; any HTTPS deployment must use `true`. No credentials are embedded in browser code.
+Open the exact URL printed by the server. Set `APP_ORIGIN` to that origin. The session cookie's Secure flag must agree with the origin's scheme: a local `http://` setup needs `SESSION_COOKIE_SECURE=false`, and an `https://` deployment uses `true` (the default). Every setting is validated once at start (`lib/config.ts`); a wrong or missing value stops the server with a message naming the variable, and `.env.example` documents each rule. No credentials are embedded in browser code.
 
 Sign in using `BOOTSTRAP_USERNAME` (currently `admin`) and `BOOTSTRAP_PASSWORD` from the local `.env`. Change the temporary password when prompted. Bootstrap never overwrites an existing administrator. Remove the bootstrap password from a production host after provisioning.
 
@@ -104,12 +104,13 @@ POD2 ticket writeback and the two-class Apex fix were explicitly approved. Its R
 npm run typecheck
 npm run lint
 npm test
+npm run test:coverage
 npm audit --audit-level=high
 ```
 
-Full tests require a PostgreSQL database named exactly `samana_qms_test`, on any server. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts tests/routes.test.ts tests/openapi.test.ts`. Applied migrations are checksummed; editing one after it has run is refused by `scripts/migrate.mjs`, so always add a new file. `npm run api:docs` regenerates `docs/openapi.json` from the route table; a test fails when it is stale.
+Full tests require a PostgreSQL database named exactly `samana_qms_test`, on any server. Put its URL and synthetic QR/origin settings in ignored `.env.test`, then migrate it using `node --env-file=.env.test scripts/migrate.mjs`. Tests refuse another database name. Salesforce is mocked in API tests; live read-only verification is separate. The suite has two projects: `server` (domain, API, database, delivery, security, configuration and browser-policy suites in Node) and `browser` (component tests for the check-in screen and the live queue table in a DOM, `tests/ui/`). `npm run test:coverage` runs both and fails when coverage drops below the thresholds in `vitest.config.ts`. Unit tests can run without a database: `npx vitest run tests/domain.test.ts tests/apex-only.test.ts tests/scheduler.test.ts tests/events.test.ts tests/routes.test.ts tests/openapi.test.ts`. Applied migrations are checksummed; editing one after it has run is refused by `scripts/migrate.mjs`, so always add a new file. `npm run api:docs` regenerates `docs/openapi.json` from the route table; a test fails when it is stale.
 
-CI checks types, lint, unit tests, dependency audit and both builds. The database job starts a PostgreSQL 18 container inside the workflow, migrates it and runs the full suite, so no external database or secret is needed. Browser/device acceptance remains pending because no controllable browser was connected during implementation. Test real mobile QR scanning, Arabic layout, desktop notifications, printing, TV fullscreen/audio, and reconnect behavior before launch.
+CI checks types, lint, the unit and browser tests, dependency audit and both builds. The database job starts a PostgreSQL 18 container inside the workflow, migrates it and runs the full suite with coverage thresholds, so no external database or secret is needed. Device acceptance remains pending because no real phones, printer or TV were connected during implementation. Test real mobile QR scanning, Arabic layout, desktop notifications, printing, TV fullscreen/audio, and reconnect behavior before launch.
 
 ## Operations
 

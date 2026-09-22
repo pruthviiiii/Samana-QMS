@@ -1,6 +1,8 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { query } from '../lib/db';
 import { hashPassword, sha256 } from '../lib/security';
+import { resetConfigForTests } from '../lib/config';
+import { HttpError } from '../lib/errors';
 import type { Customer } from '../lib/domain';
 const lookup = vi.hoisted(() => vi.fn());
 const search = vi.hoisted(() => vi.fn());
@@ -17,7 +19,6 @@ let adminCookie = '';
 let agentCookie = '';
 let adminId = '';
 let agentId = '';
-let activeTicket = '';
 let guestCookie = '';
 const loginFixtures: { id: string; username: string; email: string }[] = [];
 function request(
@@ -269,13 +270,25 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
     expect(lookup).not.toHaveBeenCalled();
   });
   it('keeps provider errors distinct from no match', async () => {
-    lookup.mockRejectedValueOnce(new Error('Provider unreachable'));
-    const result = await send('customers/lookup', 'POST', {
+    // What the real client throws when Salesforce cannot be reached.
+    lookup.mockRejectedValueOnce(
+      new HttpError(502, 'Salesforce is temporarily unreachable.', 'X'),
+    );
+    const unreachable = await send('customers/lookup', 'POST', {
       type: 'mobile',
       value: '971500000001',
     });
-    expect(result.response.status).toBe(503);
-    expect(result.result).not.toHaveProperty('lookupId');
+    expect(unreachable.response.status).toBe(502);
+    expect(unreachable.result).not.toHaveProperty('lookupId');
+    // An unexpected fault is a server error, never a lookup that found nobody.
+    lookup.mockRejectedValueOnce(new Error('unexpected'));
+    const faulty = await send('customers/lookup', 'POST', {
+      type: 'mobile',
+      value: '971500000002',
+    });
+    expect(faulty.response.status).toBe(500);
+    expect(faulty.result.code).toBe('INTERNAL_ERROR');
+    expect(faulty.result).not.toHaveProperty('lookupId');
   });
   it('issues and persists a guest ticket exactly once', async () => {
     lookup.mockResolvedValueOnce(guest);
@@ -296,17 +309,38 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
     ]);
     expect(a.response.status).toBe(201);
     expect(a.result.id).toBe(b.result.id);
-    activeTicket = String(a.result.id);
+    const issued = String(a.result.id);
     expect(
-      await query('SELECT id FROM qms.tickets WHERE id=$1', [activeTicket]),
+      await query('SELECT id FROM qms.tickets WHERE id=$1', [issued]),
     ).toHaveLength(1);
     expect(
       await query(
         "SELECT id FROM qms.outbox WHERE ticket_id=$1 AND kind='sms'",
-        [activeTicket],
+        [issued],
       ),
     ).toHaveLength(0);
   });
+  // One customer's visit from check-in to receipt. The steps are a scenario
+  // and run in order by design; the ticket they share is issued here, not
+  // left behind by an earlier test, so no step depends on another passing.
+  describe('Ticket lifecycle', { concurrent: false }, () => {
+    let activeTicket = '';
+    beforeAll(async () => {
+      lookup.mockResolvedValueOnce(guest);
+      const found = await send('customers/lookup', 'POST', {
+        type: 'mobile',
+        value: '9716' + Date.now().toString().slice(-8),
+      });
+      expect(found.response.status).toBe(200);
+      const created = await send('tickets', 'POST', {
+        lookupId: found.result.lookupId,
+        serviceId: 'general',
+        unitId: null,
+        requestId: crypto.randomUUID(),
+      });
+      expect(created.response.status).toBe(201);
+      activeTicket = String(created.result.id);
+    });
   it('stops exposing notifications to an agent after reassignment', async () => {
     await query("SELECT qms.assign_ticket($1,$2,'test_assignment')", [
       activeTicket,
@@ -426,6 +460,7 @@ describe('Authenticated API workflows', { concurrent: false }, () => {
     expect(t).not.toHaveProperty('mobile');
     expect(t).not.toHaveProperty('comments');
     expect(response.result).not.toHaveProperty('events');
+    });
   });
   it('creates customer sessions only from a valid short-lived QR', async () => {
     const invalid = await send('public/session', 'POST', { invite: 'bad' }, '');
@@ -734,6 +769,11 @@ describe('Audit trail, walk-ins and error messages', () => {
   it('pages the monitor while the bootstrap password is still on a production host', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('BOOTSTRAP_PASSWORD', 'still-on-the-host-1234');
+    // Production also requires a secure cookie and an https origin, which the
+    // test environment does not use; the whole production shape is stubbed.
+    vi.stubEnv('SESSION_COOKIE_SECURE', 'true');
+    vi.stubEnv('APP_ORIGIN', 'https://qms.test');
+    resetConfigForTests();
     try {
       const alert = await handlers.GET(request('health/alerts'));
       const body = (await alert.json()) as { problems: string[] };
@@ -741,6 +781,7 @@ describe('Audit trail, walk-ins and error messages', () => {
       expect(body.problems).toContain('bootstrap_password_present');
     } finally {
       vi.unstubAllEnvs();
+      resetConfigForTests();
     }
   });
   it('exports reports without identifiers unless asked, and records the choice', async () => {

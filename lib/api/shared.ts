@@ -25,6 +25,10 @@ export const audit = (
     'INSERT INTO qms.events(actor_id,action,details) VALUES($1,$2,$3::jsonb)',
     [actor, action, JSON.stringify(details ?? {})],
   );
-export const STAFF = ['admin', 'hod', 'manager', 'agent', 'reception'] as const;
-export const SERVING = ['admin', 'hod', 'manager', 'agent'] as const;
-export const MANAGERS = ['admin', 'hod', 'manager'] as const;
+// The route table's access groups are the domain's role groups; there is no
+// second list to keep in step.
+export {
+  WORKSPACE_ROLES as STAFF,
+  SERVING_ROLES as SERVING,
+  MANAGER_ROLES as MANAGERS,
+} from '../domain';

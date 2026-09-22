@@ -2,6 +2,13 @@ import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import { query } from '../lib/db';
 import { hashPassword, sha256 } from '../lib/security';
 import { clientRateLimit, rateLimit } from '../lib/http';
+import { resetConfigForTests } from '../lib/config';
+// Settings are read once and cached, so a test that changes the environment
+// asks for them to be read again.
+const setEnv = (name: string, value: string) => {
+  vi.stubEnv(name, value);
+  resetConfigForTests();
+};
 
 let userId = '',
   originalHash = '',
@@ -23,6 +30,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   vi.unstubAllEnvs();
+  resetConfigForTests();
   await query('DELETE FROM qms.sessions WHERE user_id=$1', [userId]);
   await query('DELETE FROM qms.events WHERE actor_id=$1', [userId]);
   await query('DELETE FROM qms.users WHERE id=$1', [userId]);
@@ -97,7 +105,7 @@ describe('Atomic authentication', () => {
 });
 describe('Distributed abuse limits', () => {
   it('ignores caller-supplied client headers unless explicitly trusted', async () => {
-    vi.stubEnv('TRUSTED_CLIENT_IP_HEADER', '');
+    setEnv('TRUSTED_CLIENT_IP_HEADER', '');
     const request = new Request('https://qms.test', {
       headers: { 'x-forwarded-for': '192.0.2.11' },
     });
@@ -116,7 +124,7 @@ describe('Distributed abuse limits', () => {
     });
   });
   it('uses a configured client header without storing raw IP addresses', async () => {
-    vi.stubEnv('TRUSTED_CLIENT_IP_HEADER', 'x-forwarded-for');
+    setEnv('TRUSTED_CLIENT_IP_HEADER', 'x-forwarded-for');
     const request = new Request('https://qms.test', {
       headers: { 'x-forwarded-for': '192.0.2.10, 192.0.2.1' },
     });
@@ -133,7 +141,7 @@ describe('Distributed abuse limits', () => {
     expect(rows[0].key).not.toContain('192.0.2.1');
   });
   it('keys the client budget on the address the proxy appended, not a forged prefix', async () => {
-    vi.stubEnv('TRUSTED_CLIENT_IP_HEADER', 'x-forwarded-for');
+    setEnv('TRUSTED_CLIENT_IP_HEADER', 'x-forwarded-for');
     // Two requests claiming different origins in the client-controlled part
     // of the header still land in one bucket when the proxy saw the same address.
     await clientRateLimit(

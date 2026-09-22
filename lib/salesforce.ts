@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { config } from './config';
 import { query } from './db';
 import { HttpError } from './http';
 import type { Customer, IdentifierType, Unit } from './domain';
@@ -7,22 +8,31 @@ import type { Customer, IdentifierType, Unit } from './domain';
 // AccountLookupAPI, QMSUserAPI and QMSTicketAPI, and nothing else. No SOQL, no
 // /services/data object access; every read and write goes through those classes.
 const APEX_PREFIX = '/services/apexrest/api/';
+// Carries the status the org returned, so callers branch on a number rather
+// than on words inside a sentence.
+export class SalesforceError extends HttpError {
+  constructor(public readonly salesforceStatus: number) {
+    super(
+      salesforceStatus === 429 ? 503 : 502,
+      `Salesforce request failed (${salesforceStatus}). Please retry or contact your administrator.`,
+      'SALESFORCE_REQUEST_FAILED',
+    );
+  }
+}
 const SF_USER_ID = /^005[a-zA-Z0-9]{12,15}$/;
 
 let cached: { token: string; expires: number } | null = null;
 let pending: Promise<string> | null = null;
 function instance() {
-  const value = process.env.SALESFORCE_INSTANCE_URL?.trim();
-  if (!value) throw new HttpError(503, 'Salesforce has not been configured.');
-  const parsed = new URL(value);
-  if (
-    parsed.protocol !== 'https:' ||
-    !parsed.hostname.endsWith('.salesforce.com') ||
-    parsed.username ||
-    parsed.password
-  )
-    throw new HttpError(503, 'Salesforce instance configuration is invalid.');
-  return parsed.origin;
+  // The protocol and host were validated when the configuration loaded.
+  const value = config().SALESFORCE_INSTANCE_URL;
+  if (!value)
+    throw new HttpError(
+      503,
+      'Salesforce has not been configured.',
+      'SALESFORCE_NOT_CONFIGURED',
+    );
+  return new URL(value).origin;
 }
 async function accessToken(force = false) {
   if (!force && cached && cached.expires > Date.now()) return cached.token;
@@ -30,12 +40,13 @@ async function accessToken(force = false) {
   pending = (async () => {
     // Trimmed: values pasted into hosting dashboards often carry whitespace,
     // which Salesforce reports as "Missing Consumer Key Parameter".
-    const clientId = process.env.SALESFORCE_CLIENT_ID?.trim();
-    const secret = process.env.SALESFORCE_CLIENT_SECRET?.trim();
+    const { SALESFORCE_CLIENT_ID: clientId, SALESFORCE_CLIENT_SECRET: secret } =
+      config();
     if (!clientId || !secret)
       throw new HttpError(
         503,
         'Salesforce credentials have not been configured.',
+        'SALESFORCE_NOT_CONFIGURED',
       );
     const payload = new URLSearchParams({
       grant_type: 'client_credentials',
@@ -122,6 +133,14 @@ async function apexFetch(path: string, init: RequestInit, retry: boolean) {
 }
 function transportFailure(error: unknown): never {
   if (error instanceof HttpError) throw error;
+  // A body we could not read is the org's problem to report, not a reason to
+  // stop calling it; only a failed connection opens the breaker.
+  if (error instanceof SyntaxError)
+    throw new HttpError(
+      502,
+      'Salesforce returned a response that could not be read.',
+      'SALESFORCE_BAD_RESPONSE',
+    );
   noteFailure();
   const cause =
     error instanceof Error && 'cause' in error ? error.cause : undefined;
@@ -150,10 +169,7 @@ export async function sfRequest(
   try {
     const response = await apexFetch(path, init, retry);
     if (!response.ok)
-      throw new HttpError(
-        response.status === 429 ? 503 : 502,
-        `Salesforce request failed (${response.status}). Please retry or contact your administrator.`,
-      );
+      throw new SalesforceError(response.status);
     return await response.json();
   } catch (error) {
     transportFailure(error);
@@ -327,10 +343,11 @@ export async function searchUsers(q: string): Promise<SalesforceUser[]> {
       APEX_PREFIX + 'QMSUserAPI?' + new URLSearchParams({ q: term }),
     );
   } catch (error) {
-    if (error instanceof HttpError && error.message.includes('(404)'))
+    if (error instanceof SalesforceError && error.salesforceStatus === 404)
       throw new HttpError(
         503,
         'Salesforce user search is not available yet. The QMSUserAPI class must be deployed to this org.',
+        'SALESFORCE_CLASS_MISSING',
       );
     throw error;
   }
@@ -350,7 +367,13 @@ export async function searchUsers(q: string): Promise<SalesforceUser[]> {
   }));
 }
 
-export async function integrationHealth() {
+type Probe = { connected: boolean; userSearchAvailable: boolean; error?: string };
+let probeCache: { at: number; value: Probe } | null = null;
+// Opening Settings costs two Apex calls. Managers open it together after a
+// deploy, so the result is held briefly; health that is a minute old is still
+// health, and the org's limits are not spent on a page refresh.
+async function probeSalesforce(): Promise<Probe> {
+  if (probeCache && Date.now() - probeCache.at < 60000) return probeCache.value;
   let connected = false;
   let userSearchAvailable = false;
   let error: string | undefined;
@@ -373,29 +396,34 @@ export async function integrationHealth() {
   } catch (e) {
     error = e instanceof HttpError ? e.message : 'Connection failed.';
   }
+  const value = { connected, userSearchAvailable, error };
+  probeCache = { at: Date.now(), value };
+  return value;
+}
+export async function integrationHealth() {
+  const { connected, userSearchAvailable, error } = await probeSalesforce();
+  const settings = config();
   const [worker] = await query<{ updated_at: string }>(
     "SELECT updated_at FROM qms.system_state WHERE key='worker'",
   );
   return {
     database: { connected: true },
     // The first administrator's password must not stay on a running host.
-    bootstrapPasswordPresent: !!process.env.BOOTSTRAP_PASSWORD,
+    bootstrapPasswordPresent: !!settings.BOOTSTRAP_PASSWORD,
     salesforce: {
       configured:
-        !!process.env.SALESFORCE_CLIENT_ID &&
-        !!process.env.SALESFORCE_CLIENT_SECRET,
+        !!settings.SALESFORCE_CLIENT_ID && !!settings.SALESFORCE_CLIENT_SECRET,
       connected,
       paused: salesforcePaused(),
       userSearchAvailable,
-      instance: process.env.SALESFORCE_INSTANCE_URL || '',
+      instance: settings.SALESFORCE_INSTANCE_URL || '',
       authMode: 'OAuth client credentials (Apex REST only)',
       error,
-      writeEnabled: process.env.SALESFORCE_WRITE_ENABLED === 'true',
+      writeEnabled: settings.SALESFORCE_WRITE_ENABLED,
     },
     sms: {
-      configured:
-        !!process.env.SMS_GATEWAY_URL && !!process.env.SMS_GATEWAY_TOKEN,
-      enabled: process.env.SMS_ENABLED === 'true',
+      configured: !!settings.SMS_GATEWAY_URL && !!settings.SMS_GATEWAY_TOKEN,
+      enabled: settings.SMS_ENABLED,
     },
     worker: {
       lastRun: worker?.updated_at || null,

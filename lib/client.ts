@@ -1,3 +1,15 @@
+/** Thrown by every call in this module; carries the HTTP status and the
+ *  server's stable error code so callers branch on a value, not on a message. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 export async function api<T>(
   path: string,
   options: RequestInit = {},
@@ -15,14 +27,14 @@ export async function api<T>(
     .json()
     .catch(() => ({ error: 'Unexpected server response.' }))) as {
     error?: string;
+    code?: string;
   };
-  if (!response.ok) {
-    const error = new Error(result.error || 'Request failed.') as Error & {
-      status: number;
-    };
-    error.status = response.status;
-    throw error;
-  }
+  if (!response.ok)
+    throw new ApiError(
+      result.error || 'Request failed.',
+      response.status,
+      result.code,
+    );
   return result as T;
 }
 export type WriteMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';

@@ -45,6 +45,30 @@ describe('Client and server boundary', () => {
     }
     expect(offenders).toEqual([]);
   });
+  it('reads the environment in one place', () => {
+    // lib/config.ts validates every setting once. Three files are allowed to
+    // read the environment directly and each has a reason: the proxy runs
+    // before the application boots, the root layout needs a metadata base at
+    // build time when no environment exists, and the instrumentation hook
+    // checks which runtime it is in before importing anything.
+    const allowed = new Set([
+      'lib/config.ts',
+      'proxy.ts',
+      'app/layout.tsx',
+      'instrumentation.ts',
+    ]);
+    const offenders = [
+      ...walk(join(root, 'lib')),
+      ...walk(join(root, 'components')),
+      ...walk(join(root, 'app')),
+      join(root, 'proxy.ts'),
+      join(root, 'instrumentation.ts'),
+    ]
+      .filter((file) => readFileSync(file, 'utf8').includes('process.env'))
+      .map((file) => file.slice(root.length).split(sep).join('/'))
+      .filter((file) => !allowed.has(file));
+    expect(offenders).toEqual([]);
+  });
   it('lets only the API entry point reach the route table', () => {
     const importers = walk(join(root, 'app')).filter((file) =>
       /from '@\/lib\/(api|router|db|http)'/.test(readFileSync(file, 'utf8')),

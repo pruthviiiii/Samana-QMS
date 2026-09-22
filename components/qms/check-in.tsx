@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { post } from '@/lib/client';
+import { ApiError, post } from '@/lib/client';
 import {
   SERVICES,
   type Customer,
@@ -209,7 +209,7 @@ export default function CheckIn({
       apply(await post<Lookup>('customers/lookup', { type, value }));
     } catch (e) {
       setError((e as Error).message);
-      const status = (e as Error & { status?: number }).status;
+      const status = (e as ApiError).status;
       // Salesforce down: reception can still register a walk-in visit.
       if (allowWalkIn && (status === 502 || status === 503)) setOffline(true);
     } finally {

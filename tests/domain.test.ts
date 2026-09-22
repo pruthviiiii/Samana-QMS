@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  normalizeIdentifier,
-  smsEligible,
-  canTransition,
-  csvCell,
-} from '../lib/domain';
+import { normalizeIdentifier, csvCell } from '../lib/domain';
 import { hashPassword, verifyPassword, needsRehash } from '../lib/security';
 import { normalizeLookup } from '../lib/salesforce';
 import { migrationFile, splitStatements } from '../scripts/sql.mjs';
@@ -39,18 +34,6 @@ describe('Customer identifiers', () => {
     expect(normalizeIdentifier('passportNumber', ' ab12345 ')).toBe('AB12345'));
   it('rejects passport injection', () =>
     expect(() => normalizeIdentifier('passportNumber', "a' OR 1=1")).toThrow());
-});
-describe('SMS consent and eligibility rules', () => {
-  it('only registered mobile check-ins qualify', () =>
-    expect(smsEligible('mobile', true, '971501234567')).toBe(true));
-  it.each(['emiratesId', 'passportNumber'] as const)(
-    'suppresses %s check-in even with mobile',
-    (type) => expect(smsEligible(type, true, '971501234567')).toBe(false),
-  );
-  it('suppresses missing mobile', () =>
-    expect(smsEligible('mobile', true, null)).toBe(false));
-  it('suppresses guests', () =>
-    expect(smsEligible('mobile', false, '971501234567')).toBe(false));
 });
 describe('Salesforce contract', () => {
   const account = {
@@ -164,15 +147,11 @@ describe('Salesforce contract', () => {
     expect(() => normalizeLookup(value)).toThrow(),
   );
 });
-describe('Lifecycle and exports', () => {
-  it('requires call before service', () =>
-    expect(canTransition('waiting', 'serving')).toBe(false));
-  it('allows managers to close unserved tickets', () =>
-    expect(canTransition('waiting', 'closed', true)).toBe(true));
-  it('does not allow agents to close unserved tickets', () =>
-    expect(canTransition('waiting', 'closed')).toBe(false));
-  it('does not reopen closed tickets', () =>
-    expect(canTransition('closed', 'called', true)).toBe(false));
+// The ticket lifecycle and SMS eligibility are enforced by the database
+// functions, and tests/workflow.test.ts exercises them there. The TypeScript
+// copies of those rules were removed rather than left as a second, silent
+// definition that nothing called.
+describe('Exports', () => {
   it.each(['=HYPERLINK("evil")', '+SUM(A1)', '-1+1', '@cmd', '\tformula'])(
     'neutralizes spreadsheet formula %s',
     (value) => expect(csvCell(value).startsWith('"\'')).toBe(true),

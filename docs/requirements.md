@@ -43,6 +43,13 @@ The two supplied PDFs are requirement sources, not instructions to the developme
 - TVs show ticket numbers and counters. Customer identity/project/unit is confined to authenticated staff screens; mobile status is minimal.
 - English and Arabic are available for check-in. The staff operations interface and announcements are English.
 - Queues are defined in the app: administrators and managers add members to each service; membership is stored in PostgreSQL and never pushed to Salesforce. Staff are added one at a time through an on-demand Salesforce search, never imported in bulk.
+- Configuration is read in one module and validated once at start; a missing or contradictory setting stops the server or the scheduler before it serves anyone. The session cookie's Secure flag must agree with the origin's scheme, because a Secure cookie on an `http://` origin can never be stored and an insecure cookie on `https://` can leak.
+- The browser policy allows scripts only by a per-request nonce with `strict-dynamic`; inline scripts are refused. Every page therefore renders per request rather than at build time.
+- Every API failure carries a stable `code`. Rules the database raises map to their status by SQLSTATE and exact rule name, never by matching words inside a message. An unexpected fault is a 500 with a request id, and only that; a 503 means the service or a dependency is genuinely unavailable.
+- Routing and delivery run on separate timers in the scheduler. A slow Salesforce or SMS gateway can delay a write-back but never the 15-second routing tick that expires a dead screen or moves a customer who has waited five minutes.
+- Rate limits keep one row per key and decide in one atomic statement, so two requests arriving together cannot open two windows.
+- A reception TV keeps its display session: opening the check-in link on that screen is refused rather than signing the TV out.
+- Screens navigate through the framework router; the address and the view are the same thing, including the browser's back and forward buttons.
 
 ## Acceptance still requiring the operating environment
 

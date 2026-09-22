@@ -41,9 +41,7 @@ button.stat-card:hover {
   background: none;
   border: 0;
 }
-.sidebar-bottom {
-  padding-top: 30px;
-}
+
 .logout-button {
   background: none;
   border: 0;
@@ -109,9 +107,7 @@ button.stat-card:hover {
   max-height: 400px;
   overflow: auto;
 }
-.notification-popover h3 {
-  font-size: 13px;
-}
+
 .notification-popover > button {
   display: block;
   text-align: left;
@@ -154,24 +150,14 @@ button.stat-card:hover {
   height: 34px;
   max-width: 120px;
 }
-.queue-toolbar {
-  gap: 10px;
-}
-.customer-cell {
-  font-weight: 500;
-  font-size: 12px;
-}
+
 .agent-cell {
   display: flex;
   gap: 8px;
   align-items: center;
   font-size: 11px;
 }
-.avatar.small {
-  width: 25px;
-  height: 25px;
-  font-size: 9px;
-}
+
 .wait-time,
 .wait-warning {
   display: inline-flex;
@@ -183,13 +169,7 @@ button.stat-card:hover {
 .wait-time {
   color: #758690;
 }
-.wait-warning {
-  color: #b48233;
-}
-.unassigned {
-  color: #bc8c3f;
-  font-size: 11px;
-}
+
 .empty-cta {
   margin-top: 20px;
   font-size: 11px !important;
@@ -275,9 +255,7 @@ button.stat-card:hover {
   align-items: center;
   color: #345b66;
 }
-.agent-status strong {
-  font-size: 14px;
-}
+
 .agent-status p {
   font-size: 11px;
   margin: 7px 0 0;
@@ -371,16 +349,11 @@ button.stat-card:hover {
   color: #275263;
   font-weight: 600;
 }
-.checkin-steps .current b {
-  background: #254f5e;
-  color: white;
-}
+
 .checkin-steps .done {
   color: #6b9782;
 }
-.checkin-steps .done b {
-  background: #e6f2eb;
-}
+
 .checkin-steps > i {
   height: 1px;
   flex: 1;
@@ -501,9 +474,7 @@ button.stat-card:hover {
   background: #f2f7f8;
   color: #315e70;
 }
-.department-options strong {
-  font-size: 13px;
-}
+
 .department-options small {
   font-size: 10px;
   color: #8c9ba4;
@@ -701,10 +672,7 @@ button.stat-card:hover {
   color: #8e9ca3;
   margin: 5px 0;
 }
-.timeline-item small {
-  font-size: 9px;
-  color: #a8b1b7;
-}
+
 .comment-text,
 .closure-note p {
   white-space: pre-wrap;
@@ -800,10 +768,7 @@ input[type='checkbox'] {
 .report-filters > div {
   flex: 1;
 }
-.report-filters label {
-  font-size: 10px;
-  color: #7f919b;
-}
+
 .report-filters input,
 .report-filters select {
   width: 100%;
@@ -893,18 +858,7 @@ input[type='checkbox'] {
   line-height: 1.7;
   font-size: 12px;
 }
-.login-screen {
-  display: grid;
-  grid-template-columns: 1.12fr 1fr;
-  min-height: 100vh;
-  background: white;
-}
-.login-visual {
-  position: relative;
-  min-height: 100vh;
-  overflow: hidden;
-  background: #102c3b;
-}
+
 .login-visual > img {
   position: absolute;
   inset: 0;
@@ -940,14 +894,7 @@ input[type='checkbox'] {
 .login-copy .eyebrow {
   color: #e8d1a3 !important;
 }
-.login-copy h1 {
-  font-size: clamp(36px, 3.4vw, 58px);
-  line-height: 1.15;
-  font-family: Georgia, serif;
-  font-weight: 400;
-  letter-spacing: -1.5px;
-  margin: 20px 0;
-}
+
 .login-copy > p:not(.eyebrow) {
   font-size: 13px;
   line-height: 1.7;
@@ -976,18 +923,7 @@ input[type='checkbox'] {
   font-size: 9px;
   color: #9eb3bd;
 }
-.login-form-panel {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  position: relative;
-  padding: 70px;
-}
-.login-form-content {
-  max-width: 370px;
-  width: 100%;
-  margin: auto;
-}
+
 .workspace-pill {
   display: inline-flex;
   align-items: center;
@@ -1000,25 +936,14 @@ input[type='checkbox'] {
   padding: 8px 12px;
   margin-bottom: 27px;
 }
-.login-form-content h2 {
-  font-size: 27px;
-  letter-spacing: -0.8px;
-  margin: 0 0 12px;
-  line-height: 1.25;
-}
+
 .login-form-content > p {
   font-size: 12px;
   color: #879aa3;
   line-height: 1.7;
   margin-bottom: 33px;
 }
-.login-form-content form {
-  gap: 22px;
-}
-.login-form-content label {
-  font-size: 11px;
-  color: #587180;
-}
+
 .login-form-content input {
   height: 43px !important;
   background: #fafcfc !important;
@@ -1029,23 +954,7 @@ input[type='checkbox'] {
   justify-content: space-between;
   height: 44px !important;
 }
-.login-help {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-top: 1px solid #e9eef0;
-  margin-top: 30px;
-  padding-top: 21px;
-  color: #95a8b2;
-}
-.login-help svg {
-  flex-shrink: 0;
-}
-.login-help p {
-  font-size: 10px;
-  line-height: 1.8;
-  margin: 0;
-}
+
 .login-form-panel footer {
   position: absolute;
   bottom: 0;
@@ -1236,11 +1145,7 @@ input[type='checkbox'] {
   margin-left: auto;
   text-align: right;
 }
-.tv-header > div:nth-child(2) > span {
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: #96b0ba;
-}
+
 .tv-header strong {
   display: block;
   font-size: 26px;
@@ -1262,9 +1167,7 @@ input[type='checkbox'] {
   flex: 1;
   min-height: calc(100vh - 188px);
 }
-.tv-queue {
-  padding: 35px 4vw;
-}
+
 .tv-section-label {
   display: flex;
   align-items: center;
@@ -1286,11 +1189,7 @@ input[type='checkbox'] {
   gap: 25px;
   padding: 35px 0 40px;
 }
-.now-serving small {
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: #8eacb7;
-}
+
 .now-serving strong {
   font-size: clamp(55px, 6vw, 105px);
   font-weight: 400;
@@ -1303,9 +1202,7 @@ input[type='checkbox'] {
   color: #8daeb9;
   margin: 0;
 }
-.now-serving > svg {
-  color: #668793;
-}
+
 .now-serving h1 {
   font-size: clamp(25px, 3vw, 47px);
   max-width: 245px;
@@ -1383,14 +1280,7 @@ input[type='checkbox'] {
   z-index: 1;
   position: relative;
 }
-.tv-photo-caption {
-  padding: 25px 30px;
-}
-.tv-photo-caption > span {
-  font-size: 9px;
-  letter-spacing: 2px;
-  color: #f1dbab;
-}
+
 .tv-photo-caption h2 {
   font-family: Georgia, serif;
   font-weight: 400;
@@ -1440,12 +1330,7 @@ input[type='checkbox'] {
 .tv-welcome {
   padding: 50px 0;
 }
-.tv-welcome h1 {
-  font-family: Georgia, serif;
-  font-size: 40px;
-  color: #edeee6;
-  font-weight: 400;
-}
+
 .tv-welcome p {
   font-size: 14px;
   line-height: 1.8;
@@ -1512,10 +1397,7 @@ input[type='checkbox'] {
 .dark-brand::before {
   background-image: url('/images/samana-logo-black.png');
 }
-.login-visual .brand::before {
-  width: 210px;
-  height: 66px;
-}
+
 .tv-header .brand::before {
   width: 220px;
   height: 67px;
@@ -1592,9 +1474,7 @@ input[type='checkbox'] {
   .sidebar-shortcuts {
     display: none;
   }
-  .topbar-actions {
-    gap: 13px;
-  }
+
   .topbar-actions > .subtle {
     display: none;
   }
@@ -1602,12 +1482,7 @@ input[type='checkbox'] {
     font-size: 10px;
     padding: 6px 9px;
   }
-  .page-heading p {
-    max-width: 230px;
-  }
-  .panel-heading p {
-    font-size: 10px;
-  }
+
   .topbar .icon-button > svg {
     width: 17px;
   }
@@ -1639,49 +1514,21 @@ input[type='checkbox'] {
   .checkin-top {
     flex-wrap: wrap;
   }
-  .checkin-top h2 {
-    font-size: 20px;
-  }
-  .checkin-steps {
-    margin: 25px 0;
-  }
-  .checkin-steps > span {
-    font-size: 10px;
-    gap: 5px;
-  }
-  .checkin-steps b {
-    width: 20px;
-    height: 20px;
-  }
-  .checkin-steps > i {
-    margin: 0 8px;
-  }
+
   .identity-option {
     padding: 14px 10px;
     font-size: 10px;
     min-height: 85px;
   }
-  .identity-options {
-    gap: 8px;
-  }
+
   .verified {
     display: none;
   }
-  .checkin-actions {
-    gap: 8px;
-  }
-  .detail-grid {
-    grid-template-columns: 1fr 1fr;
-  }
+
   .ticket-dialog {
     padding: 20px !important;
   }
-  .ticket-dialog .section-actions button {
-    font-size: 11px;
-  }
-  .detail-summary h2 {
-    font-size: 16px;
-  }
+
   .team-summary {
     gap: 15px;
     flex-wrap: wrap;
@@ -1712,43 +1559,7 @@ input[type='checkbox'] {
   .login-screen {
     grid-template-columns: 1fr;
   }
-  .login-visual {
-    min-height: 250px;
-    height: 250px;
-  }
-  .login-visual .brand {
-    top: 25px;
-    left: 25px;
-  }
-  .login-visual .brand::before {
-    width: 160px;
-    height: 45px;
-  }
-  .login-copy {
-    left: 25px;
-    right: 25px;
-    bottom: 25px;
-  }
-  .login-copy h1 {
-    font-size: 31px;
-    letter-spacing: -0.5px;
-    margin: 0;
-  }
-  .login-copy .eyebrow,
-  .login-copy > p:not(.eyebrow),
-  .login-copy > div,
-  .login-visual > small {
-    display: none;
-  }
-  .login-form-panel {
-    padding: 33px 27px 90px;
-  }
-  .login-form-content {
-    max-width: 450px;
-  }
-  .login-form-content h2 {
-    font-size: 24px;
-  }
+
   .workspace-pill {
     margin-bottom: 20px;
   }
@@ -1759,9 +1570,7 @@ input[type='checkbox'] {
     margin: 20px auto;
     padding: 20px;
   }
-  .mobile-cover {
-    height: 225px;
-  }
+
   .mobile-cover .brand {
     font-size: 25px;
   }
@@ -1799,9 +1608,7 @@ input[type='checkbox'] {
   .tv-content {
     display: block;
   }
-  .tv-queue {
-    padding: 25px 20px;
-  }
+
   .tv-feature {
     margin: 0 20px 20px;
     min-height: 400px;
@@ -1816,19 +1623,11 @@ input[type='checkbox'] {
   .tv-ticket {
     padding: 16px 10px;
   }
-  .tv-ticket > strong {
-    font-size: 23px;
-  }
-  .tv-ticket > span,
-  .tv-ticket > b {
-    font-size: 12px;
-  }
+
   .tv-list-heading {
     padding: 13px 10px;
   }
-  .tv-waiting {
-    font-size: 10px;
-  }
+
   .now-serving strong {
     font-size: 58px;
   }

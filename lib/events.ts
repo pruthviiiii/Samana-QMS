@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { config } from './config';
 // One database session per web process holds LISTEN qms_changes. Migration
 // 013 raises a NOTIFY whenever tickets, notifications or staff availability
 // change, and every connected screen is told to refresh. If the listener
@@ -8,6 +9,7 @@ const listeners = new Set<Listener>();
 let client: pg.Client | null = null;
 let connecting: Promise<void> | null = null;
 let retryAt = 0;
+let stopped = false;
 export function listening() {
   return client !== null;
 }
@@ -26,13 +28,13 @@ export function listenUrl(url: string) {
   }
 }
 async function connect() {
-  if (client) return;
+  if (client || stopped) return;
   if (connecting) return connecting;
   if (Date.now() < retryAt) throw new Error('Listener retry pending.');
   connecting = (async () => {
-    const url = process.env.DATABASE_URL;
-    if (!url) throw new Error('DATABASE_NOT_CONFIGURED');
-    const c = new pg.Client({ connectionString: listenUrl(url) });
+    const c = new pg.Client({
+      connectionString: listenUrl(config().DATABASE_URL),
+    });
     await c.connect();
     await c.query('LISTEN qms_changes');
     c.on('notification', (message) => {
@@ -44,7 +46,7 @@ async function connect() {
       c.end().catch(() => {
         /* already closed */
       });
-      if (listeners.size)
+      if (listeners.size && !stopped)
         setTimeout(() => {
           connect().catch(() => {
             /* retried on the next subscription or timer */
@@ -69,4 +71,12 @@ export function subscribe(listener: Listener, onStatus: (ok: boolean) => void) {
   return () => {
     listeners.delete(listener);
   };
+}
+/** Closes the listening session on shutdown and stops reconnection attempts. */
+export async function closeListener() {
+  stopped = true;
+  const current = client;
+  client = null;
+  listeners.clear();
+  if (current) await current.end().catch(() => {});
 }

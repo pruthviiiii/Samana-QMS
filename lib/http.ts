@@ -1,15 +1,10 @@
 import { ZodError } from 'zod';
+import { config } from './config';
 import { query } from './db';
+import { HttpError, ruleError } from './errors';
 import { sha256 } from './security';
 import type { User, Role } from './domain';
-export class HttpError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+export { HttpError } from './errors';
 export function json(
   data: unknown,
   status = 200,
@@ -26,13 +21,14 @@ export function json(
     },
   });
 }
+const MAX_BODY_BYTES = 32768;
 export async function body(request: Request) {
   if (!request.headers.get('content-type')?.includes('application/json'))
-    throw new HttpError(415, 'Send JSON content.');
-  if (Number(request.headers.get('content-length')) > 32768)
-    throw new HttpError(413, 'Request is too large.');
+    throw new HttpError(415, 'Send JSON content.', 'UNSUPPORTED_MEDIA_TYPE');
+  if (Number(request.headers.get('content-length')) > MAX_BODY_BYTES)
+    throw new HttpError(413, 'Request is too large.', 'PAYLOAD_TOO_LARGE');
   const reader = request.body?.getReader();
-  if (!reader) throw new HttpError(400, 'Invalid JSON.');
+  if (!reader) throw new HttpError(400, 'Invalid JSON.', 'INVALID_JSON');
   const decoder = new TextDecoder();
   let text = '';
   let size = 0;
@@ -40,9 +36,9 @@ export async function body(request: Request) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 32768) {
+    if (size > MAX_BODY_BYTES) {
       await reader.cancel();
-      throw new HttpError(413, 'Request is too large.');
+      throw new HttpError(413, 'Request is too large.', 'PAYLOAD_TOO_LARGE');
     }
     text += decoder.decode(value, { stream: true });
   }
@@ -50,89 +46,80 @@ export async function body(request: Request) {
   try {
     return JSON.parse(text);
   } catch {
-    throw new HttpError(400, 'Invalid JSON.');
+    throw new HttpError(400, 'Invalid JSON.', 'INVALID_JSON');
   }
 }
 export function sameOrigin(request: Request) {
   const origin = request.headers.get('origin');
-  const expected = process.env.APP_ORIGIN || new URL(request.url).origin;
-  if (!origin || origin !== expected)
-    throw new HttpError(403, 'Request origin is not allowed.');
+  if (!origin || origin !== config().APP_ORIGIN)
+    throw new HttpError(403, 'Request origin is not allowed.', 'BAD_ORIGIN');
 }
 export async function requireUser(request: Request, roles?: Role[]) {
   const token = request.headers
     .get('cookie')
     ?.match(/(?:^|;\s*)qms_session=([a-f0-9]{64})(?:;|$)/)?.[1];
-  if (!token) throw new HttpError(401, 'Please sign in.');
+  if (!token) throw new HttpError(401, 'Please sign in.', 'NOT_SIGNED_IN');
   const [user] = await query<User>(
     'SELECT u.id,u.username,u.name,u.role,u.sf_id,u.manager_sf_id,u.services,u.online,u.last_seen,u.counter,u.enabled,u.must_change_password FROM qms.sessions s JOIN qms.users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.enabled=true',
     [await sha256(token)],
   );
   if (!user)
-    throw new HttpError(401, 'Your session has expired. Please sign in.');
+    throw new HttpError(
+      401,
+      'Your session has expired. Please sign in.',
+      'SESSION_EXPIRED',
+    );
   if (roles && !roles.includes(user.role))
-    throw new HttpError(403, 'You do not have permission for this action.');
+    throw new HttpError(
+      403,
+      'You do not have permission for this action.',
+      'FORBIDDEN',
+    );
   return user;
 }
 export function sessionCookie(token: string, maxAge = 28800) {
-  const secure = process.env.SESSION_COOKIE_SECURE !== 'false';
+  const secure = config().SESSION_COOKIE_SECURE;
   return `qms_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
 }
-// Database exception codes and the message a person at the desk should read.
-const known: Record<string, [number, string]> = {
-  TICKET_NOT_FOUND: [404, 'That ticket no longer exists.'],
-  LOOKUP_EXPIRED: [
-    409,
-    'The customer lookup has expired. Look the customer up again.',
-  ],
-  UNIT_REQUIRED: [400, 'Choose the unit this visit is about.'],
-  INVALID_SERVICE: [400, 'That service is not available for this customer.'],
-  VERSION_CONFLICT: [
-    409,
-    'This ticket was just updated by someone else. It has been refreshed; please try again.',
-  ],
-  INVALID_TRANSITION: [
-    409,
-    "That action is not possible in the ticket's current state.",
-  ],
-  AGENT_BUSY: [409, 'That team member is already with a customer.'],
-  FORBIDDEN: [403, 'You do not have permission for this action.'],
-  AGENT_UNAVAILABLE: [409, 'Go online before calling a customer.'],
-  INVALID_ASSIGNEE: [
-    400,
-    'Choose a team member who is online and covers this service.',
-  ],
-  DUPLICATE_VISIT: [
-    409,
-    'This customer already has an open ticket for this service.',
-  ],
-  DATABASE_NOT_CONFIGURED: [503, 'The database is not configured.'],
-  IDEMPOTENCY_CONFLICT: [
-    409,
-    'This request was already used for a different ticket. Start again.',
-  ],
-  UNIT_NOT_ALLOWED: [400, 'A unit cannot be attached to this visit.'],
-  USER_NOT_FOUND: [404, 'That team member was not found.'],
-  PASSWORD_REQUIRED: [400, 'Set a temporary password for a new member.'],
-};
+// Every failure becomes one of three things: a rule the database enforces, a
+// validation failure, or an unexpected fault. Only the last is a 500, so an
+// uptime monitor and a load balancer can trust the status.
 function failure(error: unknown, requestId: string) {
+  const rule = ruleError(error);
+  if (rule)
+    return json({ error: rule.message, code: rule.code }, rule.status);
   if (error instanceof HttpError)
-    return json({ error: error.message }, error.status);
+    return json(
+      { error: error.message, ...(error.code ? { code: error.code } : {}) },
+      error.status,
+    );
   if (error instanceof ZodError)
-    return json({ error: error.issues.map((x) => x.message).join(' ') }, 400);
-  const message = error instanceof Error ? error.message : '';
-  for (const [code, [status, text]] of Object.entries(known))
-    if (message.includes(code)) return json({ error: text, code }, status);
+    return json(
+      {
+        error: error.issues.map((x) => x.message).join(' '),
+        code: 'INVALID_INPUT',
+      },
+      400,
+    );
   console.error(
     JSON.stringify({
       event: 'request_failed',
       requestId,
       errorType: error instanceof Error ? error.name : 'Unknown',
+      // The message can carry customer data, so only the shape is logged.
+      databaseCode:
+        error && typeof error === 'object' && 'code' in error
+          ? String((error as { code: unknown }).code).slice(0, 12)
+          : undefined,
     }),
   );
   return json(
-    { error: 'The request could not be completed. Please retry.', requestId },
-    503,
+    {
+      error: 'The request could not be completed. Please retry.',
+      code: 'INTERNAL_ERROR',
+      requestId,
+    },
+    500,
   );
 }
 // Every API response carries X-Request-Id and writes one JSON log line with the
@@ -168,17 +155,26 @@ export async function endpoint(
   );
   return new Response(response.body, { status: response.status, headers });
 }
+/**
+ * Fixed-window limiter. One row per key holds the window start and the count;
+ * the whole decision is a single atomic statement, so two requests arriving
+ * together can never open two windows and double the budget.
+ */
 export async function rateLimit(key: string, limit = 10, windowSeconds = 300) {
-  // The window starts at the first attempt and lasts windowSeconds. Windows
-  // aligned to the clock let a burst straddle a boundary and get double the
-  // budget; anchoring on the first attempt bounds every key to limit hits per
-  // windowSeconds from that attempt.
-  const [r] = await query<{ count: number }>(
-    `INSERT INTO qms.rate_limits(key,window_start,count) VALUES($1,COALESCE((SELECT window_start FROM qms.rate_limits WHERE key=$1 AND window_start>now()-make_interval(secs=>$2) ORDER BY window_start DESC LIMIT 1),now()),1) ON CONFLICT(key,window_start) DO UPDATE SET count=qms.rate_limits.count+1 RETURNING count`,
+  const [row] = await query<{ count: number }>(
+    `INSERT INTO qms.rate_limits(key,window_start,count) VALUES($1,now(),1)
+     ON CONFLICT(key) DO UPDATE SET
+       count = CASE WHEN qms.rate_limits.window_start > now()-make_interval(secs=>$2) THEN qms.rate_limits.count+1 ELSE 1 END,
+       window_start = CASE WHEN qms.rate_limits.window_start > now()-make_interval(secs=>$2) THEN qms.rate_limits.window_start ELSE now() END
+     RETURNING count`,
     [key, windowSeconds],
   );
-  if (r.count > limit)
-    throw new HttpError(429, 'Too many attempts. Please try again later.');
+  if (row.count > limit)
+    throw new HttpError(
+      429,
+      'Too many attempts. Please try again later.',
+      'RATE_LIMITED',
+    );
 }
 
 export async function clientRateLimit(
@@ -189,17 +185,8 @@ export async function clientRateLimit(
 ) {
   // Honor a proxy header only when explicitly configured behind a trusted edge.
   // Never use arbitrary forwarded headers as the sole abuse safeguard.
-  const header = process.env.TRUSTED_CLIENT_IP_HEADER;
-  if (
-    !header ||
-    ![
-      'cf-connecting-ip',
-      'true-client-ip',
-      'x-real-ip',
-      'x-forwarded-for',
-    ].includes(header)
-  )
-    return;
+  const header = config().TRUSTED_CLIENT_IP_HEADER;
+  if (!header) return;
   // A proxy appends the address it saw to the end of the list, so the last
   // entry is the one it vouches for; earlier entries are whatever the client
   // sent and can be forged.
@@ -223,9 +210,14 @@ export function intParam(
 ) {
   const raw = url.searchParams.get(name);
   if (raw === null || raw === '') return fallback;
-  if (!/^\d{1,9}$/.test(raw)) throw new HttpError(400, `Invalid ${name}.`);
+  if (!/^\d{1,9}$/.test(raw))
+    throw new HttpError(400, `Invalid ${name}.`, 'INVALID_INPUT');
   const value = Number(raw);
   if (value < min || value > max)
-    throw new HttpError(400, `${name} must be between ${min} and ${max}.`);
+    throw new HttpError(
+      400,
+      `${name} must be between ${min} and ${max}.`,
+      'INVALID_INPUT',
+    );
   return value;
 }

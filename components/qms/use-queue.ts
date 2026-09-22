@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '@/lib/client';
+import { ApiError, api } from '@/lib/client';
 import type { Ticket } from '@/lib/domain';
 import { useLive } from './use-live';
 export type Notice = {
@@ -59,8 +59,14 @@ export function useQueue({
   const [loading, setLoading] = useState(false);
   const [updated, setUpdated] = useState('');
   const lastNotice = useRef<number | null>(null);
+  // The fetch function must see the newest filters and callbacks without
+  // being rebuilt for each keystroke, so they are mirrored in a ref. The
+  // mirror is written in an effect, never during render, because a render
+  // that React discards must not leave anything behind.
   const latest = useRef({ params, onAssigned, onSignedOut });
-  latest.current = { params, onAssigned, onSignedOut };
+  useEffect(() => {
+    latest.current = { params, onAssigned, onSignedOut };
+  });
   const refresh = useCallback(
     async (silent = false) => {
       if (!enabled) return;
@@ -101,7 +107,7 @@ export function useQueue({
         if (newestId !== null) lastNotice.current = newestId;
         else if (lastNotice.current === null) lastNotice.current = 0;
       } catch (e) {
-        if ((e as Error & { status?: number }).status === 401) {
+        if ((e as ApiError).status === 401) {
           setData(null);
           onSignedOut();
         } else setError((e as Error).message);

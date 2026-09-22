@@ -1,16 +1,15 @@
 import pg from 'pg';
+import { config } from './config';
 // One pooled connection set per process over the standard PostgreSQL wire
 // protocol, so any PostgreSQL 14 or newer server works: your own machine, a
 // company server, or a managed host such as Neon. Queries share connections
 // and multi-statement work runs in real transactions. TLS is switched on by
-// `sslmode=require` in DATABASE_URL and off when the parameter is absent.
+// `sslmode=verify-full` in DATABASE_URL and off when the parameter is absent.
 let pool: pg.Pool | null = null;
 function getPool() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error('DATABASE_NOT_CONFIGURED');
   if (!pool)
     pool = new pg.Pool({
-      connectionString: url,
+      connectionString: config().DATABASE_URL,
       max: 10,
       idleTimeoutMillis: 30000,
       allowExitOnIdle: true,
@@ -48,7 +47,7 @@ export async function transaction<T>(work: (q: Query) => Promise<T>) {
     client.release();
   }
 }
-// Closes the pool; used by scripts and tests that must exit promptly.
+// Closes the pool; used by scripts, tests and shutdown handlers.
 export async function closeDb() {
   const current = pool;
   pool = null;

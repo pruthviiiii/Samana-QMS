@@ -104,12 +104,7 @@ a {
   letter-spacing: 5px;
   margin-top: 4px;
 }
-.workspace-label {
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  margin: 45px 15px 18px;
-  color: #7892a0;
-}
+
 .nav-item {
   width: 100%;
   border: 0;
@@ -124,17 +119,7 @@ a {
   text-align: left;
   font-size: 13px;
 }
-.nav-item:hover {
-  background: #1e3b4a;
-}
-.nav-item.selected {
-  background: #294654;
-  color: #fff;
-  box-shadow: inset 3px 0 #c0a36c;
-}
-.nav-item.selected svg {
-  color: #d1b47e;
-}
+
 .sidebar-bottom {
   margin-top: auto;
   padding-top: 60px;
@@ -272,12 +257,7 @@ h1 {
   gap: 19px;
   margin: 0 0 27px;
 }
-.stat-card {
-  background: white;
-  border: 1px solid var(--border);
-  padding: 21px 22px;
-  border-radius: 9px;
-}
+
 .stat-label {
   display: flex;
   justify-content: space-between;
@@ -338,10 +318,7 @@ h2 {
   align-items: center;
   padding: 0 23px 18px;
 }
-.service-tabs {
-  display: flex;
-  gap: 4px;
-}
+
 .service-tabs button {
   background: transparent;
   border: 0;
@@ -379,15 +356,7 @@ table {
   border-collapse: collapse;
   text-align: left;
 }
-th {
-  font-size: 9px;
-  letter-spacing: 0.8px;
-  font-weight: 600;
-  background: #f8fafb;
-  color: #8b97a0;
-  padding: 13px 22px;
-  white-space: nowrap;
-}
+
 td {
   font-size: 12px;
   padding: 16px 22px;
@@ -407,10 +376,7 @@ td {
   color: #526774;
   margin: 0 0 8px;
 }
-.empty-state p {
-  font-size: 12px;
-  margin: 0;
-}
+
 .bottom-grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
@@ -562,36 +528,14 @@ form {
   display: grid;
   gap: 16px;
 }
-.ticket-number {
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
+
 .ticket-meta {
   display: block;
   color: #8b97a0;
   font-size: 10px;
   margin-top: 5px;
 }
-.badge.waiting {
-  color: #ad8535;
-  background: #fbf4e6;
-}
-.badge.serving {
-  color: #28806a;
-  background: #eaf6f0;
-}
-.badge.called {
-  color: #447c9a;
-  background: #eaf3fa;
-}
-.badge.closed {
-  color: #6c7680;
-  background: #eff2f5;
-}
-.badge.no_show {
-  color: #a75862;
-  background: #faedf0;
-}
+
 .pagination {
   padding: 14px 22px;
   display: flex;
@@ -666,9 +610,7 @@ form {
   .stat-card {
     padding: 18px 15px;
   }
-  .queue-toolbar {
-    flex-wrap: wrap;
-  }
+
   .connection-banner {
     flex-wrap: wrap;
   }
@@ -719,12 +661,7 @@ form {
   .nav-item svg {
     width: 16px;
   }
-  .workspace {
-    display: block;
-  }
-  .main-shell {
-    margin-left: 0;
-  }
+
   .topbar {
     height: 52px;
     font-size: 10px;
@@ -733,16 +670,7 @@ form {
   .topbar .subtle {
     font-size: 10px;
   }
-  .main-content {
-    padding: 25px 18px;
-  }
-  .page-heading {
-    align-items: flex-start;
-  }
-  .page-heading p {
-    font-size: 11px;
-    max-width: 240px;
-  }
+
   h1 {
     font-size: 24px;
   }
@@ -755,13 +683,7 @@ form {
   .bottom-grid {
     grid-template-columns: 1fr;
   }
-  .queue-toolbar {
-    padding: 0 13px 14px;
-  }
-  .service-tabs button {
-    padding: 8px;
-    font-size: 10px;
-  }
+
   .search {
     width: 100%;
   }
@@ -772,9 +694,7 @@ form {
     font-size: 10px !important;
     padding: 0 12px !important;
   }
-  .panel-heading {
-    padding: 20px 16px;
-  }
+
   .page-section {
     padding: 18px;
   }
