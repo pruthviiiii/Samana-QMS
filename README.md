@@ -72,6 +72,13 @@ Moving data from one server to another is one `pg_dump` of `samana_qms` and one 
 
 ## Production build and self-hosting
 
+**Deploying to a new environment?** `deploy/README.md` is the handover
+specification: the three processes and what each one needs, per-tier
+environment templates, database provisioning, release order and the
+verification checklist. It is host-agnostic — start there, then use
+`render.yaml` or `compose.yaml` as a worked example of it.
+
+
 ```sh
 npm run build             # Web tier: standalone Node server in dist-node/standalone (build:node is an alias)
 npm run build:api         # API service in dist-api/api.mjs (regenerates the Prisma client first)
