@@ -71,6 +71,15 @@ beforeEach(() => {
 });
 
 async function prepareSalesforceDelivery(response: Record<string, unknown>) {
+  // Writing to Salesforce is only a coherent setting when a connection exists,
+  // and config() refuses the combination. sfRequest is mocked below, so these
+  // are the shape the validator wants and nothing dials out. They are set here
+  // rather than left to the environment: vitest.config.ts loads .env as well as
+  // .env.test, so a developer with real credentials on disk satisfied this by
+  // accident while CI, which has no .env, did not.
+  setEnv('SALESFORCE_INSTANCE_URL', 'https://qms.test.my.salesforce.com');
+  setEnv('SALESFORCE_CLIENT_ID', 'test-client-id');
+  setEnv('SALESFORCE_CLIENT_SECRET', 'test-client-secret');
   setEnv('SALESFORCE_WRITE_ENABLED', 'true');
   sf.mockImplementation(async (path: string, options?: RequestInit) => {
     if (typeof options?.body !== 'string')
