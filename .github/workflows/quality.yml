@@ -21,6 +21,37 @@ jobs:
       - run: npm run build
       - run: npm run build:worker
       - run: npm run build:api
+  images:
+    # Render builds these services natively, so nothing here gates the
+    # production deployment. This job exists because the Dockerfile and
+    # compose.yaml are the path for any other host, and a build context is the
+    # kind of thing that breaks silently: .dockerignore is an allow-list, so a
+    # directory that moves stops being copied and the failure only appears at
+    # run time, in an image that looks like it built cleanly.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the three images
+        run: |
+          docker build --target web    -t qms-web    .
+          docker build --target api    -t qms-api    .
+          docker build --target worker -t qms-worker .
+      - name: Check each image carries what its CMD runs
+        # Not a health check -- there is no database here. It asserts the file
+        # each image's CMD names is actually inside it. The web image flattens
+        # the standalone tree into /app, so its entry is frontend/server.js,
+        # not the dist-node path used outside the image; its static assets are
+        # checked too, because scripts/build.mjs places those separately and a
+        # server without them starts and then serves an unstyled page.
+        run: |
+          set -e
+          docker run --rm --entrypoint test qms-web    -f frontend/server.js
+          docker run --rm --entrypoint test qms-web    -d frontend/.next/static
+          docker run --rm --entrypoint test qms-api    -f dist-api/api.mjs
+          docker run --rm --entrypoint test qms-api    -f scripts/migrate.mjs
+          docker run --rm --entrypoint test qms-worker -f dist-worker/worker.mjs
+          echo "All three images carry their entry points."
+
   database-tests:
     # The full suite runs against a PostgreSQL 18 container started inside the
     # workflow, so every pull request and push is tested on a fresh database
