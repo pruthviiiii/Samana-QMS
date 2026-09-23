@@ -275,7 +275,7 @@ Order matters. Migrations run **before** the new API starts.
 
 1. **Snapshot the database.** Migrations are forward-only; there are no
    automatic down scripts. On a managed host with a short point-in-time window
-   this snapshot is the real restore point. See `docs/rollback.md`.
+   this snapshot is the real restore point. The rollback procedure is held with the team documents.
 2. Build all three artifacts.
 3. Run `node scripts/migrate.mjs` with `MIGRATE_DATABASE_URL`. It is
    idempotent, checksums every applied file, and refuses to run one that was

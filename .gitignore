@@ -41,6 +41,13 @@ coverage/
 .sf/
 .sfdx/
 
+# --- Internal documentation ---------------------------------------------------
+# Design, operations and review documents are kept with the team, not in the
+# repository. openapi.json is the exception: it is generated from the route
+# table and pinned by tests/openapi.test.ts, so a clone must carry it.
+docs/
+!docs/openapi.json
+
 # --- Scratch ------------------------------------------------------------------
 # Working directories for investigations, document generation and experiments.
 .analysis/
