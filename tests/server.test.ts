@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { serve, type ServerType } from '@hono/node-server';
 import { handle } from '@backend/server/handler';
 // The API service as a real HTTP server on an ephemeral port: the same host
-// server/api.ts uses, serving the same function. These tests prove the wire
+// backend/server/api.ts uses, serving the same function. These tests prove the wire
 // behaviour that the in-process API tests cannot: status codes and headers as
 // a client sees them, JSON on every error, and the event stream as a live
 // response rather than a value.

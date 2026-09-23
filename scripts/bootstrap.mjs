@@ -5,7 +5,7 @@ const password = process.env.BOOTSTRAP_PASSWORD;
 if (!password || password.length < 14)
   throw new Error('Set BOOTSTRAP_PASSWORD to at least 14 characters.');
 const salt = randomBytes(32).toString('hex');
-const iterations = 600000; // Keep in step with PBKDF2_ITERATIONS in lib/security.ts.
+const iterations = 600000; // Keep in step with PBKDF2_ITERATIONS in backend/security.ts.
 const hash = `pbkdf2$${iterations}$${salt}$${pbkdf2Sync(password, salt, iterations, 32, 'sha256').toString('hex')}`;
 const db = await open(process.env.DATABASE_URL);
 try {

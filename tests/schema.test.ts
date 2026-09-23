@@ -32,7 +32,7 @@ describe('Schema snapshot', () => {
   });
   // Migration 017 moved these from literals repeated across the functions into
   // one definition each. The application holds the same values in lib/domain.ts
-  // and lib/api/shared.ts, so this is what stops the two drifting: a screen
+  // and backend/api/shared.ts, so this is what stops the two drifting: a screen
   // must never call somebody available after routing has written them off, and
   // an endpoint must never admit a role the database refuses.
   it('agrees with lib/domain.ts on the presence window and the role groups', async () => {

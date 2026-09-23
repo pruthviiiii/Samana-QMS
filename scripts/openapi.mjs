@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-// Writes docs/openapi.json from the route table (lib/api) and the body
+// Writes docs/openapi.json from the route table (backend/api) and the body
 // schemas each route declares. tests/openapi.test.ts fails when the file is
 // out of date, so run `npm run api:docs` after changing a route.
 // `--check` only compares and exits 1 when the file is stale.
@@ -17,7 +17,7 @@ const outfile = join(scratch, `.openapi-${randomBytes(4).toString('hex')}.mjs`);
 await build({
   stdin: {
     contents:
-      "import { routes } from '../backend/api'; import { openApiDocument } from '../backend/openapi'; export const document = openApiDocument(routes);",
+      "import { routes } from './backend/api'; import { openApiDocument } from './backend/openapi'; export const document = openApiDocument(routes);",
     resolveDir: root,
     loader: 'ts',
   },

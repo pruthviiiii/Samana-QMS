@@ -45,6 +45,6 @@ describe('Prisma schema', () => {
     expect(schema).toMatch(/one_active_service_per_agent.*where: raw\(/);
   });
   it('has a generated client that the API and the scheduler import', () => {
-    expect(existsSync(new URL('../lib/generated/prisma/client.ts', import.meta.url))).toBe(true);
+    expect(existsSync(new URL('../backend/generated/prisma/client.ts', import.meta.url))).toBe(true);
   });
 });

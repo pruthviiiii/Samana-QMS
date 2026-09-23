@@ -13,7 +13,7 @@ import { PrismaClient } from './generated/prisma/client';
 // act, presence, save user), the read view that joins tickets with their
 // service and agent, aggregate reports, and the two statements that must be
 // single atomic writes (the rate limiter and the delivery claim). Every raw
-// result is checked against a schema at runtime (lib/data/rows.ts) instead of
+// result is checked against a schema at runtime (backend/data/rows.ts) instead of
 // being asserted.
 let client: PrismaClient | null = null;
 export function prisma() {

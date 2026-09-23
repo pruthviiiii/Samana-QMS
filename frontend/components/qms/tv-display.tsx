@@ -15,7 +15,7 @@ type DisplayTicket = {
   created_at: string;
 };
 // Room for the board plus the overflow line. The server sends at most this
-// many rows (BOARD_ROWS in lib/data/tickets.ts).
+// many rows (BOARD_ROWS in backend/data/tickets.ts).
 const ROWS = 9;
 export default function TVDisplay() {
   const [data, setData] = useState<{

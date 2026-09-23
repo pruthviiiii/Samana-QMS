@@ -74,7 +74,7 @@ export function openApiDocument(routes: Route[]) {
       title: 'Samana QMS API',
       version: '1.0.0',
       description:
-        'Generated from the route table in lib/api by scripts/openapi.mjs. Every state-changing call from a browser must send an Origin header equal to APP_ORIGIN; the scheduler proves itself with a bearer token instead. Errors are JSON with an "error" message and, for database rule violations, a stable "code".',
+        'Generated from the route table in backend/api by scripts/openapi.mjs. Every state-changing call from a browser must send an Origin header equal to APP_ORIGIN; the scheduler proves itself with a bearer token instead. Errors are JSON with an "error" message and, for database rule violations, a stable "code".',
     },
     servers: [{ url: '/' }],
     components: {

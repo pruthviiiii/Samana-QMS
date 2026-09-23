@@ -3,7 +3,7 @@ import { config } from './config';
 // One pooled connection set per process over the standard PostgreSQL wire
 // protocol, so any PostgreSQL 14 or newer server works: your own machine, a
 // company server, or a managed host such as Neon. The same pool serves the
-// Prisma client (lib/prisma.ts) and the raw, validated queries below, so a
+// Prisma client (backend/prisma.ts) and the raw, validated queries below, so a
 // process never holds two sets of connections. TLS is switched on by
 // `sslmode=verify-full` in DATABASE_URL and off when the parameter is absent.
 let current: pg.Pool | null = null;

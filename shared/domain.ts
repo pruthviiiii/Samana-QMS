@@ -40,7 +40,7 @@ export const STAFF_ROLES = [
   'display',
 ] as const;
 // Role groups, defined once and used by both sides: the API route table
-// declares access with them (lib/api/shared.ts) and the workspace decides what
+// declares access with them (backend/api/shared.ts) and the workspace decides what
 // to show with them, so a role can never mean one thing on the server and
 // another in the browser.
 /** Everyone who works inside the staff workspace. */
@@ -76,8 +76,8 @@ export const PRESENCE_WINDOW_MS = 45000;
 /** Whether a heartbeat is recent enough to count the person as at their desk. */
 export const isPresent = (online: boolean, lastSeen?: string | null) =>
   online && !!lastSeen && Date.now() - Date.parse(lastSeen) < PRESENCE_WINDOW_MS;
-// The routing tick runs every 15 seconds (scripts/worker.mjs). Six missed
-// ticks means it needs a person: lib/data/system.ts decides the health
+// The routing tick runs every 15 seconds (scripts/worker-entry.ts). Six missed
+// ticks means it needs a person: backend/data/system.ts decides the health
 // endpoint with this and the workspace banner reads the same number.
 export const SCHEDULER_STALE_MS = 90000;
 /** How urgently a service is routed: 0 is normal, 9 is most urgent. */
@@ -196,7 +196,7 @@ export const isManager = (role?: Role) => has(MANAGER_ROLES, role);
  * Only the UAE code is stripped. A number kept under another country code is
  * stored the same way, without it, so a foreign number typed plainly still
  * matches; one typed with its own country code is handled by the candidates in
- * lib/salesforce.ts instead of by guessing here which digits are a country.
+ * backend/salesforce.ts instead of by guessing here which digits are a country.
  */
 export function nationalMobile(value: string): string {
   let digits = value.replace(/\D/g, '');

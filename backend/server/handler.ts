@@ -6,7 +6,7 @@ import { sha256 } from '../security';
 // The whole API as one function from request to response: logging and error
 // mapping (endpoint), then the declared route table (dispatch), which enforces
 // each route's access rule before its handler runs. The Node host in
-// server/api.ts serves this function; the API tests call it directly.
+// backend/server/api.ts serves this function; the API tests call it directly.
 //
 // When API_PROXY_TOKEN is set, every request must carry it in x-internal-token.
 // The web tier adds the header to everything it forwards, so a client that

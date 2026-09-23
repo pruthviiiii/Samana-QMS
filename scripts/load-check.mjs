@@ -92,7 +92,7 @@ try {
   await timed(`route_due with ${tickets} waiting and 0 agents online`, () => pool.query('SELECT qms.route_due()'));
 
   // 3. Bring the agents online and tick again: everything gets assigned.
-  //    Production routes in bounded batches (lib/data/functions.ts) so the
+  //    Production routes in bounded batches (backend/data/functions.ts) so the
   //    global lock is released between them; qms.route_due() does the same work
   //    in one transaction and is measured beside it as the old cost.
   await pool.query('UPDATE qms.users SET online=true,last_seen=now() WHERE id=ANY($1::uuid[])', [agentIds]);

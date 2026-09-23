@@ -11,7 +11,7 @@ import { checkedRow, one, priorityRow, ticketRow, type TicketRecord } from './ro
 // process that touches the queue. tests/workflow.test.ts exercises them.
 //
 // Rule violations arrive as SQLSTATE P0001 with the rule name as the message;
-// lib/errors.ts maps them to statuses and plain sentences.
+// backend/errors.ts maps them to statuses and plain sentences.
 
 export async function issueTicket(args: {
   lookupId: string;
