@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import TVDisplay from '../../components/qms/tv-display';
+import TVDisplay from '@/components/qms/tv-display';
 // The reception television. Nobody is watching this screen on behalf of the
 // system: if it stops updating it does so in a waiting room full of people, so
 // the cases pinned here are the ones where it must say what is wrong rather

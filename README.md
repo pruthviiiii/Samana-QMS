@@ -29,7 +29,7 @@ npm run build:worker && npm run worker
 npm run dev               # forwards /api to API_URL from .env
 ```
 
-Open the exact URL printed by the web server. Set `APP_ORIGIN` to that origin and `API_URL` to where the API listens (`http://127.0.0.1:3001` locally). The session cookie's Secure flag must agree with the origin's scheme: a local `http://` setup needs `SESSION_COOKIE_SECURE=false`, and an `https://` deployment uses `true` (the default). Every setting is validated once at start (`lib/config.ts`); a wrong or missing value stops the server with a message naming the variable, and `.env.example` documents each rule. No credentials are embedded in browser code.
+Open the exact URL printed by the web server. Set `APP_ORIGIN` to that origin and `API_URL` to where the API listens (`http://127.0.0.1:3001` locally). The session cookie's Secure flag must agree with the origin's scheme: a local `http://` setup needs `SESSION_COOKIE_SECURE=false`, and an `https://` deployment uses `true` (the default). Every setting is validated once at start (`backend/config.ts`); a wrong or missing value stops the server with a message naming the variable, and `.env.example` documents each rule. No credentials are embedded in browser code.
 
 Sign in using `BOOTSTRAP_USERNAME` (currently `admin`) and `BOOTSTRAP_PASSWORD` from the local `.env`. Change the temporary password when prompted. Bootstrap never overwrites an existing administrator. Remove the bootstrap password from a production host after provisioning.
 
@@ -84,7 +84,7 @@ npm run build             # Web tier: standalone Node server in dist-node/standa
 npm run build:api         # API service in dist-api/api.mjs (regenerates the Prisma client first)
 npm run build:worker      # Scheduler in dist-worker/worker.mjs
 node --env-file=.env dist-api/api.mjs
-node --env-file=.env dist-node/standalone/server.js
+node --env-file=.env dist-node/standalone/frontend/server.js
 ```
 
 The build runs in place and writes `.next`; the script validates the destination before replacing only the generated `dist-node` directory. Next.js keeps `next dev` output separately under `.next/dev`, so a running development server is unaffected. Keep the source workspace on a normal local disk if OneDrive sync locking affects development.
@@ -102,7 +102,7 @@ Configure `.env` on the server with an HTTPS `APP_ORIGIN`, `SESSION_COOKIE_SECUR
 
 Connect the app as the restricted `qms_app` role created by `npm run db:app-role`, and keep the owner connection string in `MIGRATE_DATABASE_URL` for migrations. `RETENTION_IDENTIFIER_DAYS` and `RETENTION_EVENT_DAYS` switch on anonymisation of closed tickets and purging of old audit events once a retention period is agreed. `GET /api/health/alerts` is the one address an uptime monitor should page on. Tickets left waiting from a previous day are marked no-show two hours after issue, and a number still on the floor from yesterday is never reissued today.
 
-The web tier is a standard Next.js standalone server and the API is a plain Node HTTP server (`server/api.ts`), so any Node host works; Render is the reference deployment in `render.yaml`, with the API as a private service. The scheduler runs as a direct database worker everywhere (Docker, Render, `npm run worker`): routing tick, outbox delivery and retention every 15 seconds. `POST /api/jobs/run` with `Authorization: Bearer WORKER_SECRET` remains for hosts that can only run a cron-style caller. Live screen updates use server-sent events fed by PostgreSQL `NOTIFY`; a host that buffers streaming responses degrades gracefully to polling. The listener needs one session that stays on a real server connection: on Neon it uses the direct endpoint even when `DATABASE_URL` is the pooled one, and behind a PgBouncer in transaction mode that one connection must bypass the pooler.
+The web tier is a standard Next.js standalone server and the API is a plain Node HTTP server (`backend/server/api.ts`), so any Node host works; Render is the reference deployment in `render.yaml`, with the API as a private service. The scheduler runs as a direct database worker everywhere (Docker, Render, `npm run worker`): routing tick, outbox delivery and retention every 15 seconds. `POST /api/jobs/run` with `Authorization: Bearer WORKER_SECRET` remains for hosts that can only run a cron-style caller. Live screen updates use server-sent events fed by PostgreSQL `NOTIFY`; a host that buffers streaming responses degrades gracefully to polling. The listener needs one session that stays on a real server connection: on Neon it uses the direct endpoint even when `DATABASE_URL` is the pooled one, and behind a PgBouncer in transaction mode that one connection must bypass the pooler.
 
 ## SMS and Salesforce write-back
 
@@ -126,4 +126,4 @@ CI checks types, lint, the unit and browser tests, dependency audit and both bui
 
 ## Operations
 
-See [operations](docs/operations.md) for schema ownership, monitoring, recovery, retention, and release procedure. The data layer is `prisma/schema.prisma`, introspected from the database and pinned by a test, with the generated client for records and typed, row-validated calls into the PostgreSQL functions that hold the queue rules (`lib/data/`). The browser never talks to PostgreSQL, Salesforce or the API service directly; everything goes through the web tier. No sample customer records are seeded into the app database.
+See [operations](docs/operations.md) for schema ownership, monitoring, recovery, retention, and release procedure. The data layer is `backend/prisma/schema.prisma`, introspected from the database and pinned by a test, with the generated client for records and typed, row-validated calls into the PostgreSQL functions that hold the queue rules (`backend/data/`). The browser never talks to PostgreSQL, Salesforce or the API service directly; everything goes through the web tier. No sample customer records are seeded into the app database.

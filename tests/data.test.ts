@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { record, forTicket, page } from '../lib/data/events';
-import { markRead, unread } from '../lib/data/notifications';
-import { one, rows, ticketRow } from '../lib/data/rows';
-import { BOARD_ROWS, board } from '../lib/data/tickets';
-import { createGuest, findSessionUser, loginCandidates, revokeSession } from '../lib/data/users';
-import { closeDb, query } from '../lib/db';
-import { closePrisma } from '../lib/prisma';
-import { sha256 } from '../lib/security';
+import { record, forTicket, page } from '@backend/data/events';
+import { markRead, unread } from '@backend/data/notifications';
+import { one, rows, ticketRow } from '@backend/data/rows';
+import { BOARD_ROWS, board } from '@backend/data/tickets';
+import { createGuest, findSessionUser, loginCandidates, revokeSession } from '@backend/data/users';
+import { closeDb, query } from '@backend/db';
+import { closePrisma } from '@backend/prisma';
+import { sha256 } from '@backend/security';
 // The data layer: raw rows are checked, not asserted; records read through
 // Prisma come back in the shapes the API promises (ids as strings, dates as
 // ISO strings, no bigint anywhere near JSON).

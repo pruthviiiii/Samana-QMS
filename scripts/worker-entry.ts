@@ -1,9 +1,9 @@
-import { assertConfig } from '../lib/config';
-import { routeDue } from '../lib/data/functions';
-import { closeDb } from '../lib/db';
-import { processJobs } from '../lib/jobs';
-import { closePrisma } from '../lib/prisma';
-import { applyRetention } from '../lib/retention';
+import { assertConfig } from '@backend/config';
+import { routeDue } from '../backend/data/functions';
+import { closeDb } from '@backend/db';
+import { processJobs } from '@backend/jobs';
+import { closePrisma } from '@backend/prisma';
+import { applyRetention } from '@backend/retention';
 // Two independent cadences, because they have different deadlines.
 //
 // Routing is time critical: it expires a screen that stopped answering and

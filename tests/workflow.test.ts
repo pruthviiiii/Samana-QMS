@@ -1,5 +1,5 @@
 import { beforeAll, describe, it } from 'vitest';
-import { query } from '../lib/db';
+import { query } from '@backend/db';
 beforeAll(() => {
   if (
     !process.env.DATABASE_URL ||

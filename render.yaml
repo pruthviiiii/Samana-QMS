@@ -33,7 +33,7 @@ services:
     plan: starter
     branch: main
     buildCommand: npm ci --include=dev && npm run build:node
-    startCommand: node dist-node/standalone/server.js
+    startCommand: node dist-node/standalone/frontend/server.js
     # Health goes through the proxy to the API, so it proves the whole chain.
     healthCheckPath: /api/health
     envVars:

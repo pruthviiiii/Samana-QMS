@@ -44,46 +44,76 @@ npm run build:<target>
 
 ## Source layout
 
-No code needs moving. The separation already exists and is enforced by
-`tests/boundary.test.ts`, which fails the build if a server module is ever
-imported into browser code.
+Three npm workspaces. The separation is visible as directories and enforced by
+`tests/boundary.test.ts`, which fails the build if backend code is ever
+imported into the frontend.
 
-### Frontend — ships to the browser
+```
+QMS SAMANA/
+├── frontend/     the web tier      -> builds to dist-node/
+├── backend/      API + scheduler   -> builds to dist-api/ and dist-worker/
+├── shared/       vocabulary both agree on
+├── db/           migrations and the schema snapshot
+├── scripts/      build, migrate, provision, bootstrap
+└── deploy/       this specification and its templates
+```
+
+### `frontend/` — ships to the browser
 
 | Path | Contents |
 |---|---|
-| `app/` | Next.js routes and layouts — check-in, visit status, print receipt, workspace shell |
-| `components/qms/` | Screens: staff workspace, reception board, check-in, team, reports, settings |
-| `components/ui/` | Shared interface primitives |
+| `app/` | Routes and layouts — check-in, visit status, print receipt, workspace shell |
+| `components/qms/` | Screens: staff workspace, reception board, check-in, team, reports |
+| `components/ui/` | Interface primitives |
+| `lib/` | Browser-side helpers: the fetch client and class-name utility |
 | `proxy.ts` | Runs before every request: forwards `/api`, sets security headers |
 | `instrumentation.ts` | Validates the web tier's configuration at boot |
-| `next.config.ts`, `postcss.config.mjs` | Build configuration |
+| `next.config.ts`, `postcss.config.mjs`, `tsconfig.json` | Build configuration |
 
-### Backend — never reaches the browser
+### `backend/` — never reaches the browser
 
 | Path | Contents |
 |---|---|
 | `server/` | API entry point and request handler |
-| `lib/api/` | The route table — 32 routes, each declaring its own access rule |
-| `lib/data/` | Database access: Prisma for records, validated SQL for the queue engine |
-| `lib/router.ts`, `lib/http.ts`, `lib/errors.ts` | Routing, requests, error mapping |
-| `lib/db.ts`, `lib/prisma.ts` | Connection pool and typed client |
-| `lib/salesforce.ts`, `lib/jobs.ts` | Integration and delivery |
-| `lib/config.ts`, `lib/security.ts` | Configuration validation, password and token handling |
-| `db/` | Migrations and the generated schema snapshot |
+| `api/` | The route table — 32 routes, each declaring its own access rule |
+| `data/` | Database access: Prisma for records, validated SQL for the queue engine |
+| `router.ts`, `http.ts`, `errors.ts` | Routing, requests, error mapping |
+| `db.ts`, `prisma.ts` | Connection pool and typed client |
+| `salesforce.ts`, `jobs.ts` | Integration and delivery |
+| `config.ts`, `security.ts` | Configuration validation, password and token handling |
 | `prisma/` | Introspected schema |
-| `scripts/` | Build, migrate, provision, bootstrap |
+| `generated/` | Prisma client output. Generated, not committed. |
 
-### Shared by both
+### `shared/` — the only thing both import
 
-| Path | Why it is safe in the browser |
-|---|---|
-| `lib/domain.ts` | Types, service list, role names, validation rules. No I/O. |
-| `lib/client.ts` | Browser-side fetch helper. |
-| `lib/utils.ts` | Small pure helpers. |
+One file, `domain.ts`: service list, role names, ticket shapes, identifier
+rules. **No I/O and no dependencies** — that is the whole reason it is safe to
+send to a browser, and a test asserts its `package.json` declares no
+dependencies at all.
 
-> The web tier holds **no database credential and no Salesforce credential**.
-> That is the security boundary, and it is why the tiers are separate.
+> The frontend holds **no database credential and no Salesforce credential**.
+> Its one permitted reach into the backend is `backend/config.ts`, imported at
+> boot to validate its own four settings; that module holds no I/O, and a test
+> pins it as the only crossing.
+
+### What this means for CI
+
+Each workspace can be installed on its own:
+
+```bash
+npm ci                                      # everything, for a full build
+npm ci --workspace @qms/frontend            # frontend dependencies only
+npm ci --workspace @qms/backend             # backend dependencies only
+```
+
+All three build artifacts are produced from the repository root, because the
+build scripts and the migration tooling are shared:
+
+```bash
+npm run build:node     # -> dist-node/standalone/frontend/server.js
+npm run build:api      # -> dist-api/api.mjs
+npm run build:worker   # -> dist-worker/worker.mjs
+```
 
 ---
 
@@ -95,7 +125,7 @@ imported into browser code.
 |---|---|
 | Install | `npm ci --include=dev` |
 | Build | `npm run build:node` |
-| Start | `node dist-node/standalone/server.js` |
+| Start | `node dist-node/standalone/frontend/server.js` |
 | Listens on | `PORT`, default `3000` |
 | Health check | `GET /api/health` → `200 {"status":"ready"}` |
 | Scaling | Stateless. Run as many as you like behind a load balancer. |
@@ -169,7 +199,7 @@ it, and it is mandatory:
 - The web tier adds it as `x-internal-token` to everything it forwards.
 - The API refuses any request without it, except `GET /api/health` so the load
   balancer can probe.
-- A production API **refuses to start** without it (`lib/config.ts`,
+- A production API **refuses to start** without it (`backend/config.ts`,
   `assertApiConfig`). Set `API_TRUSTS_NETWORK=true` instead *only* if the
   address is genuinely unreachable from outside.
 
@@ -214,7 +244,7 @@ plain local server with no TLS.
 ### Two settings that affect behaviour
 
 **Connection pooling.** Each API instance opens up to 10 connections
-(`lib/db.ts`). Size the server's `max_connections`, or the pooler's limit, for
+(`backend/db.ts`). Size the server's `max_connections`, or the pooler's limit, for
 `instances × 10` plus headroom for the scheduler and migrations.
 
 **Live screen updates need one un-pooled connection.** The reception television
@@ -223,7 +253,7 @@ holds `LISTEN qms_changes`. A pooler in *transaction* mode accepts that command
 and then never delivers a notification — silently. Screens keep working, but
 fall back to polling every 30 seconds instead of updating immediately.
 
-- On Neon this is handled automatically: `lib/events.ts` rewrites a `-pooler`
+- On Neon this is handled automatically: `backend/events.ts` rewrites a `-pooler`
   hostname to the direct endpoint for that one connection.
 - Behind PgBouncer or similar, either use *session* mode, or allow that one
   connection to bypass the pooler.

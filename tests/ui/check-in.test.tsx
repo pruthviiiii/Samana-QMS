@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import CheckIn from '../../components/qms/check-in';
-import type { Customer, Ticket } from '../../lib/domain';
+import CheckIn from '@/components/qms/check-in';
+import type { Customer, Ticket } from '@qms/shared';
 // The check-in screen is what a customer or receptionist sees first. These
 // tests drive it the way a person would: pick how to identify, type a value,
 // look the account up, and read what comes back. The network is a mock, so

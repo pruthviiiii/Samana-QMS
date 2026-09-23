@@ -5,7 +5,7 @@ import {
   config,
   resetConfigForTests,
   webConfig,
-} from '../lib/config';
+} from '@backend/config';
 // Configuration is the one place the environment is read, so its rules are
 // tested directly: what is required, what is refused, and which combinations
 // are contradictions that must stop a deployment rather than reach a customer.

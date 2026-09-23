@@ -1,6 +1,7 @@
 # Three images from one build:
-#   web     the Next.js standalone server: screens only, forwards /api to the API
-#           service, holds no database or integration credential
+#   web     the Next.js standalone server from the frontend workspace: screens
+#           only, forwards /api to the API service, holds no database or
+#           integration credential
 #   api     the API service: the route table on a plain Node HTTP server, with
 #           the Prisma client and the database pool; not published outside the
 #           private network
@@ -11,17 +12,19 @@
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json prisma.config.ts ./
-COPY prisma ./prisma
+# Workspace manifests first, so a source change does not re-resolve the tree.
+# npm needs every workspace's package.json present before it can install.
+COPY package.json package-lock.json prisma.config.ts tsconfig.json ./
+COPY shared/package.json ./shared/
+COPY backend/package.json ./backend/
+COPY frontend/package.json ./frontend/
+COPY backend/prisma ./backend/prisma
 RUN npm ci
-COPY app ./app
-COPY components ./components
-COPY lib ./lib
-COPY server ./server
-COPY public ./public
+COPY shared ./shared
+COPY backend ./backend
+COPY frontend ./frontend
 COPY db ./db
 COPY scripts ./scripts
-COPY next.config.ts postcss.config.mjs proxy.ts instrumentation.ts tsconfig.json next-env.d.ts components.json ./
 RUN npm run build:node && npm run build:api && npm run build:worker
 
 FROM node:22-bookworm-slim AS web
@@ -32,12 +35,18 @@ USER node
 EXPOSE 3000
 # Health goes through the proxy to the API, so it proves the whole chain.
 HEALTHCHECK --interval=30s --timeout=20s --start-period=30s CMD node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node","server.js"]
+CMD ["node","frontend/server.js"]
 
 FROM node:22-bookworm-slim AS api
 ENV NODE_ENV=production API_PORT=3001
 WORKDIR /app
+# npm resolves the lockfile against every workspace, so each manifest must be
+# present even though only the runtime packages are installed. The bundles are
+# self-contained apart from pg, @prisma/*, @hono/node-server and zod.
 COPY package.json package-lock.json ./
+COPY shared/package.json ./shared/
+COPY backend/package.json ./backend/
+COPY frontend/package.json ./frontend/
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=build --chown=node:node /app/dist-api/ ./dist-api/
 COPY --chown=node:node scripts/migrate.mjs scripts/sql.mjs scripts/db.mjs scripts/bootstrap.mjs scripts/create-app-role.mjs ./scripts/
@@ -50,7 +59,13 @@ CMD ["node","dist-api/api.mjs"]
 FROM node:22-bookworm-slim AS worker
 ENV NODE_ENV=production
 WORKDIR /app
+# npm resolves the lockfile against every workspace, so each manifest must be
+# present even though only the runtime packages are installed. The bundles are
+# self-contained apart from pg, @prisma/*, @hono/node-server and zod.
 COPY package.json package-lock.json ./
+COPY shared/package.json ./shared/
+COPY backend/package.json ./backend/
+COPY frontend/package.json ./frontend/
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=build --chown=node:node /app/dist-worker/ ./dist-worker/
 USER node

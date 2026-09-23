@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { sfRequest } from '../lib/salesforce';
+import { sfRequest } from '@backend/salesforce';
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -17,8 +17,8 @@ function sourceFiles(dir: string): string[] {
 // Any direct object or query call would fail in production, so none may exist.
 describe('Salesforce access is Apex-only', () => {
   const files = [
-    ...sourceFiles('lib'),
-    ...sourceFiles('app'),
+    ...sourceFiles('backend'),
+    ...sourceFiles('frontend'),
     ...sourceFiles('scripts'),
   ];
   it('no server code builds a direct data, query or sobject URL', () => {

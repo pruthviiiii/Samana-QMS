@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { routes } from '../lib/api';
-import { match } from '../lib/router';
+import { routes } from '@backend/api';
+import { match } from '@backend/router';
 // Every API route must say who may call it. This guards the declaration
 // table without a database.
 describe('API route table', () => {

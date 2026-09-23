@@ -1,0 +1,33 @@
+{
+  "name": "@qms/frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The web tier: every screen, plus the proxy that forwards /api and sets the browser security headers. Holds no database or integration credential.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.7.0",
+    "@qms/shared": "*",
+    "@shadcn/react": "0.3.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "cmdk": "1.1.1",
+    "lucide-react": "1.31.0",
+    "next": "^16.3.5",
+    "qrcode.react": "^4.2.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "recharts": "3.8.0",
+    "tailwind-merge": "3.6.0",
+    "tw-animate-css": "1.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "tailwindcss": "4.2.1"
+  }
+}

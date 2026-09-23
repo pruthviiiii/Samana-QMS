@@ -27,23 +27,30 @@
     ],
     "paths": {
       "@/*": [
-        "./*"
+        "./frontend/*"
+      ],
+      "@qms/shared": [
+        "./shared/domain.ts"
+      ],
+      "@backend/*": [
+        "./backend/*"
       ]
     }
   },
   "include": [
-    "next-env.d.ts",
+    "frontend/next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts",
     "**/*.mts",
-    ".next/dev/types/**/*.ts"
+    "frontend/.next/types/**/*.ts",
+    "frontend/.next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "dist",
+    "dist-api",
     "dist-node",
     "dist-worker",
-    ".next-last"
+    "frontend/.next",
+    "backend/generated"
   ]
 }

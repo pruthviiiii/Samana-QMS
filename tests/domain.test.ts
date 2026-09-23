@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeIdentifier, nationalMobile, csvCell } from '../lib/domain';
-import { hashPassword, verifyPassword, needsRehash } from '../lib/security';
-import { mobileVariants, normalizeLookup } from '../lib/salesforce';
+import { normalizeIdentifier, nationalMobile, csvCell } from '@qms/shared';
+import { hashPassword, verifyPassword, needsRehash } from '@backend/security';
+import { mobileVariants, normalizeLookup } from '@backend/salesforce';
 import { migrationFile, splitStatements } from '../scripts/sql.mjs';
 describe('Password work factor', () => {
   it('hashes at the current work factor and flags older hashes', async () => {

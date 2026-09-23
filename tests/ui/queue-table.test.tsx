@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import QueueTable, { statusLabel } from '../../components/qms/queue-table';
-import type { Ticket } from '../../lib/domain';
+import QueueTable, { statusLabel } from '@/components/qms/queue-table';
+import type { Ticket } from '@qms/shared';
 // The live queue is the screen every agent watches all day. These tests pin
 // what it shows for each ticket state, what it says when there is nothing to
 // show, and that the two ways of opening a ticket both reach the caller.

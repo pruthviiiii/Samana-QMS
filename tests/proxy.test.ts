@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { proxy } from '../proxy';
+import { proxy } from '@/proxy';
 // The web tier's proxy runs before every request. These tests pin the browser
 // policy it sets on pages, how it forwards /api to the API service, and that a
 // client cannot smuggle the address header the API trusts.

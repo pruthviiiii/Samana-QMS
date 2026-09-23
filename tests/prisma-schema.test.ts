@@ -24,17 +24,17 @@ describe('Prisma schema', () => {
         'pull',
         '--print',
         '--schema',
-        'prisma/schema.prisma',
+        'backend/prisma/schema.prisma',
         '--url',
         url,
       ],
       { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 },
     );
-    const committed = readFileSync(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
+    const committed = readFileSync(new URL('../backend/prisma/schema.prisma', import.meta.url), 'utf8');
     expect(normalise(printed)).toBe(normalise(committed));
   });
   it('describes every table the SQL snapshot has, and nothing else', () => {
-    const schema = readFileSync(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
+    const schema = readFileSync(new URL('../backend/prisma/schema.prisma', import.meta.url), 'utf8');
     const snapshot = readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8');
     const models = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1]).sort();
     const tables = [...snapshot.matchAll(/^-- table qms\.(\w+)/gm)].map((m) => m[1]).sort();

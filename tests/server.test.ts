@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { resetConfigForTests } from '../lib/config';
+import { resetConfigForTests } from '@backend/config';
 import type { AddressInfo } from 'node:net';
 import { serve, type ServerType } from '@hono/node-server';
-import { handle } from '../server/handler';
+import { handle } from '@backend/server/handler';
 // The API service as a real HTTP server on an ephemeral port: the same host
 // server/api.ts uses, serving the same function. These tests prove the wire
 // behaviour that the in-process API tests cannot: status codes and headers as

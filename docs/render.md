@@ -56,7 +56,7 @@ are not reconfigured by a Blueprint file; confirm their build and start commands
 
 ## Validation at start
 
-All three services validate every setting when they start (`lib/config.ts`). A deploy with a
+All three services validate every setting when they start (`backend/config.ts`). A deploy with a
 missing or contradictory value fails at boot with a message naming the variable and Render
 keeps the previous version serving. The web tier needs only `APP_ORIGIN` and `API_URL`; the
 API and the scheduler need the database, origin, cookie and integration settings. The two
@@ -114,4 +114,4 @@ with the `QMS_Access` permission set.
 - Rollback: Render keeps previous deploys. Use **Manual Deploy → Rollback** on the service
   that changed; migrations are additive and do not need reverting.
 - After a migration that changes a table, run `npm run prisma:pull` locally and commit the
-  refreshed `prisma/schema.prisma`; the test suite fails until you do.
+  refreshed `backend/prisma/schema.prisma`; the test suite fails until you do.

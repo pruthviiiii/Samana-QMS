@@ -1,17 +1,17 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
-import { query } from '../lib/db';
-import { hashPassword, sha256 } from '../lib/security';
-import { resetConfigForTests } from '../lib/config';
-import { HttpError } from '../lib/errors';
-import type { Customer } from '../lib/domain';
+import { query } from '@backend/db';
+import { hashPassword, sha256 } from '@backend/security';
+import { resetConfigForTests } from '@backend/config';
+import { HttpError } from '@backend/errors';
+import type { Customer } from '@qms/shared';
 const lookup = vi.hoisted(() => vi.fn());
 const search = vi.hoisted(() => vi.fn());
-vi.mock('../lib/salesforce', async (original) => ({
-  ...(await original<typeof import('../lib/salesforce')>()),
+vi.mock('@backend/salesforce', async (original) => ({
+  ...(await original<typeof import('@backend/salesforce')>()),
   lookupCustomer: lookup,
   searchUsers: search,
 }));
-import { handle } from '../server/handler';
+import { handle } from '@backend/server/handler';
 const prefix = 'api-test-' + crypto.randomUUID().slice(0, 8);
 const password = 'Synthetic-API-Test-Password-24';
 let adminCookie = '';

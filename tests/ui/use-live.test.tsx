@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, act, waitFor } from '@testing-library/react';
-import { useLive } from '../../components/qms/use-live';
+import { useLive } from '@/components/qms/use-live';
 // The live update mechanism. Every screen depends on it to learn that
 // something changed without asking, and falls back to its own polling interval
 // when it cannot. These tests pin both halves, because a stream that silently

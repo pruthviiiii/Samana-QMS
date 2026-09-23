@@ -1,15 +1,15 @@
 import { beforeAll, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { query } from '../lib/db';
+import { query } from '@backend/db';
 import { snapshot } from '../scripts/schema-snapshot.mjs';
-import { ticketColumns } from '../lib/data/tickets';
+import { ticketColumns } from '@backend/data/tickets';
 import {
   MANAGER_ROLES,
   PRESENCE_WINDOW_MS,
   SERVING_ROLES,
   STAFF_ROLES,
-} from '../lib/domain';
-import { userSelect } from '../lib/data/users';
+} from '@qms/shared';
+import { userSelect } from '@backend/data/users';
 let live = '';
 let committed = '';
 beforeAll(async () => {

@@ -7,8 +7,8 @@ import {
   expect,
   vi,
 } from 'vitest';
-import { query } from '../lib/db';
-import { resetConfigForTests } from '../lib/config';
+import { query } from '@backend/db';
+import { resetConfigForTests } from '@backend/config';
 // Settings are validated once and cached, so a test that switches an
 // integration on asks for them to be read again.
 const setEnv = (name: string, value: string) => {
@@ -16,8 +16,8 @@ const setEnv = (name: string, value: string) => {
   resetConfigForTests();
 };
 const sf = vi.hoisted(() => vi.fn());
-vi.mock('../lib/salesforce', () => ({ sfRequest: sf }));
-import { processJobs, salesforcePayload } from '../lib/jobs';
+vi.mock('@backend/salesforce', () => ({ sfRequest: sf }));
+import { processJobs, salesforcePayload } from '@backend/jobs';
 let userId = '',
   lookupId = '',
   ticketId = '';

@@ -10,13 +10,19 @@ Object.assign(process.env, loadEnv('test', process.cwd(), ''));
 // generated interface primitives, and the thresholds hold the line where the
 // suite stands today so a change that removes coverage fails the build.
 export default defineConfig({
-  resolve: { alias: { '@': fileURLToPath(new URL('./', import.meta.url)) } },
+  resolve: {
+    alias: {
+      '@qms/shared': fileURLToPath(new URL('./shared/domain.ts', import.meta.url)),
+      '@backend': fileURLToPath(new URL('./backend', import.meta.url)),
+      '@': fileURLToPath(new URL('./frontend', import.meta.url)),
+    },
+  },
   oxc: { jsx: { runtime: 'automatic' } },
   test: {
     coverage: {
       provider: 'v8',
-      include: ['lib/**/*.ts', 'server/**/*.ts', 'components/qms/**/*.{ts,tsx}', 'proxy.ts'],
-      exclude: ['lib/openapi.ts', 'lib/generated/**'],
+      include: ['backend/**/*.ts', 'shared/**/*.ts', 'frontend/components/qms/**/*.{ts,tsx}', 'frontend/proxy.ts'],
+      exclude: ['backend/openapi.ts', 'backend/generated/**'],
       reporter: ['text-summary', 'lcov'],
       reportsDirectory: 'coverage',
       // Measured on 22 September 2026 over lib/, components/qms/ and proxy.ts.

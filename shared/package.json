@@ -1,0 +1,10 @@
+{
+  "name": "@qms/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Vocabulary both tiers agree on: services, roles, ticket shapes, identifier rules. No I/O, no dependencies -- which is why it is safe in a browser.",
+  "main": "./domain.ts",
+  "types": "./domain.ts",
+  "exports": { ".": "./domain.ts" }
+}

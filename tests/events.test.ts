@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { listenUrl } from '../lib/events';
+import { listenUrl } from '@backend/events';
 describe('Change listener endpoint', () => {
   it('rewrites a pooled Neon host to the direct endpoint', () => {
     expect(

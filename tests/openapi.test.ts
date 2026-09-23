@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { routes } from '../lib/api';
-import { openApiDocument } from '../lib/openapi';
+import { routes } from '@backend/api';
+import { openApiDocument } from '@backend/openapi';
 // The published API document must match what the route table generates, so
 // a route change without `npm run api:docs` fails here.
 describe('API document', () => {

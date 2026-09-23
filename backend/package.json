@@ -1,0 +1,20 @@
+{
+  "name": "@qms/backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The API service and the scheduler: route table, data access, queue engine calls, Salesforce. Holds every credential; never reaches a browser.",
+  "main": "./server/api.ts",
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "@qms/shared": "*",
+    "pg": "^8.23.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "prisma": "^7.10.0"
+  }
+}

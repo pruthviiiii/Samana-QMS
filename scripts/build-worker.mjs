@@ -4,7 +4,10 @@ await build({
   bundle: true,
   platform: 'node',
   format: 'esm',
-  packages: 'external',
+  // Explicit externals rather than packages:'external'. The runtime packages
+  // are installed on the host; @qms/shared is workspace source and must be
+  // bundled in, or the image would need the whole workspace to resolve it.
+  external: ['pg', '@prisma/client', '@prisma/adapter-pg', '@hono/node-server', 'zod'],
   outfile: 'dist-worker/worker.mjs',
   target: 'node22',
 });

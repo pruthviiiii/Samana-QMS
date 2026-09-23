@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import MobileVisit from '../../components/qms/mobile-visit';
+import MobileVisit from '@/components/qms/mobile-visit';
 // The screen a customer watches on their own phone after scanning the QR code.
 // It answers two questions -- what is my number, and how many people are in
 // front of me -- and deliberately answers nothing else. The waiting room's

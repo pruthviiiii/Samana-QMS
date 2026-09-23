@@ -1,8 +1,8 @@
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
-import { query } from '../lib/db';
-import { hashPassword, sha256 } from '../lib/security';
-import { clientRateLimit, rateLimit } from '../lib/http';
-import { resetConfigForTests } from '../lib/config';
+import { query } from '@backend/db';
+import { hashPassword, sha256 } from '@backend/security';
+import { clientRateLimit, rateLimit } from '@backend/http';
+import { resetConfigForTests } from '@backend/config';
 // Settings are read once and cached, so a test that changes the environment
 // asks for them to be read again.
 const setEnv = (name: string, value: string) => {

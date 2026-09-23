@@ -1,7 +1,7 @@
 import { defineConfig } from 'prisma/config';
 // Prisma CLI configuration (Prisma 7). Used by `prisma db pull`, which
-// introspects the database into prisma/schema.prisma, and by `prisma
-// generate`, which writes the typed client to lib/generated/prisma.
+// introspects the database into backend/prisma/schema.prisma, and by `prisma
+// generate`, which writes the typed client to backend/generated/prisma.
 //
 // The datasource address is read lazily: generation needs no database, and it
 // runs on every install (postinstall), including builds that have no
@@ -17,6 +17,6 @@ import { defineConfig } from 'prisma/config';
 // committed schema no longer matches the migrated database.
 const url = process.env.DATABASE_URL;
 export default defineConfig({
-  schema: 'prisma/schema.prisma',
+  schema: 'backend/prisma/schema.prisma',
   ...(url ? { datasource: { url } } : {}),
 });

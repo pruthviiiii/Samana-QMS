@@ -17,7 +17,7 @@ const outfile = join(scratch, `.openapi-${randomBytes(4).toString('hex')}.mjs`);
 await build({
   stdin: {
     contents:
-      "import { routes } from './lib/api'; import { openApiDocument } from './lib/openapi'; export const document = openApiDocument(routes);",
+      "import { routes } from '../backend/api'; import { openApiDocument } from '../backend/openapi'; export const document = openApiDocument(routes);",
     resolveDir: root,
     loader: 'ts',
   },
