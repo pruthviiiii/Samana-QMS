@@ -12,12 +12,20 @@
 !prisma.config.ts
 
 # --- The three workspaces -----------------------------------------------------
+# The directory entry is re-included as well as its contents. Negating only
+# `dir/**` leaves the directory itself excluded, which is enough to break a
+# `COPY dir/ ./dir/` on some builders.
+!shared
 !shared/**
+!backend
 !backend/**
+!frontend
 !frontend/**
 
 # --- Migrations and the build and operational scripts -------------------------
+!db
 !db/**
+!scripts
 !scripts/**
 
 # --- Nothing generated, ever --------------------------------------------------
